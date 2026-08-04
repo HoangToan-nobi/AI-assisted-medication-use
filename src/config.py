@@ -22,11 +22,17 @@ class Settings(BaseSettings):
 
     # LLM
     openai_api_key: str = ""
-    model_name: str = "gpt-4o-mini"
+    deepseek_api_key: str = ""
+    deepseek_base_url: str = "https://api.deepseek.com"
+    model_name: str = "deepseek-chat"
     llm_temperature: float = Field(default=0.7, ge=0.0, le=2.0)
 
     # Database
     database_url: str = "sqlite:///./data/app.db"
+
+    # Auth (token HMAC tự ký - xem src/services/auth.py; đổi secret_key khi deploy that)
+    secret_key: str = "dev-secret-change-me"
+    access_token_expire_minutes: int = 60 * 24
 
     # Vector Store
     chroma_persist_dir: str = "./data/chroma"
