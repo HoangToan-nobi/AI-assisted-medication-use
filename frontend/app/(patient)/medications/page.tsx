@@ -57,37 +57,40 @@ export default function MedicationsPage() {
   return (
     <main>
       <h1>Thêm thuốc</h1>
-      <form onSubmit={handleSubmit}>
-        <div className="field autocomplete">
-          <label htmlFor="medication_name">Tên thuốc (kể cả viết tắt/biệt dược)</label>
-          <input
-            id="medication_name"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="VD: aspirin, panadol..."
-            autoComplete="off"
-          />
-          {suggestions.length > 0 && (
-            <ul className="autocomplete-list">
-              {suggestions.map((s) => (
-                <li
-                  key={s.id}
-                  onClick={() => {
-                    setQuery(s.ten_chuan_hoa);
-                    setSuggestions([]);
-                  }}
-                >
-                  {s.ten_chuan_hoa}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        {error && <p className="error-text">{error}</p>}
-        <button type="submit" disabled={saving || !query.trim()}>
-          {saving ? "Đang lưu..." : "Lưu"}
-        </button>
-      </form>
+      <div className="panel">
+        <form onSubmit={handleSubmit}>
+          <div className="field autocomplete">
+            <label htmlFor="medication_name">Tên thuốc (kể cả viết tắt/biệt dược)</label>
+            <input
+              id="medication_name"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="VD: aspirin, panadol, warfarin..."
+              autoComplete="off"
+            />
+            {suggestions.length > 0 && (
+              <ul className="autocomplete-list">
+                {suggestions.map((s) => (
+                  <li
+                    key={s.id}
+                    onClick={() => {
+                      setQuery(s.ten_chuan_hoa);
+                      setSuggestions([]);
+                    }}
+                  >
+                    {s.ten_chuan_hoa}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          {error && <p className="error-text">{error}</p>}
+          <button type="submit" disabled={saving || !query.trim()} style={{ width: "100%" }}>
+            {saving && <span className="spinner" aria-hidden="true" />}
+            {saving ? "Đang lưu..." : "Lưu vào hồ sơ"}
+          </button>
+        </form>
+      </div>
     </main>
   );
 }

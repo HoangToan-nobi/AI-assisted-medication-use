@@ -46,21 +46,34 @@ function CheckResultContent() {
     <main>
       <h1>Kết quả kiểm tra tương tác</h1>
 
-      {loading && <p>Đang tải...</p>}
+      {loading && (
+        <div className="loading-row">
+          <span className="spinner" aria-hidden="true" />
+          Đang tải kết quả...
+        </div>
+      )}
       {error && <p className="error-text">{error}</p>}
 
       {result?.has_severe && (
         <div className="urgent-banner">
-          ⚠️ Phát hiện tương tác mức <strong>nghiêm trọng</strong>. Vui lòng liên hệ dược sĩ/bác
-          sĩ ngay để được tư vấn kịp thời.
+          <span className="banner-icon" aria-hidden="true">
+            🚨
+          </span>
+          <span>
+            Phát hiện tương tác mức <strong>nghiêm trọng</strong>. Vui lòng liên hệ dược sĩ/bác sĩ
+            ngay để được tư vấn kịp thời.
+          </span>
         </div>
       )}
 
       {result?.has_unclassified && (
-        <p className="disclaimer">
-          Có ít nhất 1 cặp thuốc chưa được DDInter phân loại mức độ nghiêm trọng — cần thận
-          trọng và hỏi dược sĩ/bác sĩ.
-        </p>
+        <div className="info-banner">
+          <span aria-hidden="true">ℹ️</span>
+          <span>
+            Có ít nhất 1 cặp thuốc chưa được DDInter phân loại mức độ nghiêm trọng — cần thận
+            trọng và hỏi dược sĩ/bác sĩ.
+          </span>
+        </div>
       )}
 
       {result?.explanations.map((e, idx) => (
@@ -77,7 +90,7 @@ function CheckResultContent() {
       <Disclaimer />
 
       <button className="secondary" onClick={() => router.push("/dashboard")}>
-        Về trang chủ
+        ← Về trang chủ
       </button>
     </main>
   );

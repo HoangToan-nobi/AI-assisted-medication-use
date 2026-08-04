@@ -34,7 +34,7 @@ export default function AlertCard({
   return (
     <div className={`alert-card ${config.className}`} data-severity={severity ?? "none"}>
       <div className="alert-card-header">
-        <span className="alert-icon" aria-hidden="true">
+        <span className="alert-icon-bubble" aria-hidden="true">
           {config.icon}
         </span>
         <span className="alert-severity-label">{config.label}</span>

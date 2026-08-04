@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { getInitials } from "@/lib/format";
 import { clearSession, getSession, type Session } from "@/lib/auth";
 
 export default function PharmacistLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [session, setSession] = useState<Session | null>(null);
   const [checked, setChecked] = useState(false);
 
@@ -30,12 +32,25 @@ export default function PharmacistLayout({ children }: { children: React.ReactNo
   return (
     <>
       <nav className="nav">
-        <Link href="/patients">Bệnh nhân phụ trách</Link>
+        <span className="brand">
+          <span className="brand-mark" aria-hidden="true">
+            🛡️
+          </span>
+          MedGuard AI
+        </span>
+        <div className="nav-links">
+          <Link href="/patients" className={`nav-link ${pathname === "/patients" ? "active" : ""}`}>
+            Bệnh nhân phụ trách
+          </Link>
+        </div>
         <span className="spacer" />
-        <span>{session.hoTen}</span>
-        <button className="secondary" onClick={handleLogout}>
-          Đăng xuất
-        </button>
+        <div className="nav-user">
+          <span className="avatar">{getInitials(session.hoTen)}</span>
+          <span className="nav-user-name">{session.hoTen}</span>
+          <button className="ghost" onClick={handleLogout}>
+            Đăng xuất
+          </button>
+        </div>
       </nav>
       {children}
     </>

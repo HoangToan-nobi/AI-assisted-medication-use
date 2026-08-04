@@ -86,9 +86,21 @@ function ReviewContent() {
     <main>
       <h1>Xem xét cảnh báo</h1>
 
-      {loading && <p>Đang tải...</p>}
+      {loading && (
+        <div className="loading-row">
+          <span className="spinner" aria-hidden="true" />
+          Đang tải...
+        </div>
+      )}
       {error && <p className="error-text">{error}</p>}
-      {!loading && checks.length === 0 && <p>Bệnh nhân này chưa có lần kiểm tra nào.</p>}
+      {!loading && checks.length === 0 && (
+        <div className="empty-state">
+          <span className="empty-icon" aria-hidden="true">
+            📭
+          </span>
+          Bệnh nhân này chưa có lần kiểm tra nào.
+        </div>
+      )}
 
       {checks.length > 1 && (
         <div className="field">
@@ -124,7 +136,7 @@ function ReviewContent() {
       <Disclaimer />
 
       {selectedCheckId && (
-        <>
+        <div className="panel">
           <div className="field">
             <label htmlFor="ghi_chu">Ghi chú của dược sĩ</label>
             <textarea
@@ -132,17 +144,17 @@ function ReviewContent() {
               rows={4}
               value={ghiChu}
               onChange={(e) => setGhiChu(e.target.value)}
+              placeholder="VD: đã tư vấn bệnh nhân trao đổi với bác sĩ điều trị..."
             />
           </div>
 
           <button onClick={handleConfirm} disabled={submitting}>
-            {submitting ? "Đang lưu..." : "Xác nhận đã xem xét"}
+            {submitting && <span className="spinner" aria-hidden="true" />}
+            {submitting ? "Đang lưu..." : "✓ Xác nhận đã xem xét"}
           </button>
 
-          {submitted && (
-            <p style={{ color: "#166534", marginTop: 8 }}>Đã xác nhận thành công.</p>
-          )}
-        </>
+          {submitted && <span className="badge badge-success" style={{ marginLeft: 12 }}>Đã xác nhận thành công</span>}
+        </div>
       )}
     </main>
   );

@@ -81,31 +81,68 @@ export default function PatientDashboardPage() {
 
   if (!session) return null;
 
+  const unresolvedSevere = history.filter(
+    (h) => h.co_canh_bao_nang && h.trang_thai_xac_nhan !== "da_xac_nhan"
+  ).length;
+
   return (
     <main>
-      <h1>Thuốc đang dùng</h1>
+      <h1>Chào {session.hoTen.split(" ").pop()} 👋</h1>
 
-      {loading && <p>Đang tải...</p>}
+      {loading ? (
+        <div className="loading-row">
+          <span className="spinner" aria-hidden="true" />
+          Đang tải hồ sơ...
+        </div>
+      ) : (
+        <div className="stat-grid">
+          <div className="stat-card">
+            <div className="stat-value">{medications.length}</div>
+            <div className="stat-label">Thuốc đang dùng</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-value">{history.length}</div>
+            <div className="stat-label">Lần đã kiểm tra</div>
+          </div>
+          <div className={`stat-card ${unresolvedSevere > 0 ? "attention" : ""}`}>
+            <div className="stat-value">{unresolvedSevere}</div>
+            <div className="stat-label">Cảnh báo chờ dược sĩ</div>
+          </div>
+        </div>
+      )}
+
       {error && <p className="error-text">{error}</p>}
 
+      <h2>Thuốc đang dùng</h2>
       {!loading && medications.length === 0 && (
-        <p>Bạn chưa có thuốc nào trong hồ sơ. Bấm &quot;Thêm thuốc&quot; để bắt đầu.</p>
+        <div className="empty-state">
+          <span className="empty-icon" aria-hidden="true">
+            💊
+          </span>
+          Bạn chưa có thuốc nào trong hồ sơ.
+          <br />
+          Bấm &quot;Thêm thuốc&quot; bên dưới để bắt đầu.
+        </div>
       )}
 
       <ul>
         {medications.map((m) => (
           <li key={m.id} className="card">
-            <div className="actions-row" style={{ margin: 0, justifyContent: "space-between" }}>
-              <span>
-                {m.ten_chuan_hoa}
-                {m.ngay_bat_dau && <> — từ {m.ngay_bat_dau}</>}
-              </span>
+            <div className="medication-row">
+              <div>
+                <div className="medication-name">{m.ten_chuan_hoa}</div>
+                {m.ngay_bat_dau && (
+                  <div className="medication-meta">Từ ngày {m.ngay_bat_dau}</div>
+                )}
+              </div>
               <button
-                className="secondary"
+                className="icon-btn"
                 onClick={() => handleDelete(m.id)}
                 disabled={deletingId === m.id}
+                title="Xóa khỏi hồ sơ"
+                aria-label="Xóa khỏi hồ sơ"
               >
-                {deletingId === m.id ? "Đang xóa..." : "Xóa"}
+                {deletingId === m.id ? <span className="spinner" /> : "🗑"}
               </button>
             </div>
           </li>
@@ -113,38 +150,45 @@ export default function PatientDashboardPage() {
       </ul>
 
       <div className="actions-row">
-        <Link className="btn" href="/medications">
-          Thêm thuốc
+        <Link className="btn secondary" href="/medications">
+          + Thêm thuốc
         </Link>
         <button onClick={handleCheck} disabled={checking}>
-          {checking ? "Đang kiểm tra..." : "Kiểm tra tương tác"}
+          {checking && <span className="spinner" aria-hidden="true" />}
+          {checking ? "Đang kiểm tra..." : "🔍 Kiểm tra tương tác"}
         </button>
       </div>
 
       <Disclaimer />
 
       <h2>Lịch sử kiểm tra gần đây</h2>
-      {history.length === 0 && <p>Chưa có lần kiểm tra nào.</p>}
-      <ul>
-        {history.map((h) => (
-          <li key={h.id} className="card">
-            <div className="actions-row" style={{ margin: 0, alignItems: "center" }}>
+      {history.length === 0 ? (
+        <p style={{ color: "var(--text-muted)" }}>Chưa có lần kiểm tra nào.</p>
+      ) : (
+        <ul>
+          {history.map((h) => (
+            <li key={h.id} className="card hoverable">
               <button
                 className="secondary"
+                style={{ width: "100%", justifyContent: "space-between" }}
                 onClick={() => router.push(`/check-result?checkId=${h.id}`)}
               >
-                {new Date(h.thoi_gian_kiem_tra).toLocaleString("vi-VN")}
+                <span>{new Date(h.thoi_gian_kiem_tra).toLocaleString("vi-VN")}</span>
+                <span style={{ display: "flex", gap: 8 }}>
+                  {h.co_canh_bao_nang && <span className="badge badge-urgent">Nghiêm trọng</span>}
+                  <span
+                    className={`badge ${
+                      h.trang_thai_xac_nhan === "da_xac_nhan" ? "badge-success" : "badge-ok"
+                    }`}
+                  >
+                    {h.trang_thai_xac_nhan === "da_xac_nhan" ? "Đã xác nhận" : "Chưa xác nhận"}
+                  </span>
+                </span>
               </button>
-              {h.co_canh_bao_nang && <span className="badge badge-urgent">Nghiêm trọng</span>}
-              <span className="badge badge-ok">
-                {h.trang_thai_xac_nhan === "da_xac_nhan"
-                  ? "Đã dược sĩ xác nhận"
-                  : "Chưa xác nhận"}
-              </span>
-            </div>
-          </li>
-        ))}
-      </ul>
+            </li>
+          ))}
+        </ul>
+      )}
     </main>
   );
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, listPharmacistPatients, type PatientSummary } from "@/lib/api";
 import { getSession } from "@/lib/auth";
+import { getInitials } from "@/lib/format";
 
 export default function PharmacistPatientsPage() {
   const router = useRouter();
@@ -26,30 +27,61 @@ export default function PharmacistPatientsPage() {
 
   if (!session) return null;
 
+  const urgentCount = patients.filter((p) => p.co_canh_bao_nang_chua_xu_ly).length;
+
   return (
     <main>
       <h1>Bệnh nhân phụ trách</h1>
-      {loading && <p>Đang tải...</p>}
+
+      {!loading && patients.length > 0 && (
+        <div className="stat-grid">
+          <div className="stat-card">
+            <div className="stat-value">{patients.length}</div>
+            <div className="stat-label">Tổng bệnh nhân</div>
+          </div>
+          <div className={`stat-card ${urgentCount > 0 ? "attention" : ""}`}>
+            <div className="stat-value">{urgentCount}</div>
+            <div className="stat-label">Cần xử lý gấp</div>
+          </div>
+        </div>
+      )}
+
+      {loading && (
+        <div className="loading-row">
+          <span className="spinner" aria-hidden="true" />
+          Đang tải danh sách...
+        </div>
+      )}
       {error && <p className="error-text">{error}</p>}
-      {!loading && patients.length === 0 && <p>Chưa có bệnh nhân nào được phân công.</p>}
+      {!loading && patients.length === 0 && (
+        <div className="empty-state">
+          <span className="empty-icon" aria-hidden="true">
+            🗂️
+          </span>
+          Chưa có bệnh nhân nào được phân công cho bạn.
+        </div>
+      )}
 
       <ul>
         {patients.map((p) => (
-          <li key={p.id} className="card">
+          <li key={p.id} className="card hoverable">
             <div className="actions-row" style={{ margin: 0, justifyContent: "space-between" }}>
-              <strong>{p.ho_ten}</strong>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span className="avatar">{getInitials(p.ho_ten)}</span>
+                <strong>{p.ho_ten}</strong>
+              </div>
               {p.co_canh_bao_nang_chua_xu_ly ? (
-                <span className="badge badge-urgent">Cần xử lý gấp</span>
+                <span className="badge badge-urgent">🚨 Cần xử lý gấp</span>
               ) : (
                 <span className="badge badge-ok">Ổn định</span>
               )}
             </div>
-            <div style={{ marginTop: 10 }}>
+            <div style={{ marginTop: 12 }}>
               <button
                 className="secondary"
                 onClick={() => router.push(`/review?patientId=${p.id}`)}
               >
-                Xem chi tiết
+                Xem chi tiết →
               </button>
             </div>
           </li>
