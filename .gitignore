@@ -29,9 +29,9 @@ env/
 Thumbs.db
 
 # Data (never commit large data)
-data/
-*.db
-*.sqlite3
+# data/
+# *.db
+# *.sqlite3
 
 # Logs
 logs/
@@ -50,6 +50,7 @@ node_modules/
 .next/
 out/
 .nuxt/
+*.tsbuildinfo
 
 # Build
 *.pyc
