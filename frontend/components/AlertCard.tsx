@@ -1,56 +1,25 @@
+"use client";
+
+import { useState } from "react";
+import MaterialIcon from "@/components/MaterialIcon";
 import type { Severity } from "@/lib/api";
 
-type AlertCardProps = {
-  thuocA?: string;
-  thuocB?: string;
-  severity?: Severity;
-  description: string;
-  source: string;
-  // Xử trí (DDInter Management) - CHỈ truyền prop này ở màn hình dược sĩ.
-  management?: string;
+type AlertCardProps = { thuocA?: string; thuocB?: string; severity?: Severity; description: string; source: string; management?: string };
+
+const CONFIG: Record<Severity, { label: string; tag: string; icon: string; className: string }> = {
+  nang: { label: "Nghiêm trọng", tag: "Nguy hiểm", icon: "dangerous", className: "severity-nang" },
+  trung_binh: { label: "Trung bình", tag: "Cần lưu ý", icon: "warning", className: "severity-trung-binh" },
+  nhe: { label: "Nhẹ", tag: "Theo dõi", icon: "info", className: "severity-nhe" },
+  chua_phan_loai: { label: "Chưa phân loại", tag: "Chưa rõ", icon: "help", className: "severity-chua-phan-loai" },
 };
 
-const SEVERITY_CONFIG: Record<Severity, { label: string; icon: string; className: string }> = {
-  nang: { label: "Nghiêm trọng", icon: "🔴", className: "severity-nang" },
-  trung_binh: { label: "Trung bình", icon: "🟠", className: "severity-trung-binh" },
-  nhe: { label: "Nhẹ", icon: "🟡", className: "severity-nhe" },
-  chua_phan_loai: { label: "Chưa phân loại", icon: "⚪", className: "severity-chua-phan-loai" },
-};
-
-const NO_DATA_CONFIG = { label: "Không đủ dữ liệu", icon: "⚫", className: "severity-none" };
-
-// Component chuẩn dùng lại cho cả bệnh nhân và dược sĩ (xem GĐ3 mục "Component chuẩn").
-// Không dùng màu đơn thuần để truyền tải mức độ - luôn kèm icon + chữ mô tả.
-export default function AlertCard({
-  thuocA,
-  thuocB,
-  severity,
-  description,
-  source,
-  management,
-}: AlertCardProps) {
-  const config = severity ? SEVERITY_CONFIG[severity] : NO_DATA_CONFIG;
-
-  return (
-    <div className={`alert-card ${config.className}`} data-severity={severity ?? "none"}>
-      <div className="alert-card-header">
-        <span className="alert-icon-bubble" aria-hidden="true">
-          {config.icon}
-        </span>
-        <span className="alert-severity-label">{config.label}</span>
-        {(thuocA || thuocB) && (
-          <span className="alert-drug-pair">
-            {thuocA} + {thuocB}
-          </span>
-        )}
-      </div>
-      <p className="alert-description">{description}</p>
-      {management && (
-        <p className="alert-management">
-          <strong>Xử trí (chỉ dược sĩ xem):</strong> {management}
-        </p>
-      )}
-      <p className="alert-source">Nguồn: {source}</p>
-    </div>
-  );
+export default function AlertCard({ thuocA, thuocB, severity, description, source, management }: AlertCardProps) {
+  const [sourceOpen, setSourceOpen] = useState(false);
+  const config = severity ? CONFIG[severity] : { label: "Không đủ dữ liệu", tag: "Chưa cập nhật", icon: "block", className: "severity-none" };
+  return <article className={`alert-card ${config.className}`} data-severity={severity ?? "none"}>
+    <div className="alert-card-header"><span className="alert-icon-wrap"><MaterialIcon name={config.icon} size={22} filled /></span><div className="alert-card-body"><span className="alert-severity-tag">{config.tag}</span><h3>{thuocA && thuocB ? `${config.label}: ${thuocA} + ${thuocB}` : config.label}</h3></div></div>
+    <p className="alert-description">{description}</p>
+    {management && <div className="alert-action-box"><strong>Khuyến nghị hành động</strong>{management}</div>}
+    <div className={`citation-wrap ${sourceOpen ? "citation-wrap--open" : ""}`}><button type="button" className="citation-trigger" aria-expanded={sourceOpen} aria-label={`Xem nguồn: ${source}`} onClick={() => setSourceOpen((open) => !open)}><MaterialIcon name="database" size={15} /> <span className="citation-trigger__text">{source || "Nguồn trích dẫn"}</span><MaterialIcon name={sourceOpen ? "expand_less" : "expand_more"} size={16} /></button><div className="citation-popover" role="tooltip"><span className="citation-popover__label">NGUỒN THAM KHẢO</span><strong>{source || "Chưa có thông tin nguồn"}</strong><p>Nhấn lại nút nguồn để thu gọn thông tin tham khảo.</p></div></div>
+  </article>;
 }
