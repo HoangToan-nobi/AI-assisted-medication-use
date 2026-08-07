@@ -87,6 +87,15 @@ function CheckResultContent() {
         />
       ))}
 
+      {result?.ghi_chu && (
+        <div className="panel" style={{ marginBottom: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <span className="badge badge-success">Đã dược sĩ xác nhận</span>
+          </div>
+          <p style={{ margin: 0 }}>{result.ghi_chu}</p>
+        </div>
+      )}
+
       <Disclaimer />
 
       <button className="secondary" onClick={() => router.push("/dashboard")}>

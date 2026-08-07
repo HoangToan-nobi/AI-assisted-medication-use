@@ -44,10 +44,13 @@ function ReviewContent() {
 
   useEffect(() => {
     if (!session || !selectedCheckId) return;
-    setSubmitted(false);
-    setGhiChu("");
     getInteractionCheckDetail(selectedCheckId, session.accessToken)
-      .then(setDetail)
+      .then((d) => {
+        setDetail(d);
+        // Nạp lại ghi chú cũ (nếu đã từng xác nhận) thay vì để trống mỗi lần chọn lại.
+        setGhiChu(d.ghi_chu ?? "");
+        setSubmitted(d.trang_thai_xac_nhan === "da_xac_nhan");
+      })
       .catch((err) =>
         setError(err instanceof ApiError ? err.message : "Không tải được chi tiết")
       );
@@ -77,7 +80,7 @@ function ReviewContent() {
   if (!patientId) {
     return (
       <main>
-        <p>Thiếu thông tin bệnh nhân — vui lòng chọn từ danh sách bệnh nhân phụ trách.</p>
+        <p>Thiếu thông tin người dùng — vui lòng chọn từ danh sách người dùng phụ trách.</p>
       </main>
     );
   }
@@ -98,7 +101,7 @@ function ReviewContent() {
           <span className="empty-icon" aria-hidden="true">
             📭
           </span>
-          Bệnh nhân này chưa có lần kiểm tra nào.
+          Người dùng này chưa có lần kiểm tra nào.
         </div>
       )}
 
@@ -144,16 +147,20 @@ function ReviewContent() {
               rows={4}
               value={ghiChu}
               onChange={(e) => setGhiChu(e.target.value)}
-              placeholder="VD: đã tư vấn bệnh nhân trao đổi với bác sĩ điều trị..."
+              placeholder="VD: đã tư vấn người dùng trao đổi với bác sĩ điều trị..."
             />
           </div>
 
           <button onClick={handleConfirm} disabled={submitting}>
             {submitting && <span className="spinner" aria-hidden="true" />}
-            {submitting ? "Đang lưu..." : "✓ Xác nhận đã xem xét"}
+            {submitting ? "Đang lưu..." : submitted ? "✓ Cập nhật ghi chú" : "✓ Xác nhận đã xem xét"}
           </button>
 
-          {submitted && <span className="badge badge-success" style={{ marginLeft: 12 }}>Đã xác nhận thành công</span>}
+          {submitted && (
+            <span className="badge badge-success" style={{ marginLeft: 12 }}>
+              Đã xác nhận
+            </span>
+          )}
         </div>
       )}
     </main>

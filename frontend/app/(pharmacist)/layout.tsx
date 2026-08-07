@@ -40,7 +40,7 @@ export default function PharmacistLayout({ children }: { children: React.ReactNo
         </span>
         <div className="nav-links">
           <Link href="/patients" className={`nav-link ${pathname === "/patients" ? "active" : ""}`}>
-            Bệnh nhân phụ trách
+            Người dùng phụ trách
           </Link>
         </div>
         <span className="spacer" />

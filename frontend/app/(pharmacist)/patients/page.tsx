@@ -19,7 +19,7 @@ export default function PharmacistPatientsPage() {
     listPharmacistPatients(session.userId, session.accessToken)
       .then(setPatients)
       .catch((err) =>
-        setError(err instanceof ApiError ? err.message : "Không tải được danh sách bệnh nhân")
+        setError(err instanceof ApiError ? err.message : "Không tải được danh sách người dùng")
       )
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -31,13 +31,13 @@ export default function PharmacistPatientsPage() {
 
   return (
     <main>
-      <h1>Bệnh nhân phụ trách</h1>
+      <h1>Người dùng phụ trách</h1>
 
       {!loading && patients.length > 0 && (
         <div className="stat-grid">
           <div className="stat-card">
             <div className="stat-value">{patients.length}</div>
-            <div className="stat-label">Tổng bệnh nhân</div>
+            <div className="stat-label">Tổng người dùng</div>
           </div>
           <div className={`stat-card ${urgentCount > 0 ? "attention" : ""}`}>
             <div className="stat-value">{urgentCount}</div>
@@ -58,7 +58,7 @@ export default function PharmacistPatientsPage() {
           <span className="empty-icon" aria-hidden="true">
             🗂️
           </span>
-          Chưa có bệnh nhân nào được phân công cho bạn.
+          Chưa có người dùng nào được phân công cho bạn.
         </div>
       )}
 

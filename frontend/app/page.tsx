@@ -8,6 +8,24 @@ import { saveSession } from "@/lib/auth";
 type Mode = "login" | "register";
 type Role = "patient" | "pharmacist";
 
+// Tài khoản demo - tạo sẵn bằng `python scripts/seed_demo_users.py` (bệnh nhân đã có
+// sẵn thuốc, dược sĩ đã được gán phụ trách). CHỈ để demo/dev nội bộ.
+const DEMO_LOGIN_ENABLED = process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN !== "false";
+const DEMO_ACCOUNTS: Record<Role, { email: string; matKhau: string; label: string; icon: string }> = {
+  patient: {
+    email: "demo-patient@medguard.local",
+    matKhau: "demo1234",
+    label: "Vào với vai trò Người dùng",
+    icon: "🧑",
+  },
+  pharmacist: {
+    email: "demo-pharmacist@medguard.local",
+    matKhau: "demo1234",
+    label: "Vào với vai trò Dược sĩ",
+    icon: "💊",
+  },
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("login");
@@ -17,6 +35,17 @@ export default function LoginPage() {
   const [matKhau, setMatKhau] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [demoLoadingRole, setDemoLoadingRole] = useState<Role | null>(null);
+
+  async function completeLogin(auth: Awaited<ReturnType<typeof login>>) {
+    saveSession({
+      accessToken: auth.access_token,
+      userId: auth.user_id,
+      hoTen: auth.ho_ten,
+      vaiTro: auth.vai_tro,
+    });
+    router.push(auth.vai_tro === "patient" ? "/dashboard" : "/patients");
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -27,17 +56,29 @@ export default function LoginPage() {
         mode === "login"
           ? await login(email, matKhau)
           : await register(hoTen, email, matKhau, role);
-      saveSession({
-        accessToken: auth.access_token,
-        userId: auth.user_id,
-        hoTen: auth.ho_ten,
-        vaiTro: auth.vai_tro,
-      });
-      router.push(auth.vai_tro === "patient" ? "/dashboard" : "/patients");
+      await completeLogin(auth);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra, vui lòng thử lại.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleDemoLogin(demoRole: Role) {
+    setError(null);
+    setDemoLoadingRole(demoRole);
+    try {
+      const { email: demoEmail, matKhau: demoMatKhau } = DEMO_ACCOUNTS[demoRole];
+      const auth = await login(demoEmail, demoMatKhau);
+      await completeLogin(auth);
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? `Chưa có tài khoản demo — chạy "python scripts/seed_demo_users.py" trước (${err.message}).`
+          : "Có lỗi xảy ra, vui lòng thử lại."
+      );
+    } finally {
+      setDemoLoadingRole(null);
     }
   }
 
@@ -92,7 +133,7 @@ export default function LoginPage() {
                     className={role === "patient" ? "active" : ""}
                     onClick={() => setRole("patient")}
                   >
-                    🧑 Bệnh nhân
+                    🧑 Người dùng
                   </button>
                   <button
                     type="button"
@@ -137,6 +178,33 @@ export default function LoginPage() {
             {loading ? "Đang xử lý..." : mode === "login" ? "Đăng nhập" : "Tạo tài khoản"}
           </button>
         </form>
+
+        {DEMO_LOGIN_ENABLED && mode === "login" && (
+          <>
+            <div className="auth-divider">
+              <span>hoặc dùng thử ngay</span>
+            </div>
+            <div className="field" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {(Object.keys(DEMO_ACCOUNTS) as Role[]).map((demoRole) => (
+                <button
+                  key={demoRole}
+                  type="button"
+                  className="secondary"
+                  style={{ width: "100%" }}
+                  disabled={demoLoadingRole !== null}
+                  onClick={() => handleDemoLogin(demoRole)}
+                >
+                  {demoLoadingRole === demoRole ? (
+                    <span className="spinner" aria-hidden="true" />
+                  ) : (
+                    <span aria-hidden="true">{DEMO_ACCOUNTS[demoRole].icon}</span>
+                  )}
+                  {DEMO_ACCOUNTS[demoRole].label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

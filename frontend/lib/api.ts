@@ -22,15 +22,20 @@ export type MedicationCheckResponse = {
   explanations: InteractionExplanation[];
   has_severe: boolean;
   has_unclassified: boolean;
+  // Ghi chú của dược sĩ nếu lần kiểm tra này đã được xác nhận, ngược lại null.
+  ghi_chu: string | null;
 };
 
 // Kết quả thô từ GET /pharmacist/reviews/{id} - chính là state agent đầy đủ
-// (không có interaction_check_id bên trong, có thể thiếu field nếu rỗng).
+// (không có interaction_check_id bên trong, có thể thiếu field nếu rỗng), cộng
+// thêm ghi_chu/trang_thai_xac_nhan của CHÍNH dược sĩ đang xem (nếu đã xác nhận).
 export type AgentCheckResult = {
   ranked_results?: Record<string, unknown>[];
   explanations?: InteractionExplanation[];
   has_severe?: boolean;
   has_unclassified?: boolean;
+  ghi_chu?: string | null;
+  trang_thai_xac_nhan?: string;
 };
 
 export type AuthResponse = {
