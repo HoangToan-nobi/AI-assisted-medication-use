@@ -144,6 +144,10 @@ export async function searchMedications(
   );
 }
 
+export async function searchGuestMedications(q: string): Promise<MedicationSearchResult[]> {
+  return request<MedicationSearchResult[]>(`/api/v1/guest/medications/search?q=${encodeURIComponent(q)}`);
+}
+
 export async function listPatientMedications(
   patientId: string,
   token: string
@@ -183,6 +187,13 @@ export async function checkMedications(
   return request<MedicationCheckResponse>("/api/v1/medications/check", {
     method: "POST",
     token,
+    body: JSON.stringify({ medications }),
+  });
+}
+
+export async function checkGuestMedications(medications: string[]): Promise<MedicationCheckResponse> {
+  return request<MedicationCheckResponse>("/api/v1/guest/medications/check", {
+    method: "POST",
     body: JSON.stringify({ medications }),
   });
 }

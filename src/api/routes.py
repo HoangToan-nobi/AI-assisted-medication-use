@@ -142,6 +142,25 @@ async def search_medications(
     return [MedicationSearchResult(id=m.id, ten_chuan_hoa=m.ten_chuan_hoa) for m in results]
 
 
+@router.get("/guest/medications/search", response_model=list[MedicationSearchResult])
+async def guest_search_medications(
+    q: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+) -> list[MedicationSearchResult]:
+    """Tra cứu công khai cho khách vãng lai; không yêu cầu tài khoản và không ghi dữ liệu."""
+    like_pattern = f"%{q.strip().lower()}%"
+    name_matches = db.query(Medication).filter(func.lower(Medication.ten_chuan_hoa).like(like_pattern)).all()
+    alias_matches = (
+        db.query(Medication)
+        .join(MedicationAlias, MedicationAlias.medication_id == Medication.id)
+        .filter(func.lower(MedicationAlias.alias).like(like_pattern))
+        .all()
+    )
+    unique_by_id = {m.id: m for m in [*name_matches, *alias_matches]}
+    results = sorted(unique_by_id.values(), key=lambda m: m.ten_chuan_hoa)[:10]
+    return [MedicationSearchResult(id=m.id, ten_chuan_hoa=m.ten_chuan_hoa) for m in results]
+
+
 # ---- Hồ sơ thuốc bệnh nhân ----
 
 
@@ -255,6 +274,23 @@ async def check_medications(
 
     return MedicationCheckResponse(
         interaction_check_id=check.id,
+        ranked_results=_strip_pharmacist_fields(result.get("ranked_results", [])),
+        explanations=_strip_pharmacist_fields(result.get("explanations", [])),
+        has_severe=result.get("has_severe", False),
+        has_unclassified=result.get("has_unclassified", False),
+    )
+
+
+@router.post("/guest/medications/check", response_model=MedicationCheckResponse)
+async def guest_check_medications(
+    request: MedicationCheckRequest,
+) -> MedicationCheckResponse:
+    """Kiểm tra tương tác cho khách vãng lai; chỉ chạy phân tích, không lưu lịch sử."""
+    result = dict(await agent.ainvoke({"raw_medications": request.medications}))
+    if result.get("error"):
+        raise HTTPException(status_code=422, detail=result["error"])
+    return MedicationCheckResponse(
+        interaction_check_id="guest-check",
         ranked_results=_strip_pharmacist_fields(result.get("ranked_results", [])),
         explanations=_strip_pharmacist_fields(result.get("explanations", [])),
         has_severe=result.get("has_severe", False),
