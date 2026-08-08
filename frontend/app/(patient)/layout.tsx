@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import BottomNav from "@/components/BottomNav";
+import Sidebar from "@/components/Sidebar";
 import BrandLogo from "@/components/BrandLogo";
 import MaterialIcon from "@/components/MaterialIcon";
 import { clearSession, getSession, type Session } from "@/lib/auth";
@@ -48,7 +48,7 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
         </div>
       </header>
       <div className="app-content">{children}</div>
-      <BottomNav />
+      <Sidebar />
       <span className="sr-only">Đang ở trang {pathname}</span>
     </div>
   );

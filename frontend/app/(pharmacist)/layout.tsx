@@ -33,7 +33,7 @@ export default function PharmacistLayout({ children }: { children: React.ReactNo
 
   return (
     <div className="pharmacist-shell">
-      <header className="pharmacist-nav">
+      <aside className="pharmacist-nav pharmacist-sidebar">
         <BrandLogo size="sm" />
         <Link href="/patients" className={`pharmacist-nav__link ${pathname === "/patients" ? "active" : ""}`}>
           <MaterialIcon name="group" size={20} />
@@ -47,7 +47,7 @@ export default function PharmacistLayout({ children }: { children: React.ReactNo
             <MaterialIcon name="logout" size={20} />
           </button>
         </div>
-      </header>
+      </aside>
       <div className="pharmacist-content">{children}</div>
     </div>
   );
