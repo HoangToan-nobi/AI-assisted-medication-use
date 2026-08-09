@@ -142,6 +142,25 @@ async def search_medications(
     return [MedicationSearchResult(id=m.id, ten_chuan_hoa=m.ten_chuan_hoa) for m in results]
 
 
+@router.get("/guest/medications/search", response_model=list[MedicationSearchResult])
+async def guest_search_medications(
+    q: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+) -> list[MedicationSearchResult]:
+    """Tra cứu công khai cho khách vãng lai; không yêu cầu tài khoản và không ghi dữ liệu."""
+    like_pattern = f"%{q.strip().lower()}%"
+    name_matches = db.query(Medication).filter(func.lower(Medication.ten_chuan_hoa).like(like_pattern)).all()
+    alias_matches = (
+        db.query(Medication)
+        .join(MedicationAlias, MedicationAlias.medication_id == Medication.id)
+        .filter(func.lower(MedicationAlias.alias).like(like_pattern))
+        .all()
+    )
+    unique_by_id = {m.id: m for m in [*name_matches, *alias_matches]}
+    results = sorted(unique_by_id.values(), key=lambda m: m.ten_chuan_hoa)[:10]
+    return [MedicationSearchResult(id=m.id, ten_chuan_hoa=m.ten_chuan_hoa) for m in results]
+
+
 # ---- Hồ sơ thuốc bệnh nhân ----
 
 
@@ -262,17 +281,28 @@ async def check_medications(
     )
 
 
-def _find_review(
-    db: Session, check_id: str, pharmacist_id: str | None = None
-) -> PharmacistReview | None:
-    query = db.query(PharmacistReview).filter_by(interaction_check_id=check_id)
-    if pharmacist_id is not None:
-        query = query.filter_by(pharmacist_id=pharmacist_id)
-    return query.first()
+@router.post("/guest/medications/check", response_model=MedicationCheckResponse)
+async def guest_check_medications(
+    request: MedicationCheckRequest,
+) -> MedicationCheckResponse:
+    """Kiểm tra tương tác cho khách vãng lai; chỉ chạy phân tích, không lưu lịch sử."""
+    result = dict(await agent.ainvoke({"raw_medications": request.medications}))
+    if result.get("error"):
+        raise HTTPException(status_code=422, detail=result["error"])
+    return MedicationCheckResponse(
+        interaction_check_id="guest-check",
+        ranked_results=_strip_pharmacist_fields(result.get("ranked_results", [])),
+        explanations=_strip_pharmacist_fields(result.get("explanations", [])),
+        has_severe=result.get("has_severe", False),
+        has_unclassified=result.get("has_unclassified", False),
+    )
 
 
 def _review_status(db: Session, check_id: str, pharmacist_id: str | None = None) -> str:
-    review = _find_review(db, check_id, pharmacist_id)
+    query = db.query(PharmacistReview).filter_by(interaction_check_id=check_id)
+    if pharmacist_id is not None:
+        query = query.filter_by(pharmacist_id=pharmacist_id)
+    review = query.first()
     return review.trang_thai_xac_nhan if review else "chua_xac_nhan"
 
 
@@ -320,14 +350,12 @@ async def get_patient_check_detail(
         raise HTTPException(status_code=404, detail="Không tìm thấy interaction_check")
 
     result = check.ket_qua_json or {}
-    review = _find_review(db, check.id)
     return MedicationCheckResponse(
         interaction_check_id=check.id,
         ranked_results=_strip_pharmacist_fields(result.get("ranked_results", [])),
         explanations=_strip_pharmacist_fields(result.get("explanations", [])),
         has_severe=result.get("has_severe", False),
         has_unclassified=result.get("has_unclassified", False),
-        ghi_chu=review.ghi_chu if review else None,
     )
 
 
@@ -421,19 +449,13 @@ async def get_interaction_check_detail(
     current_user: User = Depends(require_role("pharmacist")),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Chi tiết đầy đủ 1 lần kiểm tra (bao gồm xu_tri/thay_the - chỉ dược sĩ xem),
-    kèm ghi_chu/trang_thai_xac_nhan của CHÍNH dược sĩ đang xem (nếu đã từng xác nhận)."""
+    """Chi tiết đầy đủ 1 lần kiểm tra (bao gồm xu_tri/thay_the - chỉ dược sĩ xem)."""
     check = db.get(InteractionCheck, interaction_check_id)
     if check is None:
         raise HTTPException(status_code=404, detail="Không tìm thấy interaction_check")
 
     _ensure_pharmacist_assigned(current_user, check.patient_id, db)
-
-    review = _find_review(db, check.id, current_user.id)
-    result = dict(check.ket_qua_json or {})
-    result["ghi_chu"] = review.ghi_chu if review else None
-    result["trang_thai_xac_nhan"] = review.trang_thai_xac_nhan if review else "chua_xac_nhan"
-    return result
+    return check.ket_qua_json
 
 
 @router.post("/pharmacist/reviews", response_model=PharmacistReviewResponse)

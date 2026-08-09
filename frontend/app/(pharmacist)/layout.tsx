@@ -5,6 +5,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { getInitials } from "@/lib/format";
 import { clearSession, getSession, type Session } from "@/lib/auth";
+import BrandLogo from "@/components/BrandLogo";
+import MaterialIcon from "@/components/MaterialIcon";
 
 export default function PharmacistLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -30,29 +32,23 @@ export default function PharmacistLayout({ children }: { children: React.ReactNo
   if (!checked || !session) return null;
 
   return (
-    <>
-      <nav className="nav">
-        <span className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            🛡️
-          </span>
-          MedGuard AI
-        </span>
-        <div className="nav-links">
-          <Link href="/patients" className={`nav-link ${pathname === "/patients" ? "active" : ""}`}>
-            Người dùng phụ trách
-          </Link>
-        </div>
+    <div className="pharmacist-shell">
+      <aside className="pharmacist-nav pharmacist-sidebar">
+        <BrandLogo size="sm" />
+        <Link href="/patients" className={`pharmacist-nav__link ${pathname === "/patients" ? "active" : ""}`}>
+          <MaterialIcon name="group" size={20} />
+          Bệnh nhân phụ trách
+        </Link>
         <span className="spacer" />
-        <div className="nav-user">
+        <div className="pharmacist-nav__user">
           <span className="avatar">{getInitials(session.hoTen)}</span>
-          <span className="nav-user-name">{session.hoTen}</span>
-          <button className="ghost" onClick={handleLogout}>
-            Đăng xuất
+          <span className="pharmacist-nav__user-name">{session.hoTen}</span>
+          <button className="icon-btn" onClick={handleLogout} aria-label="Đăng xuất" title="Đăng xuất">
+            <MaterialIcon name="logout" size={20} />
           </button>
         </div>
-      </nav>
-      {children}
-    </>
+      </aside>
+      <div className="pharmacist-content">{children}</div>
+    </div>
   );
 }

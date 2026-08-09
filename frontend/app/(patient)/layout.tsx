@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { getInitials } from "@/lib/format";
+import Sidebar from "@/components/Sidebar";
+import BrandLogo from "@/components/BrandLogo";
+import MaterialIcon from "@/components/MaterialIcon";
 import { clearSession, getSession, type Session } from "@/lib/auth";
+import Link from "next/link";
 
 export default function PatientLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -13,52 +15,41 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    const s = getSession();
-    if (!s || s.vaiTro !== "patient") {
+    const current = getSession();
+    if ((!current || current.vaiTro !== "patient") && pathname !== "/interaction") {
       router.replace("/");
       return;
     }
-    setSession(s);
+    setSession(current);
     setChecked(true);
   }, [router]);
 
-  function handleLogout() {
+  if (!checked) return null;
+
+  if (!session && pathname === "/interaction") {
+    return <div className="app-shell"><header className="patient-header"><BrandLogo size="sm" /><Link className="guest-login-link" href="/">Đăng nhập để lưu lịch sử</Link></header><div className="app-content">{children}</div></div>;
+  }
+  if (!session) return null;
+
+  function logout() {
     clearSession();
     router.replace("/");
   }
 
-  if (!checked || !session) return null;
-
   return (
-    <>
-      <nav className="nav">
-        <span className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            🛡️
-          </span>
-          MedGuard AI
-        </span>
-        <div className="nav-links">
-          <Link href="/dashboard" className={`nav-link ${pathname === "/dashboard" ? "active" : ""}`}>
-            Trang chủ
-          </Link>
-          <Link
-            href="/medications"
-            className={`nav-link ${pathname === "/medications" ? "active" : ""}`}
-          >
-            Thêm thuốc
-          </Link>
-        </div>
-        <span className="spacer" />
-        <div className="nav-user">
-          <span className="avatar">{getInitials(session.hoTen)}</span>
-          <span className="nav-user-name">{session.hoTen}</span>
-          <button className="ghost" onClick={handleLogout}>
-            Đăng xuất
+    <div className="app-shell app-shell--with-nav">
+      <header className="patient-header">
+        <BrandLogo size="sm" />
+        <div className="patient-header__actions">
+          <Link className="patient-header__name" href="/profile" title="Hồ sơ của tôi">{session.hoTen}</Link>
+          <button className="icon-btn" onClick={logout} aria-label="Đăng xuất" title="Đăng xuất">
+            <MaterialIcon name="logout" size={20} />
           </button>
         </div>
-      </nav>
-      {children}
-    </>
+      </header>
+      <div className="app-content">{children}</div>
+      <Sidebar />
+      <span className="sr-only">Đang ở trang {pathname}</span>
+    </div>
   );
 }

@@ -260,9 +260,6 @@ async def test_pharmacist_sees_assigned_patients_and_can_review(monkeypatch, moc
         assert detail_resp.status_code == 200
         detail = detail_resp.json()
         assert any("xu_tri" in e for e in detail["explanations"])
-        # Trước khi xác nhận: chưa có ghi chú nào.
-        assert detail["ghi_chu"] is None
-        assert detail["trang_thai_xac_nhan"] == "chua_xac_nhan"
 
         # Xác nhận review -> trạng thái "đã xác nhận", patient hết escalate.
         review_resp = await client.post(
@@ -277,15 +274,3 @@ async def test_pharmacist_sees_assigned_patients_and_can_review(monkeypatch, moc
             f"/api/v1/pharmacist/{pharmacist['user_id']}/patients", headers=pharmacist_headers
         )
         assert final_resp.json()[0]["co_canh_bao_nang_chua_xu_ly"] is False
-
-        # Ghi chú phải đọc lại được: dược sĩ xem lại (round-trip) và bệnh nhân cũng thấy.
-        detail_after_resp = await client.get(
-            f"/api/v1/pharmacist/reviews/{check_id}", headers=pharmacist_headers
-        )
-        assert detail_after_resp.json()["ghi_chu"] == "Da tu van benh nhan"
-        assert detail_after_resp.json()["trang_thai_xac_nhan"] == "da_xac_nhan"
-
-        patient_detail_after_resp = await client.get(
-            f"/api/v1/patients/{patient['user_id']}/checks/{check_id}", headers=patient_headers
-        )
-        assert patient_detail_after_resp.json()["ghi_chu"] == "Da tu van benh nhan"

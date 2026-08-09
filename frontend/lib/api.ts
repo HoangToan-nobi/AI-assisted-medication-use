@@ -22,20 +22,15 @@ export type MedicationCheckResponse = {
   explanations: InteractionExplanation[];
   has_severe: boolean;
   has_unclassified: boolean;
-  // Ghi chú của dược sĩ nếu lần kiểm tra này đã được xác nhận, ngược lại null.
-  ghi_chu: string | null;
 };
 
 // Kết quả thô từ GET /pharmacist/reviews/{id} - chính là state agent đầy đủ
-// (không có interaction_check_id bên trong, có thể thiếu field nếu rỗng), cộng
-// thêm ghi_chu/trang_thai_xac_nhan của CHÍNH dược sĩ đang xem (nếu đã xác nhận).
+// (không có interaction_check_id bên trong, có thể thiếu field nếu rỗng).
 export type AgentCheckResult = {
   ranked_results?: Record<string, unknown>[];
   explanations?: InteractionExplanation[];
   has_severe?: boolean;
   has_unclassified?: boolean;
-  ghi_chu?: string | null;
-  trang_thai_xac_nhan?: string;
 };
 
 export type AuthResponse = {
@@ -149,6 +144,10 @@ export async function searchMedications(
   );
 }
 
+export async function searchGuestMedications(q: string): Promise<MedicationSearchResult[]> {
+  return request<MedicationSearchResult[]>(`/api/v1/guest/medications/search?q=${encodeURIComponent(q)}`);
+}
+
 export async function listPatientMedications(
   patientId: string,
   token: string
@@ -188,6 +187,13 @@ export async function checkMedications(
   return request<MedicationCheckResponse>("/api/v1/medications/check", {
     method: "POST",
     token,
+    body: JSON.stringify({ medications }),
+  });
+}
+
+export async function checkGuestMedications(medications: string[]): Promise<MedicationCheckResponse> {
+  return request<MedicationCheckResponse>("/api/v1/guest/medications/check", {
+    method: "POST",
     body: JSON.stringify({ medications }),
   });
 }

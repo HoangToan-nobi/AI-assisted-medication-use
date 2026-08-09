@@ -90,56 +90,11 @@ Mở terminal mới (giữ backend đang chạy):
 ```bash
 cd frontend
 npm install
-cp .env.example .env (optional)
+cp .env.local.example .env.local
 npm run dev
 ```
 
 Mở [http://localhost:3000](http://localhost:3000).
-
-## 5b. Chạy bằng Docker (thay cho bước 2–5, khuyến nghị nếu chỉ muốn xem demo)
-
-Yêu cầu: [Docker Desktop](https://www.docker.com/products/docker-desktop/) đã cài và đang chạy.
-
-```bash
-# 1) Tạo file cấu hình (nếu chưa có) và điền DEEPSEEK_API_KEY
-cp .env.example .env
-
-# 2) Build image backend + frontend
-docker compose build
-
-# 3) Chạy nền
-docker compose up -d
-
-# 4) Xem log (Ctrl+C để thoát, container vẫn chạy)
-docker compose logs -f
-```
-
-- Backend: [http://localhost:8000/health](http://localhost:8000/health) — Swagger: [http://localhost:8000/docs](http://localhost:8000/docs)
-- Frontend: [http://localhost:3000](http://localhost:3000)
-
-Dữ liệu (`data/app.db`, `data/raw/`) được mount từ thư mục `data/` trên máy host vào container nên không mất khi restart. Nếu chưa có `data/app.db` (lần chạy đầu / clone mới), nạp dữ liệu DDInter và tài khoản demo **sau khi** `docker compose up -d`:
-
-```bash
-# Bắt buộc: đã copy data/raw/vmec12_ddinter.db vào máy host trước (xem mục 3)
-docker compose exec backend python scripts/import_ddinter.py
-
-# Tùy chọn: tạo sẵn 2 tài khoản demo (patient/pharmacist, mật khẩu demo1234)
-docker compose exec backend python scripts/seed_demo_users.py
-```
-
-Đổi backend/frontend, build lại và khởi động lại:
-
-```bash
-docker compose up -d --build
-```
-
-Dừng và xoá container (dữ liệu trong `data/` vẫn giữ nguyên trên host):
-
-```bash
-docker compose down
-```
-
-> Frontend đóng gói biến `NEXT_PUBLIC_API_URL` vào lúc **build**, không phải lúc chạy (đặc thù Next.js). Nếu deploy backend ở địa chỉ khác `localhost:8000`, set biến môi trường `NEXT_PUBLIC_API_URL` trước khi `docker compose build`, ví dụ: `NEXT_PUBLIC_API_URL=https://api.example.com docker compose build frontend`.
 
 ## 6. Chạy test
 

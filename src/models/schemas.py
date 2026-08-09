@@ -68,8 +68,6 @@ class MedicationCheckResponse(BaseModel):
     explanations: list[dict]
     has_severe: bool
     has_unclassified: bool
-    # Ghi chú của dược sĩ (nếu đã xác nhận) - None nếu chưa ai xác nhận lần kiểm tra này.
-    ghi_chu: str | None = None
 
 
 class InteractionCheckSummary(BaseModel):
