@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.db.models import Medication, PatientMedication, PharmacistAssignment, User
+from src.db.models import Medication, PatientMedication, User
 from src.db.session import SessionLocal, init_db
 from src.services.auth import hash_password
 
@@ -50,14 +50,7 @@ def main() -> None:
         patient = _get_or_create_user(db, DEMO_PATIENT_EMAIL, "Bệnh Nhân Demo", "patient")
         pharmacist = _get_or_create_user(db, DEMO_PHARMACIST_EMAIL, "Dược Sĩ Demo", "pharmacist")
 
-        assignment = (
-            db.query(PharmacistAssignment)
-            .filter_by(pharmacist_id=pharmacist.id, patient_id=patient.id)
-            .first()
-        )
-        if assignment is None:
-            db.add(PharmacistAssignment(pharmacist_id=pharmacist.id, patient_id=patient.id))
-            db.commit()
+
 
         for medication_id in (WARFARIN_ID, ACETYLSALICYLIC_ACID_ID):
             if db.get(Medication, medication_id) is None:
@@ -84,7 +77,7 @@ def main() -> None:
         print("Da seed tai khoan demo:")
         print(f"  Benh nhan : {DEMO_PATIENT_EMAIL} / {DEMO_PASSWORD}")
         print(f"  Duoc si   : {DEMO_PHARMACIST_EMAIL} / {DEMO_PASSWORD}")
-        print("  -> da gan duoc si phu trach benh nhan, benh nhan da co san 2 thuoc de kiem tra ngay.")
+        print("  -> benh nhan da co san 2 thuoc de kiem tra ngay.")
     finally:
         db.close()
 

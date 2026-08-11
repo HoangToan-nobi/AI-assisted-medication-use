@@ -22,6 +22,9 @@ export type MedicationCheckResponse = {
   explanations: InteractionExplanation[];
   has_severe: boolean;
   has_unclassified: boolean;
+  // Chỉ có ở luồng kiểm tra theo tên thuốc (checkProducts/...).
+  unknown_products?: string[];
+  no_interaction_data_products?: string[];
 };
 
 // Kết quả thô từ GET /pharmacist/reviews/{id} - chính là state agent đầy đủ
@@ -42,8 +45,8 @@ export type AuthResponse = {
 
 export type MedicationItem = {
   id: string;
-  medication_id: string;
-  ten_chuan_hoa: string;
+  product_id: string;
+  ten_thuoc: string;
   ngay_bat_dau: string | null;
   ngay_ket_thuc: string | null;
 };
@@ -51,6 +54,11 @@ export type MedicationItem = {
 export type MedicationSearchResult = {
   id: string;
   ten_chuan_hoa: string;
+};
+
+export type ProductSearchResult = {
+  id: string;
+  ten_thuoc: string;
 };
 
 export type PatientSummary = {
@@ -148,6 +156,17 @@ export async function searchGuestMedications(q: string): Promise<MedicationSearc
   return request<MedicationSearchResult[]>(`/api/v1/guest/medications/search?q=${encodeURIComponent(q)}`);
 }
 
+export async function searchProducts(q: string, token: string): Promise<ProductSearchResult[]> {
+  return request<ProductSearchResult[]>(
+    `/api/v1/products/search?q=${encodeURIComponent(q)}`,
+    { token }
+  );
+}
+
+export async function searchGuestProducts(q: string): Promise<ProductSearchResult[]> {
+  return request<ProductSearchResult[]>(`/api/v1/guest/products/search?q=${encodeURIComponent(q)}`);
+}
+
 export async function listPatientMedications(
   patientId: string,
   token: string
@@ -157,13 +176,13 @@ export async function listPatientMedications(
 
 export async function addPatientMedication(
   patientId: string,
-  medicationName: string,
+  productName: string,
   token: string
 ): Promise<MedicationItem> {
   return request<MedicationItem>(`/api/v1/patients/${patientId}/medications`, {
     method: "POST",
     token,
-    body: JSON.stringify({ medication_name: medicationName }),
+    body: JSON.stringify({ product_name: productName }),
   });
 }
 
@@ -198,6 +217,24 @@ export async function checkGuestMedications(medications: string[]): Promise<Medi
   });
 }
 
+export async function checkProducts(
+  products: string[],
+  token: string
+): Promise<MedicationCheckResponse> {
+  return request<MedicationCheckResponse>("/api/v1/products/check", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ products }),
+  });
+}
+
+export async function checkGuestProducts(products: string[]): Promise<MedicationCheckResponse> {
+  return request<MedicationCheckResponse>("/api/v1/guest/products/check", {
+    method: "POST",
+    body: JSON.stringify({ products }),
+  });
+}
+
 export async function listPatientChecks(
   patientId: string,
   token: string
@@ -215,20 +252,63 @@ export async function getPatientCheckDetail(
   });
 }
 
-// ---- Dược sĩ ----
-
-export async function listPharmacistPatients(
-  pharmacistId: string,
-  token: string
-): Promise<PatientSummary[]> {
-  return request<PatientSummary[]>(`/api/v1/pharmacist/${pharmacistId}/patients`, { token });
-}
-
-export async function listPatientChecksForPharmacist(
+export async function deleteAllPatientChecks(
   patientId: string,
   token: string
-): Promise<InteractionCheckSummary[]> {
-  return request<InteractionCheckSummary[]>(`/api/v1/pharmacist/patients/${patientId}/checks`, {
+): Promise<void> {
+  return request<void>(`/api/v1/patients/${patientId}/checks`, {
+    method: "DELETE",
+    token,
+  });
+}
+
+export async function deletePatientCheck(
+  patientId: string,
+  checkId: string,
+  token: string
+): Promise<void> {
+  return request<void>(`/api/v1/patients/${patientId}/checks/${checkId}`, {
+    method: "DELETE",
+    token,
+  });
+}
+
+// ---- Dược sĩ ----
+
+export interface PharmacistSummary {
+  id: string;
+  ho_ten: string;
+  noi_cong_tac?: string;
+}
+
+export async function getPharmacists(token: string): Promise<PharmacistSummary[]> {
+  return request<PharmacistSummary[]>("/api/v1/pharmacists", { token });
+}
+
+export async function requestReview(
+  checkId: string,
+  pharmacistId: string,
+  token: string
+): Promise<{ message: string }> {
+  return request<{ message: string }>(`/api/v1/checks/${checkId}/pharmacists/${pharmacistId}/request_review`, {
+    method: "POST",
+    token,
+  });
+}
+
+export interface ReviewRequestSummary {
+  check_id: string;
+  patient_id: string;
+  patient_name: string;
+  thoi_gian_kiem_tra: string;
+  co_canh_bao_nang: boolean;
+  trang_thai_xac_nhan: string;
+}
+
+export async function listPharmacistRequests(
+  token: string
+): Promise<ReviewRequestSummary[]> {
+  return request<ReviewRequestSummary[]>(`/api/v1/pharmacist/requests`, {
     token,
   });
 }
@@ -249,5 +329,59 @@ export async function submitPharmacistReview(
     method: "POST",
     token,
     body: JSON.stringify({ interaction_check_id: checkId, ghi_chu: ghiChu }),
+  });
+}
+
+export async function checkMedicationsAsPharmacist(
+  medications: string[],
+  token: string
+): Promise<MedicationCheckResponse> {
+  return request<MedicationCheckResponse>("/api/v1/pharmacist/medications/check", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ medications }),
+  });
+}
+
+export async function checkProductsAsPharmacist(
+  products: string[],
+  token: string
+): Promise<MedicationCheckResponse> {
+  return request<MedicationCheckResponse>("/api/v1/pharmacist/products/check", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ products }),
+  });
+}
+
+// ---- Hồ sơ cá nhân bệnh nhân ----
+
+export type PatientProfileInfo = {
+  ho_ten: string | null;
+  ngay_sinh: string | null;
+  gioi_tinh: string | null;
+  can_nang: number | null;
+  chieu_cao: number | null;
+  benh_nen_ghi_chu: string | null;
+  di_ung_thuoc: string | null;
+  tinh_trang_khac: string | null;
+};
+
+export async function getPatientProfile(
+  patientId: string,
+  token: string
+): Promise<PatientProfileInfo> {
+  return request<PatientProfileInfo>(`/api/v1/patients/${patientId}/profile`, { token });
+}
+
+export async function updatePatientProfile(
+  patientId: string,
+  data: Partial<PatientProfileInfo>,
+  token: string
+): Promise<PatientProfileInfo> {
+  return request<PatientProfileInfo>(`/api/v1/patients/${patientId}/profile`, {
+    method: "PATCH",
+    token,
+    body: JSON.stringify(data),
   });
 }

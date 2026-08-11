@@ -29,9 +29,13 @@ env/
 Thumbs.db
 
 # Data (never commit large data)
-# data/
-# *.db
-# *.sqlite3
+data/
+*.db
+*.sqlite3
+
+# Raw DDInter source dumps + brand-name CSV (large, regenerate app.db via scripts/import_*.py)
+data/raw/vmec12_ddinter_*.db
+data/raw/*.csv
 
 # Logs
 logs/

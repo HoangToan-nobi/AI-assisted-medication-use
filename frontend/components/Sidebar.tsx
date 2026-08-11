@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import MaterialIcon from "@/components/MaterialIcon";
+import BrandLogo from "@/components/BrandLogo";
 
 type SidebarProps = { onCheck?: () => void; checking?: boolean };
 
@@ -13,14 +14,16 @@ export default function Sidebar({ onCheck, checking }: SidebarProps) {
 
   return (
     <nav className="bottom-nav sidebar" aria-label="Điều hướng chính">
-      <div className="sidebar__section-label">Điều hướng</div>
+      <div style={{ padding: "16px 16px 32px 0px" }}>
+        <BrandLogo size="sm" />
+      </div>
       <Link href="/dashboard" className={`bottom-nav__item ${isActive("/dashboard") ? "bottom-nav__item--active" : ""}`}>
         <MaterialIcon name="home" size={22} filled={isActive("/dashboard")} />
         <span>Trang chủ</span>
       </Link>
       <Link href="/profile" className={`bottom-nav__item ${isMedicationActive ? "bottom-nav__item--active" : ""}`}>
         <MaterialIcon name="medication" size={22} filled={isMedicationActive} />
-        <span>Thuốc của tôi</span>
+        <span>Hồ sơ</span>
       </Link>
       {onCheck ? (
         <button type="button" className="bottom-nav__item" onClick={onCheck} disabled={checking}>

@@ -32,23 +32,30 @@ export default function PharmacistLayout({ children }: { children: React.ReactNo
   if (!checked || !session) return null;
 
   return (
-    <div className="pharmacist-shell">
-      <aside className="pharmacist-nav pharmacist-sidebar">
-        <BrandLogo size="sm" />
-        <Link href="/patients" className={`pharmacist-nav__link ${pathname === "/patients" ? "active" : ""}`}>
-          <MaterialIcon name="group" size={20} />
-          Bệnh nhân phụ trách
-        </Link>
-        <span className="spacer" />
-        <div className="pharmacist-nav__user">
-          <span className="avatar">{getInitials(session.hoTen)}</span>
-          <span className="pharmacist-nav__user-name">{session.hoTen}</span>
+    <div className="app-shell app-shell--with-nav">
+      <header className="patient-header">
+        <div className="patient-header__actions" style={{ marginLeft: "auto" }}>
+          <span className="patient-header__name" title="Hồ sơ dược sĩ">{session.hoTen}</span>
           <button className="icon-btn" onClick={handleLogout} aria-label="Đăng xuất" title="Đăng xuất">
             <MaterialIcon name="logout" size={20} />
           </button>
         </div>
-      </aside>
-      <div className="pharmacist-content">{children}</div>
+      </header>
+      <div className="app-content">{children}</div>
+      <nav className="bottom-nav sidebar" aria-label="Điều hướng chính">
+        <div style={{ padding: "16px 16px 32px 0px" }}>
+          <BrandLogo size="sm" />
+        </div>
+        <Link href="/pharmacist-dashboard" className={`bottom-nav__item ${pathname === "/pharmacist-dashboard" ? "bottom-nav__item--active" : ""}`}>
+          <MaterialIcon name="home" size={22} filled={pathname === "/pharmacist-dashboard"} />
+          <span>Trang chủ</span>
+        </Link>
+        <Link href="/pharmacist-lookup" className={`bottom-nav__item ${pathname === "/pharmacist-lookup" ? "bottom-nav__item--active" : ""}`}>
+          <MaterialIcon name="analytics" size={22} filled={pathname === "/pharmacist-lookup"} />
+          <span>Tra cứu tương tác</span>
+        </Link>
+      </nav>
+      <span className="sr-only">Đang ở trang {pathname}</span>
     </div>
   );
 }

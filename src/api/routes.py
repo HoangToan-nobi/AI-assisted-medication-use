@@ -1,4 +1,3 @@
-import json
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -6,20 +5,22 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from src.agents.graph import agent
-from src.agents.tools.drug_normalizer_tool import drug_normalizer
 from src.api.deps import get_current_user, require_role
 from src.db.models import (
     InteractionCheck,
     Medication,
     MedicationAlias,
     PatientMedication,
-    PharmacistAssignment,
+    PatientProfile,
     PharmacistReview,
+    Product,
+    ProductIngredient,
     User,
 )
 from src.db.session import get_db
 from src.models.schemas import (
     AddMedicationRequest,
+    AddProductRequest,
     AuthResponse,
     ChatRequest,
     ChatResponse,
@@ -29,10 +30,15 @@ from src.models.schemas import (
     MedicationCheckResponse,
     MedicationItem,
     MedicationSearchResult,
-    PatientSummary,
+    PatientProfileInfo,
+    ReviewRequestSummary,
+    PharmacistSummary,
     PharmacistReviewRequest,
     PharmacistReviewResponse,
+    ProductCheckRequest,
+    ProductSearchResult,
     RegisterRequest,
+    UpdatePatientProfileRequest,
 )
 from src.services.auth import create_token, hash_password, verify_password
 
@@ -50,12 +56,16 @@ def _ensure_can_view_patient(current_user: User, patient_id: str, db: Session) -
     if current_user.id == patient_id:
         return
     if current_user.vai_tro == "pharmacist":
-        assignment = (
-            db.query(PharmacistAssignment)
-            .filter_by(pharmacist_id=current_user.id, patient_id=patient_id)
+        review = (
+            db.query(PharmacistReview)
+            .join(InteractionCheck, PharmacistReview.interaction_check_id == InteractionCheck.id)
+            .filter(
+                PharmacistReview.pharmacist_id == current_user.id,
+                InteractionCheck.patient_id == patient_id
+            )
             .first()
         )
-        if assignment is not None:
+        if review is not None:
             return
     raise HTTPException(status_code=403, detail="Không có quyền xem thuốc của bệnh nhân này")
 
@@ -161,6 +171,187 @@ async def guest_search_medications(
     return [MedicationSearchResult(id=m.id, ten_chuan_hoa=m.ten_chuan_hoa) for m in results]
 
 
+# ---- Tra cứu / kiểm tra tương tác theo tên thuốc (biệt dược) ----
+
+
+@router.get("/products/search", response_model=list[ProductSearchResult])
+async def search_products(
+    q: str = Query(..., min_length=1),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[ProductSearchResult]:
+    like_pattern = f"%{q.strip().lower()}%"
+    matches = (
+        db.query(Product)
+        .filter(func.lower(Product.ten_thuoc).like(like_pattern))
+        .order_by(Product.ten_thuoc)
+        .limit(10)
+        .all()
+    )
+    return [ProductSearchResult(id=p.id, ten_thuoc=p.ten_thuoc) for p in matches]
+
+
+@router.get("/guest/products/search", response_model=list[ProductSearchResult])
+async def guest_search_products(
+    q: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+) -> list[ProductSearchResult]:
+    like_pattern = f"%{q.strip().lower()}%"
+    matches = (
+        db.query(Product)
+        .filter(func.lower(Product.ten_thuoc).like(like_pattern))
+        .order_by(Product.ten_thuoc)
+        .limit(10)
+        .all()
+    )
+    return [ProductSearchResult(id=p.id, ten_thuoc=p.ten_thuoc) for p in matches]
+
+
+def _brand_label(hoat_chat_name: str | None, ingredient_to_products: dict[str, list[str]]) -> str | None:
+    if not hoat_chat_name:
+        return hoat_chat_name
+    brands = ingredient_to_products.get(hoat_chat_name)
+    if not brands:
+        return hoat_chat_name
+    unique_brands = list(dict.fromkeys(brands))
+    return f"{'/'.join(unique_brands)} (hoạt chất: {hoat_chat_name})"
+
+
+def _enrich_with_brand_names(items: list[dict], ingredient_to_products: dict[str, list[str]]) -> list[dict]:
+    enriched = []
+    for item in items:
+        item = dict(item)
+        item["thuoc_a"] = _brand_label(item.get("thuoc_a"), ingredient_to_products)
+        item["thuoc_b"] = _brand_label(item.get("thuoc_b"), ingredient_to_products)
+        enriched.append(item)
+    return enriched
+
+
+def _resolve_products(
+    product_names: list[str], db: Session
+) -> tuple[list[str], dict[str, list[str]], list[str], list[str]]:
+    """Quy đổi tên thuốc -> danh sách hoạt chất (dedup, exact-match Product.ten_thuoc) để
+    đưa vào agent hiện có (KHÔNG đổi gì trong src/agents/ - agent vẫn nhận tên hoạt chất).
+
+    Trả về (ingredient_names, ingredient_to_products, unknown_products, no_interaction_data_products).
+    """
+    ingredient_names: list[str] = []
+    ingredient_to_products: dict[str, list[str]] = {}
+    unknown_products: list[str] = []
+    no_interaction_data_products: list[str] = []
+    seen: set[str] = set()
+
+    for name in product_names:
+        product = (
+            db.query(Product).filter(func.lower(Product.ten_thuoc) == name.strip().lower()).first()
+        )
+        if product is None:
+            unknown_products.append(name)
+            continue
+
+        ingredient_meds = (
+            db.query(Medication)
+            .join(ProductIngredient, ProductIngredient.medication_id == Medication.id)
+            .filter(ProductIngredient.product_id == product.id)
+            .all()
+        )
+        if not ingredient_meds:
+            no_interaction_data_products.append(name)
+            continue
+
+        for med in ingredient_meds:
+            ingredient_to_products.setdefault(med.ten_chuan_hoa, []).append(product.ten_thuoc)
+            key = med.ten_chuan_hoa.lower()
+            if key not in seen:
+                seen.add(key)
+                ingredient_names.append(med.ten_chuan_hoa)
+
+    return ingredient_names, ingredient_to_products, unknown_products, no_interaction_data_products
+
+
+async def _run_product_check(products: list[str], db: Session) -> tuple[dict, list[str], list[str]]:
+    """Dùng chung cho patient/guest/pharmacist: resolve tên thuốc -> hoạt chất, chạy agent
+    hiện có, rồi gắn tên thuốc (biệt dược) vào kết quả để hiển thị."""
+    ingredient_names, ingredient_to_products, unknown, no_data = _resolve_products(products, db)
+
+    result = dict(await agent.ainvoke({"raw_medications": ingredient_names}))
+    if result.get("error"):
+        raise HTTPException(status_code=422, detail=result["error"])
+
+    result["ranked_results"] = _enrich_with_brand_names(
+        result.get("ranked_results", []), ingredient_to_products
+    )
+    result["explanations"] = _enrich_with_brand_names(
+        result.get("explanations", []), ingredient_to_products
+    )
+    return result, unknown, no_data
+
+
+@router.post("/products/check", response_model=MedicationCheckResponse)
+async def check_products(
+    request: ProductCheckRequest,
+    current_user: User = Depends(require_role("patient")),
+    db: Session = Depends(get_db),
+) -> MedicationCheckResponse:
+    result, unknown, no_data = await _run_product_check(request.products, db)
+
+    check = InteractionCheck(
+        patient_id=current_user.id,
+        ket_qua_json=result,
+        co_canh_bao_nang=bool(result.get("has_severe")),
+        co_chua_phan_loai=bool(result.get("has_unclassified")),
+    )
+    db.add(check)
+    db.commit()
+    db.refresh(check)
+
+    return MedicationCheckResponse(
+        interaction_check_id=check.id,
+        ranked_results=_strip_pharmacist_fields(result.get("ranked_results", [])),
+        explanations=_strip_pharmacist_fields(result.get("explanations", [])),
+        has_severe=result.get("has_severe", False),
+        has_unclassified=result.get("has_unclassified", False),
+        unknown_products=unknown,
+        no_interaction_data_products=no_data,
+    )
+
+
+@router.post("/guest/products/check", response_model=MedicationCheckResponse)
+async def guest_check_products(
+    request: ProductCheckRequest,
+    db: Session = Depends(get_db),
+) -> MedicationCheckResponse:
+    result, unknown, no_data = await _run_product_check(request.products, db)
+    return MedicationCheckResponse(
+        interaction_check_id="guest-check",
+        ranked_results=_strip_pharmacist_fields(result.get("ranked_results", [])),
+        explanations=_strip_pharmacist_fields(result.get("explanations", [])),
+        has_severe=result.get("has_severe", False),
+        has_unclassified=result.get("has_unclassified", False),
+        unknown_products=unknown,
+        no_interaction_data_products=no_data,
+    )
+
+
+@router.post("/pharmacist/products/check", response_model=MedicationCheckResponse)
+async def check_products_as_pharmacist(
+    request: ProductCheckRequest,
+    current_user: User = Depends(require_role("pharmacist")),
+    db: Session = Depends(get_db),
+) -> MedicationCheckResponse:
+    """Công cụ tra cứu độc lập cho dược sĩ - không lưu lịch sử, KHÔNG ẩn xu_tri/thay_the."""
+    result, unknown, no_data = await _run_product_check(request.products, db)
+    return MedicationCheckResponse(
+        interaction_check_id="pharmacist-lookup",
+        ranked_results=result.get("ranked_results", []),
+        explanations=result.get("explanations", []),
+        has_severe=result.get("has_severe", False),
+        has_unclassified=result.get("has_unclassified", False),
+        unknown_products=unknown,
+        no_interaction_data_products=no_data,
+    )
+
+
 # ---- Hồ sơ thuốc bệnh nhân ----
 
 
@@ -173,20 +364,20 @@ async def list_patient_medications(
     _ensure_can_view_patient(current_user, patient_id, db)
 
     rows = (
-        db.query(PatientMedication, Medication)
-        .join(Medication, Medication.id == PatientMedication.medication_id)
+        db.query(PatientMedication, Product)
+        .join(Product, Product.id == PatientMedication.product_id)
         .filter(PatientMedication.patient_id == patient_id)
         .all()
     )
     return [
         MedicationItem(
             id=pm.id,
-            medication_id=med.id,
-            ten_chuan_hoa=med.ten_chuan_hoa,
+            product_id=product.id,
+            ten_thuoc=product.ten_thuoc,
             ngay_bat_dau=pm.ngay_bat_dau,
             ngay_ket_thuc=pm.ngay_ket_thuc,
         )
-        for pm, med in rows
+        for pm, product in rows
     ]
 
 
@@ -195,25 +386,26 @@ async def list_patient_medications(
 )
 async def add_patient_medication(
     patient_id: str,
-    request: AddMedicationRequest,
+    request: AddProductRequest,
     current_user: User = Depends(require_role("patient")),
     db: Session = Depends(get_db),
 ) -> MedicationItem:
     if current_user.id != patient_id:
         raise HTTPException(status_code=403, detail="Chỉ tự thêm thuốc cho chính mình")
 
-    normalized_json = await drug_normalizer.ainvoke(
-        {"medication_names": [request.medication_name]}
+    product = (
+        db.query(Product)
+        .filter(func.lower(Product.ten_thuoc) == request.product_name.strip().lower())
+        .first()
     )
-    med_info = json.loads(normalized_json)[0]
-    if med_info["khong_du_du_lieu"]:
+    if product is None:
         raise HTTPException(
-            status_code=422, detail=f"Không tìm thấy thuốc '{request.medication_name}' trong CSDL"
+            status_code=422, detail=f"Không tìm thấy thuốc '{request.product_name}' trong CSDL"
         )
 
     pm = PatientMedication(
         patient_id=patient_id,
-        medication_id=med_info["medication_id"],
+        product_id=product.id,
         ngay_bat_dau=date.today(),
     )
     db.add(pm)
@@ -222,8 +414,8 @@ async def add_patient_medication(
 
     return MedicationItem(
         id=pm.id,
-        medication_id=med_info["medication_id"],
-        ten_chuan_hoa=med_info["ten_chuan"],
+        product_id=product.id,
+        ten_thuoc=product.ten_thuoc,
         ngay_bat_dau=pm.ngay_bat_dau,
         ngay_ket_thuc=None,
     )
@@ -245,6 +437,80 @@ async def remove_patient_medication(
 
     db.delete(pm)
     db.commit()
+
+
+# ---- Hồ sơ cá nhân bệnh nhân (ngày sinh, bệnh nền) ----
+
+
+@router.get("/patients/{patient_id}/profile", response_model=PatientProfileInfo)
+async def get_patient_profile(
+    patient_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PatientProfileInfo:
+    _ensure_can_view_patient(current_user, patient_id, db)
+
+    user = db.query(User).filter_by(id=patient_id).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    profile = db.query(PatientProfile).filter_by(user_id=patient_id).first()
+    if profile is None:
+        return PatientProfileInfo(ho_ten=user.ho_ten)
+    
+    return PatientProfileInfo(
+        ho_ten=user.ho_ten,
+        ngay_sinh=profile.ngay_sinh,
+        gioi_tinh=profile.gioi_tinh,
+        can_nang=profile.can_nang,
+        chieu_cao=profile.chieu_cao,
+        benh_nen_ghi_chu=profile.benh_nen_ghi_chu,
+        di_ung_thuoc=profile.di_ung_thuoc,
+        tinh_trang_khac=profile.tinh_trang_khac,
+    )
+
+
+@router.patch("/patients/{patient_id}/profile", response_model=PatientProfileInfo)
+async def update_patient_profile(
+    patient_id: str,
+    request: UpdatePatientProfileRequest,
+    current_user: User = Depends(require_role("patient")),
+    db: Session = Depends(get_db),
+) -> PatientProfileInfo:
+    if current_user.id != patient_id:
+        raise HTTPException(status_code=403, detail="Chỉ tự sửa hồ sơ của chính mình")
+
+    user = db.query(User).filter_by(id=patient_id).first()
+    if request.ho_ten:
+        user.ho_ten = request.ho_ten
+
+    profile = db.query(PatientProfile).filter_by(user_id=patient_id).first()
+    if profile is None:
+        profile = PatientProfile(user_id=patient_id)
+        db.add(profile)
+
+    profile.ngay_sinh = request.ngay_sinh
+    profile.gioi_tinh = request.gioi_tinh
+    profile.can_nang = request.can_nang
+    profile.chieu_cao = request.chieu_cao
+    profile.benh_nen_ghi_chu = request.benh_nen_ghi_chu
+    profile.di_ung_thuoc = request.di_ung_thuoc
+    profile.tinh_trang_khac = request.tinh_trang_khac
+    
+    db.commit()
+    db.refresh(profile)
+    db.refresh(user)
+
+    return PatientProfileInfo(
+        ho_ten=user.ho_ten,
+        ngay_sinh=profile.ngay_sinh,
+        gioi_tinh=profile.gioi_tinh,
+        can_nang=profile.can_nang,
+        chieu_cao=profile.chieu_cao,
+        benh_nen_ghi_chu=profile.benh_nen_ghi_chu,
+        di_ung_thuoc=profile.di_ung_thuoc,
+        tinh_trang_khac=profile.tinh_trang_khac,
+    )
 
 
 # ---- Kiểm tra tương tác (chạy agent) ----
@@ -358,89 +624,142 @@ async def get_patient_check_detail(
         has_unclassified=result.get("has_unclassified", False),
     )
 
+@router.delete("/patients/{patient_id}/checks", status_code=204)
+async def delete_all_patient_checks(
+    patient_id: str,
+    current_user: User = Depends(require_role("patient")),
+    db: Session = Depends(get_db),
+) -> None:
+    """Xóa tất cả lịch sử tra cứu của bệnh nhân."""
+    if current_user.id != patient_id:
+        raise HTTPException(status_code=403, detail="Chỉ tự xóa lịch sử của chính mình")
+    
+    # Xóa các PharmacistReview liên quan trước để tránh lỗi khóa ngoại
+    checks = db.query(InteractionCheck).filter_by(patient_id=patient_id).all()
+    check_ids = [c.id for c in checks]
+    if check_ids:
+        db.query(PharmacistReview).filter(PharmacistReview.interaction_check_id.in_(check_ids)).delete(synchronize_session=False)
+        db.query(InteractionCheck).filter_by(patient_id=patient_id).delete(synchronize_session=False)
+        db.commit()
+
+
+@router.delete("/patients/{patient_id}/checks/{check_id}", status_code=204)
+async def delete_patient_check(
+    patient_id: str,
+    check_id: str,
+    current_user: User = Depends(require_role("patient")),
+    db: Session = Depends(get_db),
+) -> None:
+    """Xóa 1 lịch sử tra cứu cụ thể."""
+    if current_user.id != patient_id:
+        raise HTTPException(status_code=403, detail="Chỉ tự xóa lịch sử của chính mình")
+    
+    check = db.get(InteractionCheck, check_id)
+    if check is None or check.patient_id != patient_id:
+        raise HTTPException(status_code=404, detail="Không tìm thấy lịch sử tra cứu")
+    
+    # Xóa PharmacistReview liên quan trước
+    db.query(PharmacistReview).filter_by(interaction_check_id=check_id).delete(synchronize_session=False)
+    db.delete(check)
+    db.commit()
+
 
 # ---- Dược sĩ ----
 
 
-@router.get("/pharmacist/{pharmacist_id}/patients", response_model=list[PatientSummary])
-async def list_pharmacist_patients(
+@router.get("/pharmacists", response_model=list[PharmacistSummary])
+async def list_pharmacists(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[PharmacistSummary]:
+    pharmacists = db.query(User).filter_by(vai_tro="pharmacist").all()
+    return [
+        PharmacistSummary(
+            id=p.id,
+            ho_ten=p.ho_ten,
+            noi_cong_tac=p.noi_cong_tac,
+        )
+        for p in pharmacists
+    ]
+
+
+@router.post("/checks/{check_id}/pharmacists/{pharmacist_id}/request_review", status_code=201)
+async def request_review(
+    check_id: str,
     pharmacist_id: str,
+    current_user: User = Depends(require_role("patient")),
+    db: Session = Depends(get_db),
+):
+    check = db.get(InteractionCheck, check_id)
+    if check is None or check.patient_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Không tìm thấy lịch sử tra cứu của bạn")
+    
+    pharmacist = db.get(User, pharmacist_id)
+    if pharmacist is None or pharmacist.vai_tro != "pharmacist":
+        raise HTTPException(status_code=404, detail="Không tìm thấy dược sĩ")
+
+    review = db.query(PharmacistReview).filter_by(
+        interaction_check_id=check_id, pharmacist_id=pharmacist_id
+    ).first()
+
+    if not review:
+        review = PharmacistReview(
+            interaction_check_id=check_id,
+            pharmacist_id=pharmacist_id,
+            trang_thai_xac_nhan="cho_xac_nhan"
+        )
+        db.add(review)
+        db.commit()
+    return {"message": "Đã gửi yêu cầu xét duyệt thành công"}
+
+
+@router.get("/pharmacist/requests", response_model=list[ReviewRequestSummary])
+async def list_pharmacist_requests(
     current_user: User = Depends(require_role("pharmacist")),
     db: Session = Depends(get_db),
-) -> list[PatientSummary]:
-    if current_user.id != pharmacist_id:
-        raise HTTPException(status_code=403, detail="Không được xem danh sách của dược sĩ khác")
-
-    assignments = db.query(PharmacistAssignment).filter_by(pharmacist_id=pharmacist_id).all()
+) -> list[ReviewRequestSummary]:
+    reviews = (
+        db.query(PharmacistReview, InteractionCheck, User)
+        .join(InteractionCheck, PharmacistReview.interaction_check_id == InteractionCheck.id)
+        .join(User, InteractionCheck.patient_id == User.id)
+        .filter(PharmacistReview.pharmacist_id == current_user.id)
+        .all()
+    )
 
     results = []
-    for assignment in assignments:
-        patient = db.get(User, assignment.patient_id)
-        if patient is None:
-            continue
-        unresolved_severe = (
-            db.query(InteractionCheck)
-            .outerjoin(
-                PharmacistReview,
-                PharmacistReview.interaction_check_id == InteractionCheck.id,
-            )
-            .filter(
-                InteractionCheck.patient_id == patient.id,
-                InteractionCheck.co_canh_bao_nang.is_(True),
-                PharmacistReview.id.is_(None),
-            )
-            .count()
-            > 0
-        )
+    for review, check, patient in reviews:
         results.append(
-            PatientSummary(
-                id=patient.id, ho_ten=patient.ho_ten, co_canh_bao_nang_chua_xu_ly=unresolved_severe
+            ReviewRequestSummary(
+                check_id=check.id,
+                patient_id=patient.id,
+                patient_name=patient.ho_ten,
+                thoi_gian_kiem_tra=check.thoi_gian_kiem_tra,
+                co_canh_bao_nang=check.co_canh_bao_nang,
+                trang_thai_xac_nhan=review.trang_thai_xac_nhan
             )
         )
 
-    # Escalate: bệnh nhân có cảnh báo nặng chưa xử lý nổi lên đầu danh sách.
-    results.sort(key=lambda p: p.co_canh_bao_nang_chua_xu_ly, reverse=True)
+    # Sort: pending severe -> pending -> resolved
+    def _sort_key(req: ReviewRequestSummary):
+        score = 0
+        if req.trang_thai_xac_nhan != "da_xac_nhan":
+            score += 10
+        if req.co_canh_bao_nang:
+            score += 5
+        return (score, req.thoi_gian_kiem_tra.timestamp())
+    
+    results.sort(key=_sort_key, reverse=True)
     return results
 
 
-def _ensure_pharmacist_assigned(current_user: User, patient_id: str, db: Session) -> None:
-    assignment = (
-        db.query(PharmacistAssignment)
-        .filter_by(pharmacist_id=current_user.id, patient_id=patient_id)
+def _ensure_pharmacist_can_review(current_user: User, check: InteractionCheck, db: Session) -> None:
+    review = (
+        db.query(PharmacistReview)
+        .filter_by(interaction_check_id=check.id, pharmacist_id=current_user.id)
         .first()
     )
-    if assignment is None:
-        raise HTTPException(status_code=403, detail="Bạn không được phân công bệnh nhân này")
-
-
-@router.get(
-    "/pharmacist/patients/{patient_id}/checks", response_model=list[InteractionCheckSummary]
-)
-async def list_patient_checks_for_pharmacist(
-    patient_id: str,
-    current_user: User = Depends(require_role("pharmacist")),
-    db: Session = Depends(get_db),
-) -> list[InteractionCheckSummary]:
-    """Danh sách lần kiểm tra của 1 bệnh nhân - để dược sĩ chọn ra check cần xem
-    chi tiết/xác nhận (GET /pharmacist/reviews/{id}, POST /pharmacist/reviews)."""
-    _ensure_pharmacist_assigned(current_user, patient_id, db)
-
-    checks = (
-        db.query(InteractionCheck)
-        .filter_by(patient_id=patient_id)
-        .order_by(InteractionCheck.co_canh_bao_nang.desc(), InteractionCheck.thoi_gian_kiem_tra.desc())
-        .all()
-    )
-    return [
-        InteractionCheckSummary(
-            id=check.id,
-            thoi_gian_kiem_tra=check.thoi_gian_kiem_tra,
-            co_canh_bao_nang=check.co_canh_bao_nang,
-            co_chua_phan_loai=check.co_chua_phan_loai,
-            trang_thai_xac_nhan=_review_status(db, check.id, current_user.id),
-        )
-        for check in checks
-    ]
+    if review is None:
+        raise HTTPException(status_code=403, detail="Bạn không được yêu cầu xem xét lần kiểm tra này")
 
 
 @router.get("/pharmacist/reviews/{interaction_check_id}")
@@ -454,7 +773,7 @@ async def get_interaction_check_detail(
     if check is None:
         raise HTTPException(status_code=404, detail="Không tìm thấy interaction_check")
 
-    _ensure_pharmacist_assigned(current_user, check.patient_id, db)
+    _ensure_pharmacist_can_review(current_user, check, db)
     return check.ket_qua_json
 
 
@@ -468,18 +787,13 @@ async def submit_pharmacist_review(
     if check is None:
         raise HTTPException(status_code=404, detail="Không tìm thấy interaction_check")
 
-    _ensure_pharmacist_assigned(current_user, check.patient_id, db)
-
     review = (
         db.query(PharmacistReview)
         .filter_by(interaction_check_id=check.id, pharmacist_id=current_user.id)
         .first()
     )
     if review is None:
-        review = PharmacistReview(
-            interaction_check_id=check.id, pharmacist_id=current_user.id
-        )
-        db.add(review)
+        raise HTTPException(status_code=403, detail="Bạn không được yêu cầu xem xét lần kiểm tra này")
 
     review.ghi_chu = request.ghi_chu
     review.trang_thai_xac_nhan = "da_xac_nhan"
@@ -491,4 +805,23 @@ async def submit_pharmacist_review(
         interaction_check_id=review.interaction_check_id,
         trang_thai_xac_nhan=review.trang_thai_xac_nhan,
         ghi_chu=review.ghi_chu or "",
+    )
+
+
+@router.post("/pharmacist/medications/check", response_model=MedicationCheckResponse)
+async def check_medications_as_pharmacist(
+    request: MedicationCheckRequest,
+    current_user: User = Depends(require_role("pharmacist")),
+) -> MedicationCheckResponse:
+    """Công cụ tra cứu tương tác độc lập cho dược sĩ - không gắn bệnh nhân nào,
+    không lưu lịch sử, và KHÔNG ẩn xu_tri/thay_the (dược sĩ được xem đầy đủ)."""
+    result = dict(await agent.ainvoke({"raw_medications": request.medications}))
+    if result.get("error"):
+        raise HTTPException(status_code=422, detail=result["error"])
+    return MedicationCheckResponse(
+        interaction_check_id="pharmacist-lookup",
+        ranked_results=result.get("ranked_results", []),
+        explanations=result.get("explanations", []),
+        has_severe=result.get("has_severe", False),
+        has_unclassified=result.get("has_unclassified", False),
     )
