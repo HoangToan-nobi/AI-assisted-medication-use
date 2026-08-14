@@ -98,7 +98,11 @@ export default function PatientDashboardPage() {
       <section className="dashboard-summary-row"><div><span className="dashboard-summary-number">{medications.length}</span><span> thuốc đang theo dõi</span></div><div><span className="dashboard-summary-number">{unresolvedSevere}</span><span> cảnh báo chưa xử lý</span></div></section>
       <Disclaimer />
 
+<<<<<<< HEAD
       {history.length > 0 && <section className="dashboard-history"><div className="dashboard-section__header"><h2>Lịch sử kiểm tra gần đây</h2><Link href="/check-result">Xem tất cả <MaterialIcon name="arrow_forward" size={17} /></Link></div>{history.slice(0, 3).map((h) => <button className="history-card" key={h.id} onClick={() => router.push(`/check-result?checkId=${h.id}`)}><span>{formatVietnameseDateTime(h.thoi_gian_kiem_tra)}</span><strong>{h.co_canh_bao_nang ? "Có cảnh báo cần chú ý" : "Chưa phát hiện cảnh báo nghiêm trọng"}</strong><MaterialIcon name="chevron_right" size={20} /></button>)}</section>}
+=======
+      {history.length > 0 && <section className="dashboard-history"><div className="dashboard-section__header"><h2>Lịch sử kiểm tra gần đây</h2><Link href="/check-result">Xem tất cả <MaterialIcon name="arrow_forward" size={17} /></Link></div>{history.slice(0, 3).map((h) => <button className="history-card" key={h.id} onClick={() => router.push(`/check-result?checkId=${h.id}`)}><span>{new Date(h.thoi_gian_kiem_tra).toLocaleString("vi-VN")}</span><strong>{h.co_canh_bao_nang ? "Có cảnh báo cần chú ý" : "Chưa phát hiện cảnh báo nghiêm trọng"}</strong><MaterialIcon name="chevron_right" size={20} /></button>)}</section>}
+>>>>>>> origin/main
     </main>
   );
 }

@@ -212,6 +212,7 @@ export async function searchGuestMedications(q: string): Promise<MedicationSearc
   return request<MedicationSearchResult[]>(`/api/v1/guest/medications/search?q=${encodeURIComponent(q)}`);
 }
 
+<<<<<<< HEAD
 export async function searchProducts(q: string, token: string): Promise<ProductSearchResult[]> {
   return request<ProductSearchResult[]>(
     `/api/v1/products/search?q=${encodeURIComponent(q)}`,
@@ -223,6 +224,8 @@ export async function searchGuestProducts(q: string): Promise<ProductSearchResul
   return request<ProductSearchResult[]>(`/api/v1/guest/products/search?q=${encodeURIComponent(q)}`);
 }
 
+=======
+>>>>>>> origin/main
 export async function listPatientMedications(
   patientId: string,
   token: string
@@ -273,6 +276,7 @@ export async function checkGuestMedications(medications: string[]): Promise<Medi
   });
 }
 
+<<<<<<< HEAD
 export async function checkProducts(
   prescriptions: PrescriptionCheckInput[],
   token: string
@@ -293,6 +297,8 @@ export async function checkGuestProducts(
   });
 }
 
+=======
+>>>>>>> origin/main
 export async function listPatientChecks(
   patientId: string,
   token: string

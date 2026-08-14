@@ -1,5 +1,9 @@
+<<<<<<< HEAD
 /* Clinical Clarity — MediCheck Design System (Stitch) */
 @import './landing.css';
+=======
+/* Clinical Clarity — MedCheck AI Design System (Stitch) */
+>>>>>>> origin/main
 
 :root {
   --background: #f6faff;
@@ -3915,6 +3919,7 @@ button,
 }
 
 /* Citation hover cards, inspired by NotebookLM source chips */
+<<<<<<< HEAD
 .citation-wrap {
   position: relative;
   display: inline-flex;
@@ -4053,3 +4058,22 @@ button,
     position: static;
   }
 }
+=======
+.citation-wrap { position: relative; display: inline-flex; margin-top: 13px; }
+.citation-trigger { display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 5px 8px; color: #355b91; background: #eef4fc; border: 1px solid #d3dfef; border-radius: 6px; box-shadow: none; font-size: 12px; font-weight: 700; }
+.citation-trigger__text { display: block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.citation-trigger:hover, .citation-trigger:focus-visible { color: #173f7d; background: #dfebfa; }
+.citation-popover { position: absolute; bottom: calc(100% + 9px); left: 0; z-index: 15; display: none; width: min(360px, calc(100vw - 48px)); padding: 14px; color: #233c5b; background: #fff; border: 1px solid #c7d5e7; border-radius: 9px; box-shadow: 0 12px 28px rgba(26, 60, 98, .16); }
+.citation-popover::after { content: ""; position: absolute; bottom: -6px; left: 18px; width: 10px; height: 10px; background: #fff; border-right: 1px solid #c7d5e7; border-bottom: 1px solid #c7d5e7; transform: rotate(45deg); }
+.citation-wrap:hover .citation-popover, .citation-wrap:focus-within .citation-popover { display: block; }
+.citation-wrap--open .citation-popover { display: block; }
+.citation-popover__label { display: block; margin-bottom: 7px; color: #5b789c; font-size: 10px; font-weight: 800; letter-spacing: .1em; }
+.citation-popover strong { display: block; color: #173f7d; font-family: var(--font-body); font-size: 14px; line-height: 1.4; }
+.citation-popover p { margin-top: 8px; color: #687b91; font-size: 12px; line-height: 1.45; }
+.result-hero--unknown { background: #edf0f3; border-color: #cbd2da; }
+.result-hero--unknown .result-hero__icon { color: #687582; }
+.check-result-page .alert-card { font-family: var(--font-body); }
+.check-result-page .alert-card h3, .check-result-page .alert-card p, .check-result-page .alert-card strong { letter-spacing: 0; }
+.citation-wrap:hover .citation-popover, .citation-wrap:focus-within .citation-popover { display: none; }
+.citation-wrap--open .citation-popover { display: block !important; }
+>>>>>>> origin/main

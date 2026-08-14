@@ -3,7 +3,11 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import MaterialIcon from "@/components/MaterialIcon";
+<<<<<<< HEAD
 import { ApiError, addPatientMedication, searchProducts, type ProductSearchResult } from "@/lib/api";
+=======
+import { ApiError, addPatientMedication, searchMedications, type MedicationSearchResult } from "@/lib/api";
+>>>>>>> origin/main
 import { getSession } from "@/lib/auth";
 
 export default function MedicationsPage() {
@@ -16,7 +20,11 @@ export default function MedicationsPage() {
 
   useEffect(() => {
     if (!session || query.trim().length < 2) { setSuggestions([]); return; }
+<<<<<<< HEAD
     const timer = setTimeout(() => searchProducts(query.trim(), session.accessToken).then(setSuggestions).catch(() => setSuggestions([])), 250);
+=======
+    const timer = setTimeout(() => searchMedications(query.trim(), session.accessToken).then(setSuggestions).catch(() => setSuggestions([])), 250);
+>>>>>>> origin/main
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);

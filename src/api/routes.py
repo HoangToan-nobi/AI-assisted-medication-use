@@ -179,6 +179,7 @@ async def guest_search_medications(
     return [MedicationSearchResult(id=m.id, ten_chuan_hoa=m.ten_chuan_hoa) for m in results]
 
 
+<<<<<<< HEAD
 # ---- Tra cứu / kiểm tra tương tác theo tên thuốc (biệt dược) ----
 
 
@@ -462,6 +463,8 @@ async def check_products_as_pharmacist(
     )
 
 
+=======
+>>>>>>> origin/main
 # ---- Hồ sơ thuốc bệnh nhân ----
 
 

@@ -32,10 +32,24 @@ export default function PharmacistLayout({ children }: { children: React.ReactNo
   if (!checked || !session) return null;
 
   return (
+<<<<<<< HEAD
     <div className="app-shell app-shell--with-nav">
       <header className="patient-header">
         <div className="patient-header__actions" style={{ marginLeft: "auto" }}>
           <span className="patient-header__name" title="Hồ sơ dược sĩ">{session.hoTen}</span>
+=======
+    <div className="pharmacist-shell">
+      <header className="pharmacist-nav">
+        <BrandLogo size="sm" />
+        <Link href="/patients" className={`pharmacist-nav__link ${pathname === "/patients" ? "active" : ""}`}>
+          <MaterialIcon name="group" size={20} />
+          Bệnh nhân phụ trách
+        </Link>
+        <span className="spacer" />
+        <div className="pharmacist-nav__user">
+          <span className="avatar">{getInitials(session.hoTen)}</span>
+          <span className="pharmacist-nav__user-name">{session.hoTen}</span>
+>>>>>>> origin/main
           <button className="icon-btn" onClick={handleLogout} aria-label="Đăng xuất" title="Đăng xuất">
             <MaterialIcon name="logout" size={20} />
           </button>

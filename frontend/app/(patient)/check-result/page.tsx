@@ -4,8 +4,11 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Disclaimer from "@/components/Disclaimer";
 import MaterialIcon from "@/components/MaterialIcon";
+<<<<<<< HEAD
 import PharmacistReviewPrompt from "@/components/PharmacistReviewPrompt";
 import InteractionOverview from "@/components/graph/InteractionOverview";
+=======
+>>>>>>> origin/main
 import { ApiError, getPatientCheckDetail, type MedicationCheckResponse } from "@/lib/api";
 import { getSession } from "@/lib/auth";
 import { productNamesFromExplanations } from "@/lib/interactionGraph";

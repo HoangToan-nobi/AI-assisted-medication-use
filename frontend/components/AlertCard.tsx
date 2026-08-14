@@ -4,6 +4,7 @@ import { useState } from "react";
 import MaterialIcon from "@/components/MaterialIcon";
 import type { Severity } from "@/lib/api";
 
+<<<<<<< HEAD
 type AlertCardProps = {
   thuocA?: string;
   thuocB?: string;
@@ -15,6 +16,9 @@ type AlertCardProps = {
   // trả về cho dược sĩ, bệnh nhân không có field này nên luôn undefined.
   scientificDescription?: string;
 };
+=======
+type AlertCardProps = { thuocA?: string; thuocB?: string; severity?: Severity; description: string; source: string; management?: string };
+>>>>>>> origin/main
 
 const CONFIG: Record<Severity, { label: string; tag: string; icon: string; className: string }> = {
   nang: { label: "Nghiêm trọng", tag: "Nguy hiểm", icon: "dangerous", className: "severity-nang" },

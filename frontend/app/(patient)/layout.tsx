@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+<<<<<<< HEAD
 import Sidebar from "@/components/Sidebar";
+=======
+import BottomNav from "@/components/BottomNav";
+>>>>>>> origin/main
 import BrandLogo from "@/components/BrandLogo";
 import MaterialIcon from "@/components/MaterialIcon";
 import { clearSession, getSession, type Session } from "@/lib/auth";
