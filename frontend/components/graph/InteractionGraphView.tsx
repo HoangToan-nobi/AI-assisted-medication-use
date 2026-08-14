@@ -20,7 +20,9 @@ type InteractionGraphViewProps = {
   ariaLabel: string;
 };
 
-function truncateLabel(label: string, max = 17): string {
+const NODE_RADIUS = 7;
+
+function truncateLabel(label: string, max = 7): string {
   return label.length > max ? `${label.slice(0, max)}…` : label;
 }
 
@@ -92,6 +94,13 @@ export default function InteractionGraphView({ nodes, edges, groups, ariaLabel }
     return edge.sourceId === hovered.id || edge.targetId === hovered.id ? 1 : 0.08;
   }
 
+  // Đường nối chỉ dày lên khi con trỏ nằm đúng trong phạm vi của chính nó (không
+  // phải khi hover 1 node đầu cạnh) - phạm vi bắt hover (.tt-graph-edge-hit) đã
+  // được thu hẹp bằng đúng độ dày đường nối hiển thị (xem .tt-graph-edge-hit trong globals.css).
+  function edgeStrokeWidth(edge: GraphEdgeVM): number {
+    return hovered?.type === "edge" && hovered.id === edge.id ? 1.8 : 0.8;
+  }
+
   function nodeVisualState(node: GraphNodeVM): { opacity: number; filter: string } {
     if (!hovered) return { opacity: 1, filter: "none" };
     const connected = hovered.type === "node"
@@ -103,48 +112,41 @@ export default function InteractionGraphView({ nodes, edges, groups, ariaLabel }
     return connected ? { opacity: 1, filter: "none" } : { opacity: 0.3, filter: "saturate(0.3)" };
   }
 
-  function svgPointToClient(x: number, y: number): { left: number; top: number } | null {
-    const svg = svgRef.current;
-    if (!svg) return null;
-    const ctm = svg.getScreenCTM();
-    if (!ctm) return null;
-    const pt = svg.createSVGPoint();
-    pt.x = x;
-    pt.y = y;
-    const p = pt.matrixTransform(ctm);
-    const rect = svg.getBoundingClientRect();
-    return { left: p.x - rect.left, top: p.y - rect.top };
+  // Tooltip đi theo đúng vị trí con trỏ (không neo cố định vào node/cạnh nữa) -
+  // tính theo tọa độ con trỏ so với góc trên-trái của .tt-graph-canvas (cha trực
+  // tiếp của svg, position:relative, cũng là nơi tooltip absolute định vị theo).
+  function tooltipPosFromPointer(e: React.PointerEvent): { left: number; top: number; below: boolean } | null {
+    const canvas = svgRef.current?.parentElement;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const left = e.clientX - rect.left;
+    const top = e.clientY - rect.top;
+    // Lật tooltip xuống dưới con trỏ khi quá gần mép trên canvas, tránh bị cắt bởi
+    // phần header phía trên khung đồ thị.
+    return { left, top, below: top < 40 };
   }
 
-  // Lật tooltip xuống dưới khi điểm neo quá gần mép trên của canvas (0..100),
-  // tránh bị cắt bởi phần header phía trên khung đồ thị.
-  function anchorY(y: number, offsetAbove: number, offsetBelow: number): { y: number; below: boolean } {
-    return y < 18 ? { y: y + offsetBelow, below: true } : { y: y - offsetAbove, below: false };
-  }
-
-  function handleEdgeEnter(edge: GraphEdgeVM) {
+  function handleEdgeEnter(edge: GraphEdgeVM, e: React.PointerEvent) {
     setHovered({ type: "edge", id: edge.id });
-    const p1 = positionById.get(edge.sourceId);
-    const p2 = positionById.get(edge.targetId);
-    if (!p1 || !p2) return;
-    const midY = (p1[1] + p2[1]) / 2;
-    const anchor = anchorY(midY, 6, 6);
-    const pos = svgPointToClient((p1[0] + p2[0]) / 2, anchor.y);
+    const pos = tooltipPosFromPointer(e);
     if (!pos) return;
     const nodeA = nodeById.get(edge.sourceId);
     const nodeB = nodeById.get(edge.targetId);
     const background = edge.muc_do ? SEVERITY_EDGE_COLOR[edge.muc_do] : "#8d98a4";
-    setTooltip({ ...pos, below: anchor.below, background, content: `${nodeA?.label ?? ""} ⇄ ${nodeB?.label ?? ""}` });
+    setTooltip({ ...pos, background, content: `${nodeA?.label ?? ""} ⇄ ${nodeB?.label ?? ""}` });
   }
 
-  function handleNodeEnter(node: GraphNodeVM) {
+  function handleNodeEnter(node: GraphNodeVM, e: React.PointerEvent) {
     setHovered({ type: "node", id: node.id });
-    const p = positionById.get(node.id);
-    if (!p) return;
-    const anchor = anchorY(p[1], 10, 14);
-    const pos = svgPointToClient(p[0], anchor.y);
+    const pos = tooltipPosFromPointer(e);
     if (!pos) return;
-    setTooltip({ ...pos, below: anchor.below, content: node.label });
+    setTooltip({ ...pos, content: node.label });
+  }
+
+  function handlePointerMove(e: React.PointerEvent) {
+    const pos = tooltipPosFromPointer(e);
+    if (!pos) return;
+    setTooltip((t) => (t ? { ...t, ...pos } : t));
   }
 
   function handleLeave() {
@@ -168,11 +170,12 @@ export default function InteractionGraphView({ nodes, edges, groups, ariaLabel }
               <path
                 d={d}
                 className="tt-graph-edge-hit"
-                onPointerEnter={() => handleEdgeEnter(edge)}
+                onPointerEnter={(e) => handleEdgeEnter(edge, e)}
+                onPointerMove={handlePointerMove}
                 onPointerLeave={handleLeave}
                 onClick={() => scrollToPairCard(edge.id)}
               />
-              <path d={d} className="tt-graph-edge" style={{ stroke: color, opacity: edgeOpacity(edge) }} />
+              <path d={d} className="tt-graph-edge" style={{ stroke: color, opacity: edgeOpacity(edge), strokeWidth: edgeStrokeWidth(edge) }} />
             </g>
           );
         })}
@@ -180,17 +183,23 @@ export default function InteractionGraphView({ nodes, edges, groups, ariaLabel }
           const pos = positionById.get(node.id);
           if (!pos) return null;
           const state = nodeVisualState(node);
+          const isThisNodeHovered = hovered?.type === "node" && hovered.id === node.id;
           return (
             <g
               key={node.id}
               className="tt-graph-node"
-              transform={`translate(${pos[0]} ${pos[1]})`}
-              style={{ opacity: state.opacity, filter: state.filter }}
-              onPointerEnter={() => handleNodeEnter(node)}
+              transform={`translate(${pos[0]} ${pos[1]}) scale(${isThisNodeHovered ? 1.18 : 1})`}
+              style={{ filter: state.filter }}
+              onPointerEnter={(e) => handleNodeEnter(node, e)}
+              onPointerMove={handlePointerMove}
               onPointerLeave={handleLeave}
             >
-              <circle r="8" fill={colorForNode(node, index)} />
-              <text className="tt-graph-node__label" y="13" textAnchor="middle">{truncateLabel(node.label)}</text>
+              {/* Lõi (khối màu + tên) mờ/hiện cùng lúc với cạnh - vòng trắng bao
+                  quanh (tt-graph-node__ring) cố ý mờ/hiện CHẬM HƠN một nhịp (xem
+                  transition-delay ở globals.css) để tạo hiệu ứng lớp trong-ngoài. */}
+              <circle className="tt-graph-node__fill" r={NODE_RADIUS} fill={colorForNode(node, index)} style={{ opacity: state.opacity }} />
+              <text className="tt-graph-node__label" y="0.4" textAnchor="middle" dominantBaseline="central" style={{ opacity: state.opacity }}>{truncateLabel(node.label)}</text>
+              <circle className="tt-graph-node__ring" r={NODE_RADIUS} style={{ opacity: state.opacity }} />
             </g>
           );
         })}

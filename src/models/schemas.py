@@ -42,12 +42,30 @@ class MedicationItem(BaseModel):
     id: str  # id của bản ghi patient_medications - dùng để xóa
     product_id: str
     ten_thuoc: str
+    prescription_id: str
     ngay_bat_dau: date | None = None
     ngay_ket_thuc: date | None = None
 
 
 class AddMedicationRequest(BaseModel):
     medication_name: str = Field(..., min_length=1, max_length=255)
+
+
+# ---- Đơn thuốc đã lưu trong hồ sơ (tab "Đơn thuốc của tôi") ----
+
+
+class PatientPrescriptionSummary(BaseModel):
+    id: str
+    label: str
+    medications: list[MedicationItem]
+
+
+class CreatePrescriptionRequest(BaseModel):
+    label: str = Field(..., min_length=1, max_length=100)
+
+
+class RenamePrescriptionRequest(BaseModel):
+    label: str = Field(..., min_length=1, max_length=100)
 
 
 class MedicationSearchResult(BaseModel):
@@ -78,6 +96,10 @@ class ProductCheckRequest(BaseModel):
 
 class AddProductRequest(BaseModel):
     product_name: str = Field(..., min_length=1, max_length=500)
+    # Tùy chọn - nếu bỏ trống, route tự gán vào đơn mặc định của bệnh nhân (tạo mới
+    # nếu chưa có đơn nào), giữ tương thích ngược với các client cũ chưa biết khái
+    # niệm "đơn thuốc" (VD test_add_and_list_patient_medications không gửi field này).
+    prescription_id: str | None = None
 
 
 # ---- Kiểm tra tương tác ----
@@ -103,9 +125,14 @@ class MedicationCheckResponse(BaseModel):
     # luồng dược sĩ (pharmacist/products/check) khi request có từ 2 đơn trở lên.
     product_explanations: list[dict] = Field(default_factory=list)
     prescription_explanations: list[dict] = Field(default_factory=list)
-    # Tóm tắt tổng quan toàn bộ lần phân tích - chỉ sinh cho luồng bệnh nhân
-    # (products/check, guest/products/check), None ở luồng dược sĩ.
+    # Tóm tắt tổng quan toàn bộ lần phân tích - sinh cho cả luồng bệnh nhân và dược
+    # sĩ, khác nhau ở giọng điệu (xem build_overview_explanation).
     overview: dict | None = None
+    # Ghi chú dược sĩ để lại khi xác nhận lần kiểm tra này (PharmacistReview.ghi_chu)
+    # - chỉ có ở GET /patients/{id}/checks/{check_id} khi đã có dược sĩ xác nhận,
+    # None ở mọi trường hợp khác (lần kiểm tra mới chạy, guest, chưa ai xác nhận).
+    ghi_chu_duoc_si: str | None = None
+    ten_duoc_si_xac_nhan: str | None = None
 
 
 class InteractionCheckSummary(BaseModel):
@@ -123,6 +150,7 @@ class PharmacistSummary(BaseModel):
     id: str
     ho_ten: str
     noi_cong_tac: str | None = None
+    mo_ta_ngan: str | None = None
 
 
 class ReviewRequestSummary(BaseModel):
@@ -132,6 +160,24 @@ class ReviewRequestSummary(BaseModel):
     thoi_gian_kiem_tra: datetime
     co_canh_bao_nang: bool
     trang_thai_xac_nhan: str
+    # Ngữ cảnh bệnh nhân gửi kèm lúc nhờ xác nhận (xem RequestReviewRequest) - đưa
+    # thẳng vào đây để trang review dược sĩ lấy được luôn từ listPharmacistRequests,
+    # khỏi cần gọi thêm endpoint riêng.
+    gui_kem_ho_so: bool = False
+    ten_nguoi_duoc_kiem_tra: str | None = None
+    ngay_sinh_nhap_tay: date | None = None
+    ghi_chu_nhap_tay: str | None = None
+
+
+class RequestReviewRequest(BaseModel):
+    """Ngữ cảnh bệnh nhân chọn gửi kèm khi nhờ dược sĩ xác nhận 1 lần tra cứu - gửi
+    hồ sơ cá nhân CỦA CHÍNH MÌNH (gui_kem_ho_so=True), hoặc tự nhập thông tin cho
+    trường hợp tra cứu hộ người khác (3 field dưới), hoặc không gửi gì cả."""
+
+    gui_kem_ho_so: bool = False
+    ten_nguoi_duoc_kiem_tra: str | None = Field(default=None, max_length=255)
+    ngay_sinh_nhap_tay: date | None = None
+    ghi_chu_nhap_tay: str | None = Field(default=None, max_length=2000)
 
 
 class PharmacistReviewRequest(BaseModel):
@@ -144,6 +190,32 @@ class PharmacistReviewResponse(BaseModel):
     interaction_check_id: str
     trang_thai_xac_nhan: str
     ghi_chu: str
+
+
+# ---- Hồ sơ cá nhân dược sĩ ----
+
+
+class PharmacistProfileInfo(BaseModel):
+    ho_ten: str | None = None
+    noi_cong_tac: str | None = None
+    mo_ta_ngan: str | None = None
+
+
+class UpdatePharmacistProfileRequest(BaseModel):
+    ho_ten: str | None = Field(default=None, max_length=255)
+    noi_cong_tac: str | None = Field(default=None, max_length=255)
+    mo_ta_ngan: str | None = Field(default=None, max_length=2000)
+
+
+# ---- Thông báo ----
+
+
+class NotificationItem(BaseModel):
+    id: str
+    noi_dung: str
+    da_doc: bool
+    thoi_gian_tao: datetime
+    interaction_check_id: str | None = None
 
 
 # ---- Hồ sơ cá nhân bệnh nhân ----

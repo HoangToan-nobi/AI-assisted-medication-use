@@ -1,9 +1,5 @@
-<<<<<<< HEAD
 /* Clinical Clarity — MediCheck Design System (Stitch) */
 @import './landing.css';
-=======
-/* Clinical Clarity — MedCheck AI Design System (Stitch) */
->>>>>>> origin/main
 
 :root {
   --background: #f6faff;
@@ -293,6 +289,94 @@ main.app-main {
 .icon-btn:hover {
   background: var(--surface-container-low);
   color: var(--primary);
+}
+
+.notification-bell {
+  position: relative;
+}
+.notification-bell__badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: #c94740;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+.notification-bell__panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: min(340px, calc(100vw - 32px));
+  max-height: 380px;
+  overflow-y: auto;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #c7d8ef;
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(26, 60, 98, 0.16);
+}
+.notification-bell__title {
+  margin-bottom: 6px;
+  padding: 4px 6px;
+  color: #5b789c;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.notification-bell__empty {
+  padding: 16px 6px;
+  color: var(--on-surface-variant);
+  font-size: 13px;
+  text-align: center;
+}
+.notification-bell__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.notification-bell__list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.notification-bell__list li:hover {
+  background: var(--surface-container-low);
+}
+.notification-bell__list li p {
+  margin: 0;
+  color: var(--on-surface-variant);
+  font-size: 13px;
+  line-height: 18px;
+}
+.notification-bell__list li small {
+  color: #8d98a4;
+  font-size: 11px;
+}
+.notification-bell__item--unread p {
+  color: var(--on-surface);
+  font-weight: 700;
+}
+.notification-bell__dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  background: #244c93;
+  border-radius: 999px;
 }
 
 /* ---- Brand ---- */
@@ -1200,7 +1284,7 @@ button.btn-severe:hover {
   line-height: 22px;
 }
 
-.result-hero {
+.pharmacist-note-box {
   display: flex;
   gap: 12px;
   align-items: flex-start;
@@ -1209,47 +1293,13 @@ button.btn-severe:hover {
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
   background: var(--surface-container-lowest);
-}
-.result-hero--severe {
-  background: var(--severe-container);
-  border-color: rgba(213, 43, 30, 0.25);
-}
-.result-hero--safe {
-  background: var(--primary-fixed);
-}
-.result-hero__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 52px;
-  height: 52px;
-  flex: 0 0 auto;
-  border-radius: var(--radius);
-  background: var(--surface-container-lowest);
   color: var(--primary);
 }
-.result-hero--severe .result-hero__icon {
-  color: var(--severe);
-}
-.result-hero h2 {
-  font-size: 18px;
-  font-weight: 600;
-  margin: 2px 0 4px;
-}
-.result-hero p:not(.eyebrow) {
-  color: var(--on-surface-variant);
+.pharmacist-note-box p:not(.eyebrow) {
+  margin-top: 4px;
+  color: var(--on-surface);
   font-size: 14px;
   line-height: 20px;
-}
-.result-hero .pharmacist-prompt,
-.result-hero .pharmacist-prompt--done,
-.result-hero .pharmacist-prompt--confirmed,
-.result-hero .pharmacist-prompt--loading {
-  margin-top: 12px;
-  padding: 0;
-  background: none;
-  border: none;
-  box-shadow: none;
 }
 .result-list-heading {
   margin-top: 24px;
@@ -2010,6 +2060,33 @@ button,
   font-size: 13px;
   font-weight: 700;
 }
+.dashboard-notifications {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.dashboard-notification {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  color: #244c93;
+  text-align: left;
+  background: #eef4fc;
+  border: 1px solid #c7d8ef;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.dashboard-notification:hover {
+  background: #dbe8fb;
+}
+.dashboard-notification span {
+  flex: 1;
+  font-size: 13.5px;
+  line-height: 19px;
+}
 .dashboard-med-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2371,6 +2448,10 @@ button,
   color: #fff;
   background: #9b5b1c;
 }
+.history-status--not-sent {
+  color: #fff;
+  background: #6c7f95;
+}
 .history-tile > strong {
   font-size: 14px;
 }
@@ -2684,6 +2765,12 @@ button,
   font-size: 14px;
   line-height: 21px;
 }
+.pharmacist-review-section {
+  margin: 16px 0;
+}
+.pharmacist-review-section .pharmacist-prompt {
+  margin-top: 0;
+}
 .interaction-selection__header > span {
   display: inline-flex;
   align-items: center;
@@ -2945,22 +3032,17 @@ button,
 }
 .tt-graph-canvas {
   position: relative;
-  min-height: 520px;
-  border: 1px solid #d8e2ee;
-  border-radius: 6px;
-  background: radial-gradient(circle at center, #fbfdff 0, #f1f7fd 100%);
+  min-height: 680px;
 }
 .tt-graph-canvas svg {
   display: block;
   width: 100%;
-  height: 520px;
-  overflow: hidden;
-  border-radius: 6px;
+  height: 680px;
 }
 .tt-graph-edge-hit {
   fill: none;
   stroke: transparent;
-  stroke-width: 8;
+  stroke-width: 0.8;
   pointer-events: stroke;
 }
 .tt-graph-edge-group--clickable .tt-graph-edge-hit {
@@ -2968,7 +3050,7 @@ button,
 }
 .tt-graph-edge {
   fill: none;
-  stroke-width: 1.6;
+  stroke-width: 0.8;
   stroke-linecap: round;
   pointer-events: none;
   transition:
@@ -2978,24 +3060,34 @@ button,
 .tt-graph-node {
   cursor: default;
   transition:
-    opacity 0.18s ease,
+    transform 0.18s ease,
     filter 0.18s ease;
 }
-.tt-graph-node circle {
-  stroke: #fff;
-  stroke-width: 1.7;
+.tt-graph-node__fill {
+  transition: opacity 0.18s ease;
   filter: drop-shadow(0 3px 3px rgba(36, 65, 101, 0.18));
 }
+.tt-graph-node__ring {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.7;
+  pointer-events: none;
+  /* Cố ý trễ hơn 1 nhịp so với lõi (.tt-graph-node__fill mờ/hiện tức thời) - tạo
+     hiệu ứng vòng ngoài "đuổi theo" lõi khi hover 1 node/cạnh làm mờ các node khác. */
+  transition: opacity 0.18s ease 0.07s;
+}
 .tt-graph-node__label {
-  fill: #111;
+  fill: #fff;
   font-family: var(--font-body);
-  font-size: 3.6px;
+  font-size: 2.6px;
   font-weight: 700;
   pointer-events: none;
+  filter: drop-shadow(0 0 1.2px rgba(0, 0, 0, 0.55));
+  transition: opacity 0.18s ease;
 }
 .tt-graph-tooltip {
   position: absolute;
-  transform: translate(-50%, -112%);
+  transform: translate(-50%, calc(-100% - 14px));
   background: #1c2f4c;
   color: #fff;
   padding: 6px 10px;
@@ -3008,7 +3100,7 @@ button,
   z-index: 5;
 }
 .tt-graph-tooltip--below {
-  transform: translate(-50%, 12%);
+  transform: translate(-50%, 14px);
 }
 .tt-graph-legend {
   display: flex;
@@ -3161,20 +3253,20 @@ button,
   margin-top: 12px;
   padding: 16px;
   background: #fff;
-  border: 1px solid #f3c8c4;
+  border: 1px solid #c7d8ef;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 .pharmacist-prompt__title {
   margin-bottom: 8px;
-  color: #9b3029;
+  color: #244c93;
   font-size: 15px;
   font-weight: 600;
 }
 .pharmacist-prompt__cta {
   padding: 10px 16px;
   color: #fff;
-  background: #9b3029;
+  background: #244c93;
   border: none;
   border-radius: 6px;
   font-size: 14px;
@@ -3182,13 +3274,40 @@ button,
   cursor: pointer;
 }
 .pharmacist-prompt__cta:hover {
-  background: #832721;
+  background: #1b3a70;
+}
+.pharmacist-prompt__cta:disabled {
+  background: #9db6da;
+  cursor: default;
+}
+.pharmacist-prompt__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding: 0;
+  color: #64707e;
+  background: none;
+  border: none;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: none;
+}
+.pharmacist-prompt__back:hover {
+  color: #244c93;
 }
 .pharmacist-prompt__list {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 100%;
   margin-top: 12px;
+  max-height: 260px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 2px;
+  box-sizing: border-box;
 }
 .pharmacist-prompt__loading {
   color: #64707e;
@@ -3198,22 +3317,90 @@ button,
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
+  width: 100%;
   padding: 12px;
+  color: inherit;
+  text-align: left;
   background: #fafafa;
   border: 1px solid #eee;
   border-radius: 6px;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+.pharmacist-prompt__item:hover {
+  background: #eef4fc;
+  border-color: #c7d8ef;
+}
+.pharmacist-prompt__item-body {
+  min-width: 0;
+  flex: 1;
 }
 .pharmacist-prompt__name {
   color: #1a2b4c;
   font-weight: 600;
+  overflow-wrap: break-word;
 }
 .pharmacist-prompt__place {
-  display: inline-flex;
-  align-items: center;
+  display: flex;
+  align-items: flex-start;
   gap: 4px;
   margin-top: 4px;
   color: #64707e;
   font-size: 12px;
+  overflow-wrap: break-word;
+}
+.pharmacist-prompt__place .material-symbols-outlined {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.pharmacist-prompt__bio {
+  margin-top: 4px;
+  color: #64707e;
+  font-size: 12px;
+  line-height: 16px;
+  overflow-wrap: break-word;
+}
+.pharmacist-prompt__attach-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+  font-size: 13px;
+}
+.pharmacist-prompt__attach-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  color: var(--on-surface);
+  background: #fafafa;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.pharmacist-prompt__attach-option:hover {
+  background: #f2f6fb;
+}
+.pharmacist-prompt__attach-option--active {
+  background: #eef4fc;
+  border-color: #244c93;
+  color: #1a2b4c;
+  font-weight: 600;
+}
+.pharmacist-prompt__attach-option input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: #244c93;
+}
+.pharmacist-prompt__manual-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 .pharmacist-prompt__assign {
   padding: 8px 16px;
@@ -3539,6 +3726,30 @@ button,
   margin-bottom: 16px;
   align-items: start;
 }
+.prescription-board--slider {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scroll-padding-left: 2px;
+  padding: 2px 2px 10px;
+  -webkit-overflow-scrolling: touch;
+}
+.prescription-board--slider .prescription-panel,
+.prescription-board--slider .prescription-board__add {
+  flex: 0 0 300px;
+  width: 300px;
+  scroll-snap-align: start;
+}
+.prescription-board--slider::-webkit-scrollbar {
+  height: 8px;
+}
+.prescription-board--slider::-webkit-scrollbar-track {
+  background: transparent;
+}
+.prescription-board--slider::-webkit-scrollbar-thumb {
+  background: #c7d6ea;
+  border-radius: 999px;
+}
 .prescription-panel {
   position: relative;
   padding: 20px;
@@ -3559,8 +3770,29 @@ button,
   margin-bottom: 10px;
 }
 .prescription-panel__header h3 {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
   font-size: 15px;
   font-weight: 800;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.prescription-panel__header-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+}
+.prescription-panel__edit {
+  min-height: unset;
+  padding: 5px;
+  color: #6c7f95;
+  background: transparent;
+  box-shadow: none;
+}
+.prescription-panel__edit:hover {
+  color: #244c93;
 }
 .prescription-panel__actions {
   display: flex;
@@ -3636,6 +3868,97 @@ button,
 .prescription-board__add:hover {
   background: #eef4fc;
   border-color: #6f95c8;
+}
+.prescription-panel__label-input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  color: var(--on-surface);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 800;
+}
+.prescription-panel__label-input:hover,
+.prescription-panel__label-input:focus {
+  background: var(--surface-container-low);
+  border-color: #c7d8ef;
+  outline: none;
+}
+.prescription-panel__label-input:disabled {
+  opacity: 0.6;
+}
+.prescription-panel__import {
+  position: relative;
+}
+.prescription-panel__import-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  width: max(220px, 100%);
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #c7d8ef;
+  border-radius: 10px;
+  box-shadow: 0 10px 24px rgba(20, 40, 80, 0.14);
+}
+.prescription-panel__import-menu li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.prescription-panel__import-menu li:hover {
+  background: #eef4fc;
+}
+.prescription-panel__import-menu li strong {
+  display: block;
+  font-size: 13px;
+}
+.prescription-panel__import-menu li small {
+  color: var(--on-surface-variant);
+  font-size: 11.5px;
+}
+.profile-tabs {
+  display: inline-flex;
+  gap: 6px;
+  margin-bottom: 20px;
+  padding: 4px;
+  background: var(--surface-container-low);
+  border-radius: 999px;
+}
+.profile-tabs__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: unset;
+  padding: 9px 16px;
+  color: var(--on-surface-variant);
+  background: transparent;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: none;
+}
+.profile-tabs__item--active {
+  color: #244c93;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(20, 40, 80, 0.12);
+}
+.dashboard-prescription-group {
+  margin-bottom: 20px;
+}
+.dashboard-prescription-group__title {
+  margin-bottom: 10px;
+  font-size: 15px;
+  font-weight: 800;
 }
 @media (max-width: 720px) {
   .prescription-board {
@@ -3919,7 +4242,6 @@ button,
 }
 
 /* Citation hover cards, inspired by NotebookLM source chips */
-<<<<<<< HEAD
 .citation-wrap {
   position: relative;
   display: inline-flex;
@@ -4005,13 +4327,6 @@ button,
   font-size: 12px;
   line-height: 1.45;
 }
-.result-hero--unknown {
-  background: #edf0f3;
-  border-color: #cbd2da;
-}
-.result-hero--unknown .result-hero__icon {
-  color: #687582;
-}
 .check-result-page .alert-card {
   font-family: var(--font-body);
 }
@@ -4058,22 +4373,3 @@ button,
     position: static;
   }
 }
-=======
-.citation-wrap { position: relative; display: inline-flex; margin-top: 13px; }
-.citation-trigger { display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 5px 8px; color: #355b91; background: #eef4fc; border: 1px solid #d3dfef; border-radius: 6px; box-shadow: none; font-size: 12px; font-weight: 700; }
-.citation-trigger__text { display: block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.citation-trigger:hover, .citation-trigger:focus-visible { color: #173f7d; background: #dfebfa; }
-.citation-popover { position: absolute; bottom: calc(100% + 9px); left: 0; z-index: 15; display: none; width: min(360px, calc(100vw - 48px)); padding: 14px; color: #233c5b; background: #fff; border: 1px solid #c7d5e7; border-radius: 9px; box-shadow: 0 12px 28px rgba(26, 60, 98, .16); }
-.citation-popover::after { content: ""; position: absolute; bottom: -6px; left: 18px; width: 10px; height: 10px; background: #fff; border-right: 1px solid #c7d5e7; border-bottom: 1px solid #c7d5e7; transform: rotate(45deg); }
-.citation-wrap:hover .citation-popover, .citation-wrap:focus-within .citation-popover { display: block; }
-.citation-wrap--open .citation-popover { display: block; }
-.citation-popover__label { display: block; margin-bottom: 7px; color: #5b789c; font-size: 10px; font-weight: 800; letter-spacing: .1em; }
-.citation-popover strong { display: block; color: #173f7d; font-family: var(--font-body); font-size: 14px; line-height: 1.4; }
-.citation-popover p { margin-top: 8px; color: #687b91; font-size: 12px; line-height: 1.45; }
-.result-hero--unknown { background: #edf0f3; border-color: #cbd2da; }
-.result-hero--unknown .result-hero__icon { color: #687582; }
-.check-result-page .alert-card { font-family: var(--font-body); }
-.check-result-page .alert-card h3, .check-result-page .alert-card p, .check-result-page .alert-card strong { letter-spacing: 0; }
-.citation-wrap:hover .citation-popover, .citation-wrap:focus-within .citation-popover { display: none; }
-.citation-wrap--open .citation-popover { display: block !important; }
->>>>>>> origin/main

@@ -4,7 +4,6 @@ import { useState } from "react";
 import MaterialIcon from "@/components/MaterialIcon";
 import type { Severity } from "@/lib/api";
 
-<<<<<<< HEAD
 type AlertCardProps = {
   thuocA?: string;
   thuocB?: string;
@@ -12,13 +11,11 @@ type AlertCardProps = {
   description: string;
   source: string;
   management?: string;
-  // Mô tả khoa học nguyên văn từ CSDL (không qua AI diễn giải lại) - chỉ backend
-  // trả về cho dược sĩ, bệnh nhân không có field này nên luôn undefined.
+  // Bản dịch nguyên văn (không qua AI diễn giải lại, chỉ dịch sát nghĩa Anh -> Việt)
+  // của mô tả khoa học từ CSDL DDInter 2.0 - chỉ backend trả về cho dược sĩ, bệnh
+  // nhân không có field này nên luôn undefined.
   scientificDescription?: string;
 };
-=======
-type AlertCardProps = { thuocA?: string; thuocB?: string; severity?: Severity; description: string; source: string; management?: string };
->>>>>>> origin/main
 
 const CONFIG: Record<Severity, { label: string; tag: string; icon: string; className: string }> = {
   nang: { label: "Nghiêm trọng", tag: "Nguy hiểm", icon: "dangerous", className: "severity-nang" },
@@ -33,8 +30,8 @@ export default function AlertCard({ thuocA, thuocB, severity, description, sourc
   return <article className={`alert-card ${config.className}`} data-severity={severity ?? "none"}>
     <div className="alert-card-header"><span className="alert-icon-wrap"><MaterialIcon name={config.icon} size={22} filled /></span><div className="alert-card-body"><span className="alert-severity-tag">{config.tag}</span><h3>{thuocA && thuocB ? `${config.label}: ${thuocA} + ${thuocB}` : config.label}</h3></div></div>
     <p className="alert-description">{description}</p>
-    {scientificDescription && <div className="alert-science-box"><strong>Mô tả khoa học (nguyên văn CSDL DDInter 2.0)</strong>{scientificDescription}</div>}
-    {management && <div className="alert-action-box"><strong>Khuyến nghị hành động</strong>{management}</div>}
+    {scientificDescription && <div className="alert-science-box"><strong>Mô tả khoa học (dịch nguyên văn từ CSDL DDInter 2.0)</strong>{scientificDescription}</div>}
+    {management && <div className="alert-action-box"><strong>Khuyến nghị xử trí (dịch nguyên văn từ CSDL DDInter 2.0)</strong>{management}</div>}
     <div className={`citation-wrap ${sourceOpen ? "citation-wrap--open" : ""}`}><button type="button" className="citation-trigger" aria-expanded={sourceOpen} aria-label={`Xem nguồn: ${source}`} onClick={() => setSourceOpen((open) => !open)}><MaterialIcon name="database" size={15} /> <span className="citation-trigger__text">{source || "Nguồn trích dẫn"}</span><MaterialIcon name={sourceOpen ? "expand_less" : "expand_more"} size={16} /></button><div className="citation-popover" role="tooltip"><span className="citation-popover__label">NGUỒN THAM KHẢO</span><strong>{source || "Chưa có thông tin nguồn"}</strong><p>Nhấn lại nút nguồn để thu gọn thông tin tham khảo.</p></div></div>
   </article>;
 }

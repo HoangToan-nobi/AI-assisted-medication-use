@@ -208,11 +208,17 @@ export function assignGroupColors(groups: { id: string; label: string }[]): Grap
   return groups.map((g, index) => ({ ...g, color: NODE_FILL_PALETTE[index % NODE_FILL_PALETTE.length] }));
 }
 
+// Xoay cả vòng tròn layout 15° ngược chiều kim đồng hồ so với mặc định (node đầu
+// tiên đúng đỉnh 12h) - thuần thẩm mỹ, không ảnh hưởng cạnh/node nào. Trừ (không
+// cộng) vào góc vì trục y của SVG hướng xuống nên góc tăng dần vốn xoay THEO chiều
+// kim đồng hồ - trừ đi mới xoay NGƯỢC chiều kim đồng hồ trên màn hình.
+const LAYOUT_ROTATION_RAD = (-15 * Math.PI) / 180;
+
 // Vị trí node trên vòng tròn bán kính r quanh tâm (cx, cy), viewBox 0..100.
 export function circleLayout(count: number, cx = 50, cy = 50, r = 38): [number, number][] {
   if (count <= 1) return [[cx, cy]];
   return Array.from({ length: count }, (_, index) => {
-    const angle = (2 * Math.PI * index) / count - Math.PI / 2;
+    const angle = (2 * Math.PI * index) / count - Math.PI / 2 + LAYOUT_ROTATION_RAD;
     return [cx + r * Math.cos(angle), cy + r * Math.sin(angle)];
   });
 }

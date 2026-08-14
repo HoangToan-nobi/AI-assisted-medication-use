@@ -8,6 +8,30 @@ export function createPrescription(index: number): Prescription {
   return { id: `rx-${Date.now()}-${index}`, label: `Đơn thuốc ${index}`, drugs: [] };
 }
 
+
+// Gộp các đơn ĐÃ LƯU trong hồ sơ vào bàn cân hiện tại theo nhãn (label): đơn trên
+// bàn cân đã có nhãn trùng thì cộng dồn thêm thuốc mới (bỏ trùng) vào panel đó,
+// nhãn chưa từng xuất hiện thì thêm panel mới - để import nhiều lần liên tiếp (VD
+// lưu thêm 1 đơn mới rồi bấm "Kiểm tra tương tác" lại) nối tiếp nhau thay vì ghi
+// đè mất các đơn/thuốc đã có sẵn trên bàn cân từ lần import hoặc chỉnh sửa trước đó.
+export function mergeSavedIntoPrescriptions(
+  current: Prescription[],
+  saved: { id: string; label: string; medications: { ten_thuoc: string }[] }[]
+): Prescription[] {
+  const next = current.map((p) => ({ ...p, drugs: [...p.drugs] }));
+  saved.forEach((source, index) => {
+    const newDrugs = source.medications.map((m) => ({ name: m.ten_thuoc, known: true }));
+    const target = next.find((p) => p.label === source.label);
+    if (target) {
+      const existing = new Set(target.drugs.map((d) => d.name.toLowerCase()));
+      target.drugs.push(...newDrugs.filter((d) => !existing.has(d.name.toLowerCase())));
+    } else {
+      next.push({ id: `rx-${Date.now()}-${index}`, label: source.label, drugs: newDrugs });
+    }
+  });
+  return next;
+}
+
 // Bỏ các đơn rỗng rồi quy đổi sang payload gửi lên /products/check - đơn thuốc rỗng
 // không có ý nghĩa để backend tính cạnh cấp đơn, và schema yêu cầu mỗi đơn có ít
 // nhất 1 thuốc. Dùng CHÍNH danh sách đã lọc này (không phải `prescriptions` gốc) để
