@@ -2,13 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-<<<<<<< HEAD
 import Sidebar from "@/components/Sidebar";
-=======
-import BottomNav from "@/components/BottomNav";
->>>>>>> origin/main
 import BrandLogo from "@/components/BrandLogo";
 import MaterialIcon from "@/components/MaterialIcon";
+import NotificationBell from "@/components/NotificationBell";
 import { clearSession, getSession, type Session } from "@/lib/auth";
 import Link from "next/link";
 
@@ -17,6 +14,7 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
   const pathname = usePathname();
   const [session, setSession] = useState<Session | null>(null);
   const [checked, setChecked] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     const current = getSession();
@@ -41,9 +39,10 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
   }
 
   return (
-    <div className="app-shell app-shell--with-nav">
+    <div className={`app-shell app-shell--with-nav ${sidebarCollapsed ? "app-shell--sidebar-collapsed" : ""}`}>
       <header className="patient-header">
         <div className="patient-header__actions" style={{ marginLeft: "auto" }}>
+          <NotificationBell patientId={session.userId} token={session.accessToken} />
           <Link className="patient-header__name" href="/profile" title="Hồ sơ của tôi">{session.hoTen}</Link>
           <button className="icon-btn" onClick={logout} aria-label="Đăng xuất" title="Đăng xuất">
             <MaterialIcon name="logout" size={20} />
@@ -51,7 +50,7 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
         </div>
       </header>
       <div className="app-content">{children}</div>
-      <Sidebar />
+      <Sidebar collapsed={sidebarCollapsed} onToggleCollapsed={() => setSidebarCollapsed((current) => !current)} />
       <span className="sr-only">Đang ở trang {pathname}</span>
     </div>
   );

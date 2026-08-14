@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import type { MedicationCheckResponse } from "@/lib/api";
 import type { Session } from "@/lib/auth";
 import type { Prescription } from "@/lib/prescription";
 import InteractionOverview from "./InteractionOverview";
-import SevereInteractionPopup from "./SevereInteractionPopup";
+import MediFox from "@/components/MediFox";
 
 type InteractionResultViewProps = {
   result: MedicationCheckResponse;
@@ -13,25 +12,18 @@ type InteractionResultViewProps = {
   session: Session | null;
 };
 
-// Dùng ở tab "Tra cứu tương tác" (kết quả vừa tính xong): bọc InteractionOverview
-// bằng popup gợi ý nhờ dược sĩ, có thể đóng rồi mở lại.
+// Dùng ở tab "Tra cứu tương tác" (kết quả vừa tính xong): bọc InteractionOverview,
+// vốn tự hiện khung "Nhờ dược sĩ xác nhận" bên trong nó cho MỌI lần tra cứu (không
+// còn chỉ dành riêng cho tương tác nghiêm trọng như trước).
 export default function InteractionResultView({ result, prescriptions, session }: InteractionResultViewProps) {
-  const [popupDismissed, setPopupDismissed] = useState(false);
-
-  useEffect(() => {
-    setPopupDismissed(false);
-  }, [result]);
-
-  return (
-    <>
-      {result.has_severe && !popupDismissed && (
-        <SevereInteractionPopup checkId={result.interaction_check_id} session={session} onClose={() => setPopupDismissed(true)} />
-      )}
-      <InteractionOverview
-        result={result}
-        prescriptions={prescriptions}
-        onReopenSeverePopup={result.has_severe && popupDismissed ? () => setPopupDismissed(false) : undefined}
-      />
-    </>
-  );
+  return <>
+    <aside className={`interaction-mascot-note ${result.has_severe ? "interaction-mascot-note--alert" : ""}`}>
+      <MediFox variant="alert" className="interaction-mascot-note__image" />
+      <div>
+        <strong>{result.has_severe ? "Cáo Medi nhắc bạn cần lưu ý" : "Cáo Medi đã kiểm tra xong"}</strong>
+        <p>{result.has_severe ? "Hãy đọc kỹ cảnh báo và hỏi dược sĩ hoặc bác sĩ trước khi dùng thuốc." : "Kết quả không thay thế tư vấn trực tiếp từ bác sĩ hoặc dược sĩ."}</p>
+      </div>
+    </aside>
+    <InteractionOverview result={result} prescriptions={prescriptions} session={session} />
+  </>;
 }

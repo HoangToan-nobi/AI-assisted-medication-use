@@ -31,6 +31,9 @@ class User(Base):
     mat_khau_hash = Column(String(255), nullable=False)
     vai_tro = Column(String(20), nullable=False)  # patient | pharmacist
     noi_cong_tac = Column(String(255), nullable=True)
+    # Mô tả ngắn của dược sĩ (bio) - hiện ở khung chọn dược sĩ khi bệnh nhân nhờ xác
+    # nhận, tự cập nhật qua tab "Hồ sơ cá nhân" bên luồng dược sĩ.
+    mo_ta_ngan = Column(Text, nullable=True)
     ngay_tao = Column(DateTime, default=datetime.utcnow)
 
 
@@ -102,10 +105,26 @@ class ProductIngredient(Base):
     medication_id = Column(String, ForeignKey("medications.id"), nullable=True)
 
 
+class PatientPrescription(Base):
+    """1 đơn thuốc đã lưu trong hồ sơ bệnh nhân (tab "Đơn thuốc của tôi") - gộp nhóm
+    các PatientMedication lại theo label do bệnh nhân tự đặt, tương tự khái niệm
+    "Đơn thuốc N" ở bàn cân tương tác nhưng có lưu persist lại DB."""
+
+    __tablename__ = "patient_prescriptions"
+    id = Column(String, primary_key=True, default=_uuid)
+    patient_id = Column(String, ForeignKey("users.id"))
+    label = Column(String(100), nullable=False)
+    ngay_tao = Column(DateTime, default=datetime.utcnow)
+
+
 class PatientMedication(Base):
     __tablename__ = "patient_medications"
     id = Column(String, primary_key=True, default=_uuid)
     patient_id = Column(String, ForeignKey("users.id"))
+    # Nullable ở DB (bảng cũ tạo trước khi có khái niệm đơn thuốc, xem
+    # src/db/session.py::_ensure_prescription_id_column) nhưng route
+    # add_patient_medication luôn gán 1 đơn cụ thể - không có bản ghi "mồ côi" mới.
+    prescription_id = Column(String, ForeignKey("patient_prescriptions.id"), nullable=True)
     medication_id = Column(String, ForeignKey("medications.id"), nullable=True)
     product_id = Column(String, ForeignKey("products.id"), nullable=True)
     ngay_bat_dau = Column(Date)
@@ -149,3 +168,26 @@ class PharmacistReview(Base):
     pharmacist_id = Column(String, ForeignKey("users.id"))
     ghi_chu = Column(Text)
     trang_thai_xac_nhan = Column(String(20), default="chua_xac_nhan")
+    # true nếu bệnh nhân chọn gửi kèm hồ sơ cá nhân CỦA CHÍNH MÌNH (PatientProfile,
+    # đọc trực tiếp lúc dược sĩ xem, không snapshot) - loại trừ lẫn nhau với 3 field
+    # nhập tay bên dưới (trường hợp tra cứu hộ người khác không có hồ sơ trong hệ thống).
+    gui_kem_ho_so = Column(Boolean, default=False)
+    ten_nguoi_duoc_kiem_tra = Column(String(255), nullable=True)
+    ngay_sinh_nhap_tay = Column(Date, nullable=True)
+    ghi_chu_nhap_tay = Column(Text, nullable=True)
+    # Mốc dược sĩ bấm xác nhận - dùng để sắp xếp/tạo thông báo (InteractionCheck chỉ
+    # có thời điểm TẠO lần kiểm tra, không phải thời điểm xác nhận).
+    thoi_gian_xac_nhan = Column(DateTime, nullable=True)
+
+
+class Notification(Base):
+    """Thông báo 1 chiều cho bệnh nhân - hiện tại chỉ tạo khi dược sĩ xác nhận xong
+    1 yêu cầu xét duyệt (xem submit_pharmacist_review)."""
+
+    __tablename__ = "notifications"
+    id = Column(String, primary_key=True, default=_uuid)
+    patient_id = Column(String, ForeignKey("users.id"))
+    pharmacist_review_id = Column(String, ForeignKey("pharmacist_reviews.id"), nullable=True)
+    noi_dung = Column(Text, nullable=False)
+    da_doc = Column(Boolean, default=False)
+    thoi_gian_tao = Column(DateTime, default=datetime.utcnow)

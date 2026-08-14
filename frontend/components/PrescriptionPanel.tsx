@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import MaterialIcon from "@/components/MaterialIcon";
-import type { ProductSearchResult } from "@/lib/api";
+import type { PatientPrescription, ProductSearchResult } from "@/lib/api";
 import type { SelectedDrug } from "@/lib/prescription";
 
 type PrescriptionPanelProps = {
@@ -12,13 +12,26 @@ type PrescriptionPanelProps = {
   onAdd: (name: string, known?: boolean) => void;
   onRemoveDrug: (name: string) => void;
   onRemovePanel?: () => void;
-  onImport?: () => void;
+  // Đơn thuốc đã lưu trong hồ sơ (tab "Đơn thuốc của tôi") để chọn nhập vào panel
+  // này. 0 đơn -> ẩn hẳn nút; đúng 1 đơn -> bấm là nhập luôn (như hành vi cũ);
+  // từ 2 đơn trở lên -> hiện danh sách để chọn đúng 1 đơn.
+  savedPrescriptions?: PatientPrescription[];
+  onImportFrom?: (prescriptionId: string) => void;
+  // Cho phép đổi tên đơn thuốc qua nút sửa (bấm mới cho sửa). Không truyền prop
+  // này thì tên đơn hiển thị tĩnh, không sửa được (VD: bàn cân tương tác của bệnh nhân).
+  onRename?: (label: string) => void;
   inputId: string;
 };
 
-export default function PrescriptionPanel({ label, drugs, search, onAdd, onRemoveDrug, onRemovePanel, onImport, inputId }: PrescriptionPanelProps) {
+export default function PrescriptionPanel({ label, drugs, search, onAdd, onRemoveDrug, onRemovePanel, savedPrescriptions, onImportFrom, onRename, inputId }: PrescriptionPanelProps) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<ProductSearchResult[]>([]);
+  const [importPickerOpen, setImportPickerOpen] = useState(false);
+  const importPickerRef = useRef<HTMLDivElement>(null);
+  const [editingLabel, setEditingLabel] = useState(false);
+  const [draftLabel, setDraftLabel] = useState(label);
+
+  useEffect(() => setDraftLabel(label), [label]);
 
   useEffect(() => {
     if (query.trim().length < 2) { setSuggestions([]); return; }
@@ -27,27 +40,83 @@ export default function PrescriptionPanel({ label, drugs, search, onAdd, onRemov
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
+  useEffect(() => {
+    if (!importPickerOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (importPickerRef.current && !importPickerRef.current.contains(e.target as Node)) setImportPickerOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [importPickerOpen]);
+
+  function handleImportClick() {
+    if (!savedPrescriptions || !onImportFrom) return;
+    if (savedPrescriptions.length === 1) onImportFrom(savedPrescriptions[0].id);
+    else setImportPickerOpen((open) => !open);
+  }
+
   function add(name: string, known = true) {
     onAdd(name, known);
     setQuery("");
     setSuggestions([]);
   }
 
+  function saveLabel() {
+    const trimmed = draftLabel.trim();
+    setEditingLabel(false);
+    if (!trimmed || trimmed === label) { setDraftLabel(label); return; }
+    onRename?.(trimmed);
+  }
+
   return (
     <div className="prescription-panel panel">
       <div className="prescription-panel__header">
-        <h3>{label}</h3>
-        {onRemovePanel && (
-          <button type="button" className="prescription-panel__remove" onClick={onRemovePanel} aria-label={`Xóa ${label}`}>
-            <MaterialIcon name="close" size={18} />
-          </button>
+        {editingLabel && onRename ? (
+          <input
+            className="prescription-panel__label-input"
+            value={draftLabel}
+            onChange={(e) => setDraftLabel(e.target.value)}
+            onBlur={saveLabel}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+              if (e.key === "Escape") { setDraftLabel(label); setEditingLabel(false); }
+            }}
+            aria-label="Tên đơn thuốc"
+            autoFocus
+          />
+        ) : (
+          <h3>{label}</h3>
         )}
+        <div className="prescription-panel__header-actions">
+          {onRename && !editingLabel && (
+            <button type="button" className="prescription-panel__edit" onClick={() => setEditingLabel(true)} aria-label="Sửa tên đơn thuốc" title="Sửa tên đơn thuốc">
+              <MaterialIcon name="edit" size={16} />
+            </button>
+          )}
+          {onRemovePanel && (
+            <button type="button" className="prescription-panel__remove" onClick={onRemovePanel} aria-label={`Xóa ${label}`}>
+              <MaterialIcon name="close" size={18} />
+            </button>
+          )}
+        </div>
       </div>
       <div className="prescription-panel__actions">
-        {onImport && (
-          <button type="button" className="prescription-panel__tool" onClick={onImport} title="Nhập từ hồ sơ thuốc đang dùng">
-            <MaterialIcon name="download" size={16} /><span>Nhập từ hồ sơ</span>
-          </button>
+        {savedPrescriptions && savedPrescriptions.length > 0 && onImportFrom && (
+          <div className="prescription-panel__import" ref={importPickerRef}>
+            <button type="button" className="prescription-panel__tool" onClick={handleImportClick} title="Nhập từ hồ sơ thuốc đang dùng">
+              <MaterialIcon name="download" size={16} /><span>Nhập từ hồ sơ</span>
+            </button>
+            {importPickerOpen && (
+              <ul className="prescription-panel__import-menu">
+                {savedPrescriptions.map((p) => (
+                  <li key={p.id} onClick={() => { onImportFrom(p.id); setImportPickerOpen(false); }}>
+                    <div><strong>{p.label}</strong><small>{p.medications.length} thuốc</small></div>
+                    <MaterialIcon name="chevron_right" size={17} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
         <button type="button" className="prescription-panel__tool" disabled title="Quét đơn thuốc bằng OCR — tính năng sắp ra mắt">
           <MaterialIcon name="photo_camera" size={16} /><span>Quét OCR</span>

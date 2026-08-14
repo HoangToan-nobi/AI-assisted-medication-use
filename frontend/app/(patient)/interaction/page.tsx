@@ -5,9 +5,10 @@ import { useSearchParams } from "next/navigation";
 import MaterialIcon from "@/components/MaterialIcon";
 import PrescriptionPanel from "@/components/PrescriptionPanel";
 import InteractionResultView from "@/components/graph/InteractionResultView";
-import { ApiError, checkGuestProducts, checkProducts, listPatientMedications, searchGuestProducts, searchProducts, type MedicationCheckResponse, type ProductSearchResult } from "@/lib/api";
+import { ApiError, checkGuestProducts, checkProducts, listPatientPrescriptions, searchGuestProducts, searchProducts, type MedicationCheckResponse, type PatientPrescription } from "@/lib/api";
 import { getSession } from "@/lib/auth";
-import { createPrescription, mergedDrugNames, nonEmptyPrescriptions, toPrescriptionCheckInput, type Prescription } from "@/lib/prescription";
+import { createPrescription, mergeSavedIntoPrescriptions, mergedDrugNames, nonEmptyPrescriptions, toPrescriptionCheckInput, type Prescription } from "@/lib/prescription";
+import MediFox from "@/components/MediFox";
 
 // Lưu tạm các đơn/thuốc đang nhập dở và kết quả phân tích gần nhất trong phiên
 // trình duyệt, để reload trang hoặc chuyển sang tab khác rồi quay lại Tra cứu
@@ -55,15 +56,37 @@ function loadDraftResultPrescriptions(): Prescription[] | null {
   }
 }
 
+function parseLandingDrugs(value: string | null): string[] {
+  if (!value) return [];
+  const seen = new Set<string>();
+  return value
+    .split(/[,;|\n]/)
+    .map((name) => name.trim())
+    .filter((name) => {
+      const key = name.toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 2);
+}
+
 function InteractionPageContent() {
   const session = getSession();
+  const searchParams = useSearchParams();
   // Chỉ tự nhập thuốc từ hồ sơ khi được điều hướng tới từ nút "Kiểm tra tương tác"
   // (ví dụ ở trang Hồ sơ, gắn ?import=profile) - không tự ý ghi đè khi người dùng
   // chỉ đơn thuần bấm vào tab "Tương tác" trên thanh điều hướng.
-  const shouldImportFromProfile = useSearchParams().get("import") === "profile";
-  const [query, setQuery] = useState("");
-  const [suggestions, setSuggestions] = useState<ProductSearchResult[]>([]);
-  const [prescriptions, setPrescriptions] = useState<Prescription[]>(() => loadDraftPrescriptions() ?? [createPrescription(1)]);
+  const shouldImportFromProfile = searchParams.get("import") === "profile";
+  const landingDrugs = parseLandingDrugs(searchParams.get("drugs"));
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>(() => {
+    if (landingDrugs.length) {
+      const prescription = createPrescription(1);
+      return [{ ...prescription, drugs: landingDrugs.map((name) => ({ name, known: true })) }];
+    }
+    return loadDraftPrescriptions() ?? [createPrescription(1)];
+  });
+  const [savedPrescriptions, setSavedPrescriptions] = useState<PatientPrescription[]>([]);
   const [result, setResult] = useState<MedicationCheckResponse | null>(() => loadDraftResult());
   const [resultPrescriptions, setResultPrescriptions] = useState<Prescription[] | null>(() => loadDraftResultPrescriptions());
   const [loading, setLoading] = useState(false);
@@ -73,18 +96,20 @@ function InteractionPageContent() {
   const primary = prescriptions[0];
 
   useEffect(() => {
-    if (query.trim().length < 2) { setSuggestions([]); return; }
-    const timer = setTimeout(() => (session ? searchProducts(query.trim(), session.accessToken) : searchGuestProducts(query.trim())).then(setSuggestions).catch(() => setSuggestions([])), 250);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
-  useEffect(() => {
-    if (!session || !shouldImportFromProfile) return;
-    listPatientMedications(session.userId, session.accessToken)
-      .then((items) => setPrescriptions((prev) => prev.map((p, index) => (index === 0 ? { ...p, drugs: items.map((item) => ({ name: item.ten_thuoc, known: true })) } : p))))
+    if (!session) return;
+    listPatientPrescriptions(session.userId, session.accessToken)
+      .then((saved) => {
+        setSavedPrescriptions(saved);
+        // Chỉ điều hướng tới đây kèm ?import=profile (VD từ nút "Kiểm tra tương tác"
+        // ở tab Đơn thuốc của tôi) mới tự nạp đơn đã lưu thành các panel tương ứng -
+        // bấm thẳng vào tab Tương tác không tự ý ghi đè bàn cân. Gộp theo nhãn đơn
+        // (mergeSavedIntoPrescriptions) thay vì thay thế toàn bộ, để import nhiều
+        // lần liên tiếp nối tiếp nhau vào bàn cân thay vì xóa mất lần import trước.
+        if (shouldImportFromProfile && saved.length > 0) setPrescriptions((prev) => mergeSavedIntoPrescriptions(prev, saved));
+      })
       .catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shouldImportFromProfile]);
+  }, []);
   useEffect(() => {
     window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(prescriptions));
   }, [prescriptions]);
@@ -113,14 +138,8 @@ function InteractionPageContent() {
     setResult(null);
   }
 
-  function addDrug(name: string, known = true) {
-    addDrugTo(primary.id, name, known);
-    setQuery(""); setSuggestions([]);
-  }
-
   function addPrescription() {
     setPrescriptions((prev) => [...prev, createPrescription(prev.length + 1)]);
-    setQuery(""); setSuggestions([]);
   }
 
   function removePrescription(id: string) {
@@ -128,18 +147,16 @@ function InteractionPageContent() {
     setResult(null);
   }
 
-  async function importFromProfile(prescriptionId: string) {
-    if (!session) return;
-    try {
-      const items = await listPatientMedications(session.userId, session.accessToken);
-      setPrescriptions((prev) => prev.map((p) => {
-        if (p.id !== prescriptionId) return p;
-        const existing = new Set(p.drugs.map((d) => d.name.toLowerCase()));
-        const toAdd = items.filter((item) => !existing.has(item.ten_thuoc.toLowerCase())).map((item) => ({ name: item.ten_thuoc, known: true }));
-        return toAdd.length ? { ...p, drugs: [...p.drugs, ...toAdd] } : p;
-      }));
-      setResult(null);
-    } catch { /* import lỗi âm thầm bỏ qua, người dùng vẫn có thể nhập tay */ }
+  function importFromProfile(prescriptionId: string, sourcePrescriptionId: string) {
+    const source = savedPrescriptions.find((p) => p.id === sourcePrescriptionId);
+    if (!source) return;
+    setPrescriptions((prev) => prev.map((p) => {
+      if (p.id !== prescriptionId) return p;
+      const existing = new Set(p.drugs.map((d) => d.name.toLowerCase()));
+      const toAdd = source.medications.filter((item) => !existing.has(item.ten_thuoc.toLowerCase())).map((item) => ({ name: item.ten_thuoc, known: true }));
+      return toAdd.length ? { ...p, drugs: [...p.drugs, ...toAdd] } : p;
+    }));
+    setResult(null);
   }
 
   function resetAll() {
@@ -148,8 +165,6 @@ function InteractionPageContent() {
     setResult(null);
     setResultPrescriptions(null);
     setError(null);
-    setQuery("");
-    setSuggestions([]);
   }
 
   async function runCheck(e?: FormEvent) {
@@ -178,19 +193,18 @@ function InteractionPageContent() {
       )}
     </section>
 
-    {!boardMode && <form className="interaction-search panel" onSubmit={(e) => { e.preventDefault(); if (query.trim() && suggestions.length === 0) addDrug(query.trim(), false); else void runCheck(e); }}><label htmlFor="interaction-search">Tìm kiếm thuốc</label><div className="interaction-search__input"><MaterialIcon name="search" size={21} /><input id="interaction-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Nhập tên thuốc, ví dụ Panadol" autoComplete="off" />{query && <button type="button" onClick={() => { setQuery(""); setSuggestions([]); }} aria-label="Xóa tìm kiếm"><MaterialIcon name="close" size={18} /></button>}</div>{suggestions.length > 0 ? <ul className="interaction-suggestions">{suggestions.slice(0, 5).map((item) => <li key={item.id} onClick={() => addDrug(item.ten_thuoc)}><div><strong>{item.ten_thuoc}</strong><small>Thuốc trong cơ sở dữ liệu</small></div><MaterialIcon name="add_circle_outline" size={21} /></li>)}</ul> : query.trim().length >= 2 && <button type="button" className="interaction-unknown" onClick={() => addDrug(query.trim(), false)}><div><strong>Không tìm thấy "{query.trim()}"</strong><small>Thêm thuốc chưa cập nhật trong cơ sở dữ liệu</small></div><MaterialIcon name="add_circle_outline" size={21} /></button>}</form>}
-
     {error && <p className="error-text" role="alert">{error}</p>}
-    {result && ((result.unknown_products?.length ?? 0) > 0 || (result.no_interaction_data_products?.length ?? 0) > 0) && <div className="guest-mode-banner"><MaterialIcon name="info" size={18} /><span>{result.unknown_products && result.unknown_products.length > 0 && `Không tìm thấy trong CSDL: ${result.unknown_products.join(", ")}. `}{result.no_interaction_data_products && result.no_interaction_data_products.length > 0 && `Chưa có dữ liệu hoạt chất để kiểm tra tương tác: ${result.no_interaction_data_products.join(", ")}.`}</span></div>}
+    {result && (result.unknown_products?.length ?? 0) > 0 && <div className="guest-mode-banner"><MaterialIcon name="info" size={18} /><span>Không tìm thấy trong CSDL: {result.unknown_products!.join(", ")}.</span></div>}
 
-    {boardMode && <section className="prescription-board-wrap">
-      <div className="prescription-board">
+    <section className="prescription-board-wrap">
+      <div className="prescription-board prescription-board--slider">
         {prescriptions.map((p) => (
           <PrescriptionPanel key={p.id} label={p.label} drugs={p.drugs} search={searchFn}
             onAdd={(name, known) => addDrugTo(p.id, name, known)}
             onRemoveDrug={(name) => removeDrugFrom(p.id, name)}
-            onRemovePanel={() => removePrescription(p.id)}
-            onImport={session ? () => importFromProfile(p.id) : undefined}
+            onRemovePanel={boardMode ? () => removePrescription(p.id) : undefined}
+            savedPrescriptions={session ? savedPrescriptions : undefined}
+            onImportFrom={session ? (sourceId) => importFromProfile(p.id, sourceId) : undefined}
             inputId={`prescription-search-${p.id}`} />
         ))}
         <button type="button" className="prescription-board__add" onClick={addPrescription}>
@@ -200,11 +214,8 @@ function InteractionPageContent() {
       <button className="interaction-run" type="button" onClick={() => void runCheck()} disabled={loading || mergedDrugNames(prescriptions).length < 2}>
         <MaterialIcon name="analytics" size={19} />{loading ? "Đang phân tích..." : "Phân tích tương tác"}
       </button>
-    </section>}
-
-    {!boardMode && <div className="interaction-workspace interaction-workspace--board">
-      <aside className="interaction-selection panel"><div className="interaction-selection__header"><h2>Thuốc đang chọn</h2><span>{primary.drugs.length}</span></div>{session && <button type="button" className="prescription-panel__tool interaction-selection__import" onClick={() => void importFromProfile(primary.id)}><MaterialIcon name="download" size={16} /><span>Nhập từ hồ sơ</span></button>}{primary.drugs.length === 0 && <div className="interaction-selection__empty"><MaterialIcon name="medication" size={34} /><p>Chọn thuốc ở ô tìm kiếm phía trên để bắt đầu.</p></div>}{primary.drugs.map((item, index) => <div className={`selected-medication ${!item.known ? "selected-medication--unknown" : ""}`} key={item.name}><span className="selected-medication__icon"><MaterialIcon name="medication" size={21} /></span><div><strong>{item.name}</strong><small>{item.known ? (index === 0 ? "Thuốc hiện tại" : "Thuốc mới thêm") : "Chưa cập nhật trong cơ sở dữ liệu"}</small></div><button type="button" onClick={() => removeDrugFrom(primary.id, item.name)} aria-label={`Xóa ${item.name}`}><MaterialIcon name="close" size={19} /></button></div>)}<button className="interaction-run" type="button" onClick={() => void runCheck()} disabled={loading || primary.drugs.length < 2}><MaterialIcon name="analytics" size={19} />{loading ? "Đang phân tích..." : "Phân tích tương tác"}</button><button type="button" className="prescription-add-link" onClick={addPrescription}><MaterialIcon name="add_circle_outline" size={17} /> Thêm đơn thuốc để so sánh nhiều đơn</button></aside>
-    </div>}
+      {loading && <div className="mascot-loading" role="status"><MediFox variant="loading" className="mascot-loading__image" /><span>Cáo Medi đang rà soát các tương tác thuốc...</span></div>}
+    </section>
 
     {result && <InteractionResultView result={result} prescriptions={resultPrescriptions ?? []} session={session} />}
   </main>;
