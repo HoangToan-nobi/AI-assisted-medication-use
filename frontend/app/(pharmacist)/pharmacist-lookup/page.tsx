@@ -6,7 +6,7 @@ import AlertCard from "@/components/AlertCard";
 import PrescriptionPanel from "@/components/PrescriptionPanel";
 import { ApiError, checkProductsAsPharmacist, searchProducts, type MedicationCheckResponse, type ProductSearchResult } from "@/lib/api";
 import { getSession } from "@/lib/auth";
-import { createPrescription, drugOrigins, isCrossPrescription, mergedDrugNames, originLabel, type Prescription } from "@/lib/prescription";
+import { createPrescription, drugOrigins, isCrossPrescription, mergedDrugNames, nonEmptyPrescriptions, originLabel, toPrescriptionCheckInput, type Prescription } from "@/lib/prescription";
 
 export default function PharmacistLookupPage() {
   const session = getSession();
@@ -62,11 +62,11 @@ export default function PharmacistLookupPage() {
   async function runCheck(e?: FormEvent) {
     e?.preventDefault();
     if (!session) return;
-    const names = mergedDrugNames(prescriptions);
-    if (names.length < 2) { setError("Hãy chọn ít nhất 2 thuốc để phân tích tương tác."); return; }
+    const activePrescriptions = nonEmptyPrescriptions(prescriptions);
+    if (mergedDrugNames(activePrescriptions).length < 2) { setError("Hãy chọn ít nhất 2 thuốc để phân tích tương tác."); return; }
     setError(null); setLoading(true);
     try {
-      const data = await checkProductsAsPharmacist(names, session.accessToken);
+      const data = await checkProductsAsPharmacist(toPrescriptionCheckInput(activePrescriptions), session.accessToken);
       setResult(data);
     } catch (err) { setError(err instanceof ApiError ? err.message : "Không thể phân tích tương tác lúc này."); }
     finally { setLoading(false); }
@@ -191,7 +191,7 @@ export default function PharmacistLookupPage() {
             return (
               <div className="interaction-pair-card" key={`${item.thuoc_a}-${item.thuoc_b}-${index}`}>
                 {origin && <span className="interaction-pair-card__origin">{origin}</span>}
-                <AlertCard thuocA={item.thuoc_a} thuocB={item.thuoc_b} severity={item.muc_do} description={item.giai_thich} source={item.nguon_trich_dan} management={item.xu_tri} />
+                <AlertCard thuocA={item.thuoc_a} thuocB={item.thuoc_b} severity={item.muc_do} description={item.giai_thich_duoc_si ?? item.giai_thich} source={item.nguon_trich_dan} management={item.xu_tri} />
               </div>
             );
           })}

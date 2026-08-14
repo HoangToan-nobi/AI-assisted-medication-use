@@ -31,6 +31,7 @@ from src.models.schemas import (
     MedicationItem,
     MedicationSearchResult,
     PatientProfileInfo,
+    PrescriptionInput,
     ReviewRequestSummary,
     PharmacistSummary,
     PharmacistReviewRequest,
@@ -41,11 +42,18 @@ from src.models.schemas import (
     UpdatePatientProfileRequest,
 )
 from src.services.auth import create_token, hash_password, verify_password
+from src.services.rollup_explain import (
+    build_overview_explanation,
+    build_prescription_edges,
+    build_prescription_explanations,
+    build_product_edges,
+    build_product_explanations,
+)
 
 router = APIRouter()
 
 # Field chỉ dành cho vai trò dược sĩ (GD6 mục 7.2) - không trả cho bệnh nhân.
-_PHARMACIST_ONLY_FIELDS = {"xu_tri", "thay_the_a", "thay_the_b"}
+_PHARMACIST_ONLY_FIELDS = {"xu_tri", "thay_the_a", "thay_the_b", "mo_ta", "giai_thich_duoc_si"}
 
 
 def _strip_pharmacist_fields(items: list[dict]) -> list[dict]:
@@ -207,38 +215,63 @@ async def guest_search_products(
     return [ProductSearchResult(id=p.id, ten_thuoc=p.ten_thuoc) for p in matches]
 
 
-def _brand_label(hoat_chat_name: str | None, ingredient_to_products: dict[str, list[str]]) -> str | None:
+def _brand_names(hoat_chat_name: str | None, ingredient_to_products: dict[str, list[str]]) -> list[str]:
     if not hoat_chat_name:
-        return hoat_chat_name
+        return []
     brands = ingredient_to_products.get(hoat_chat_name)
     if not brands:
+        return []
+    return list(dict.fromkeys(brands))
+
+
+def _brand_label(hoat_chat_name: str | None, unique_brands: list[str]) -> str | None:
+    if not hoat_chat_name:
         return hoat_chat_name
-    unique_brands = list(dict.fromkeys(brands))
+    if not unique_brands:
+        return hoat_chat_name
     return f"{'/'.join(unique_brands)} (hoạt chất: {hoat_chat_name})"
 
 
 def _enrich_with_brand_names(items: list[dict], ingredient_to_products: dict[str, list[str]]) -> list[dict]:
+    """Gắn tên thương hiệu (san_pham_*) bên cạnh hoạt chất gốc (hoat_chat_*), giữ
+    thuoc_a/thuoc_b dạng chuỗi gộp cũ để không phá vỡ UI đang hiển thị trực tiếp.
+
+    san_pham_a/san_pham_b là danh sách tên thuốc (trong lần kiểm tra hiện tại) có
+    chứa hoạt chất đó - dùng để gộp (rollup) cạnh ở cấp thuốc trên đồ thị tương tác.
+    """
     enriched = []
     for item in items:
         item = dict(item)
-        item["thuoc_a"] = _brand_label(item.get("thuoc_a"), ingredient_to_products)
-        item["thuoc_b"] = _brand_label(item.get("thuoc_b"), ingredient_to_products)
+        hoat_chat_a = item.get("thuoc_a")
+        hoat_chat_b = item.get("thuoc_b")
+        brands_a = _brand_names(hoat_chat_a, ingredient_to_products)
+        brands_b = _brand_names(hoat_chat_b, ingredient_to_products)
+        item["hoat_chat_a"] = hoat_chat_a
+        item["hoat_chat_b"] = hoat_chat_b
+        item["san_pham_a"] = brands_a
+        item["san_pham_b"] = brands_b
+        item["thuoc_a"] = _brand_label(hoat_chat_a, brands_a)
+        item["thuoc_b"] = _brand_label(hoat_chat_b, brands_b)
         enriched.append(item)
     return enriched
 
 
 def _resolve_products(
     product_names: list[str], db: Session
-) -> tuple[list[str], dict[str, list[str]], list[str], list[str]]:
+) -> tuple[list[str], dict[str, list[str]], list[str], list[str], dict[str, str]]:
     """Quy đổi tên thuốc -> danh sách hoạt chất (dedup, exact-match Product.ten_thuoc) để
     đưa vào agent hiện có (KHÔNG đổi gì trong src/agents/ - agent vẫn nhận tên hoạt chất).
 
-    Trả về (ingredient_names, ingredient_to_products, unknown_products, no_interaction_data_products).
+    Trả về (ingredient_names, ingredient_to_products, unknown_products,
+    no_interaction_data_products, canonical_by_input). canonical_by_input ánh xạ tên
+    thuốc người dùng nhập (viết thường) -> Product.ten_thuoc chuẩn trong CSDL, dùng
+    để đối chiếu với san_pham_a/san_pham_b (rollup cấp thuốc/cấp đơn ở routes bên dưới).
     """
     ingredient_names: list[str] = []
     ingredient_to_products: dict[str, list[str]] = {}
     unknown_products: list[str] = []
     no_interaction_data_products: list[str] = []
+    canonical_by_input: dict[str, str] = {}
     seen: set[str] = set()
 
     for name in product_names:
@@ -248,6 +281,8 @@ def _resolve_products(
         if product is None:
             unknown_products.append(name)
             continue
+
+        canonical_by_input[name.strip().lower()] = product.ten_thuoc
 
         ingredient_meds = (
             db.query(Medication)
@@ -266,13 +301,54 @@ def _resolve_products(
                 seen.add(key)
                 ingredient_names.append(med.ten_chuan_hoa)
 
-    return ingredient_names, ingredient_to_products, unknown_products, no_interaction_data_products
+    return (
+        ingredient_names,
+        ingredient_to_products,
+        unknown_products,
+        no_interaction_data_products,
+        canonical_by_input,
+    )
 
 
-async def _run_product_check(products: list[str], db: Session) -> tuple[dict, list[str], list[str]]:
+def _flatten_prescriptions(
+    prescriptions: list[PrescriptionInput],
+) -> tuple[list[str], dict[str, set[int]]]:
+    """Gộp tên thuốc từ mọi đơn (dedup, giữ thứ tự xuất hiện) + ghi nhận mỗi tên
+    thuốc (viết thường) thuộc chỉ số đơn nào - dùng để tính cạnh cấp đơn thuốc sau
+    khi đã có cạnh cấp thuốc."""
+    flat: list[str] = []
+    seen: set[str] = set()
+    origins: dict[str, set[int]] = {}
+
+    for index, prescription in enumerate(prescriptions):
+        for name in prescription.products:
+            key = name.strip().lower()
+            if key not in seen:
+                seen.add(key)
+                flat.append(name)
+            origins.setdefault(key, set()).add(index)
+
+    return flat, origins
+
+
+async def _run_product_check(
+    prescriptions: list[PrescriptionInput], db: Session, for_pharmacist: bool = False
+) -> tuple[dict, list[str], list[str]]:
     """Dùng chung cho patient/guest/pharmacist: resolve tên thuốc -> hoạt chất, chạy agent
-    hiện có, rồi gắn tên thuốc (biệt dược) vào kết quả để hiển thị."""
-    ingredient_names, ingredient_to_products, unknown, no_data = _resolve_products(products, db)
+    hiện có, gắn tên thuốc (biệt dược) vào kết quả, rồi tự tính + sinh giải thích riêng
+    cho cấp thuốc.
+
+    for_pharmacist=True (công cụ tra cứu độc lập của dược sĩ, vẫn giữ drill-down đầy
+    đủ): sinh thêm prescription_explanations (cấp đơn) khi có từ 2 đơn trở lên,
+    KHÔNG sinh overview.
+    for_pharmacist=False (luồng bệnh nhân, chỉ còn graph thuốc-thuốc + tóm tắt):
+    sinh overview, KHÔNG sinh prescription_explanations (không còn UI nào dùng tới,
+    tránh tốn LLM call vô ích).
+    """
+    flat_products, origins_by_input = _flatten_prescriptions(prescriptions)
+    ingredient_names, ingredient_to_products, unknown, no_data, canonical_by_input = _resolve_products(
+        flat_products, db
+    )
 
     result = dict(await agent.ainvoke({"raw_medications": ingredient_names}))
     if result.get("error"):
@@ -284,6 +360,31 @@ async def _run_product_check(products: list[str], db: Session) -> tuple[dict, li
     result["explanations"] = _enrich_with_brand_names(
         result.get("explanations", []), ingredient_to_products
     )
+
+    product_edges = build_product_edges(result["explanations"])
+    result["product_explanations"] = await build_product_explanations(product_edges)
+
+    if for_pharmacist and len(prescriptions) > 1:
+        product_origins: dict[str, set[int]] = {}
+        for input_key, rx_indexes in origins_by_input.items():
+            canonical = canonical_by_input.get(input_key)
+            if not canonical:
+                continue
+            product_origins.setdefault(canonical.lower(), set()).update(rx_indexes)
+
+        labels = [p.label for p in prescriptions]
+        prescription_edges = build_prescription_edges(product_edges, product_origins)
+        result["prescription_explanations"] = await build_prescription_explanations(
+            prescription_edges, labels
+        )
+    else:
+        result["prescription_explanations"] = []
+
+    if for_pharmacist:
+        result["overview"] = None
+    else:
+        result["overview"] = await build_overview_explanation(product_edges, result["product_explanations"])
+
     return result, unknown, no_data
 
 
@@ -293,7 +394,7 @@ async def check_products(
     current_user: User = Depends(require_role("patient")),
     db: Session = Depends(get_db),
 ) -> MedicationCheckResponse:
-    result, unknown, no_data = await _run_product_check(request.products, db)
+    result, unknown, no_data = await _run_product_check(request.prescriptions, db)
 
     check = InteractionCheck(
         patient_id=current_user.id,
@@ -313,6 +414,9 @@ async def check_products(
         has_unclassified=result.get("has_unclassified", False),
         unknown_products=unknown,
         no_interaction_data_products=no_data,
+        product_explanations=_strip_pharmacist_fields(result.get("product_explanations", [])),
+        prescription_explanations=_strip_pharmacist_fields(result.get("prescription_explanations", [])),
+        overview=result.get("overview"),
     )
 
 
@@ -321,7 +425,7 @@ async def guest_check_products(
     request: ProductCheckRequest,
     db: Session = Depends(get_db),
 ) -> MedicationCheckResponse:
-    result, unknown, no_data = await _run_product_check(request.products, db)
+    result, unknown, no_data = await _run_product_check(request.prescriptions, db)
     return MedicationCheckResponse(
         interaction_check_id="guest-check",
         ranked_results=_strip_pharmacist_fields(result.get("ranked_results", [])),
@@ -330,6 +434,9 @@ async def guest_check_products(
         has_unclassified=result.get("has_unclassified", False),
         unknown_products=unknown,
         no_interaction_data_products=no_data,
+        product_explanations=_strip_pharmacist_fields(result.get("product_explanations", [])),
+        prescription_explanations=_strip_pharmacist_fields(result.get("prescription_explanations", [])),
+        overview=result.get("overview"),
     )
 
 
@@ -340,7 +447,7 @@ async def check_products_as_pharmacist(
     db: Session = Depends(get_db),
 ) -> MedicationCheckResponse:
     """Công cụ tra cứu độc lập cho dược sĩ - không lưu lịch sử, KHÔNG ẩn xu_tri/thay_the."""
-    result, unknown, no_data = await _run_product_check(request.products, db)
+    result, unknown, no_data = await _run_product_check(request.prescriptions, db, for_pharmacist=True)
     return MedicationCheckResponse(
         interaction_check_id="pharmacist-lookup",
         ranked_results=result.get("ranked_results", []),
@@ -349,6 +456,9 @@ async def check_products_as_pharmacist(
         has_unclassified=result.get("has_unclassified", False),
         unknown_products=unknown,
         no_interaction_data_products=no_data,
+        product_explanations=result.get("product_explanations", []),
+        prescription_explanations=result.get("prescription_explanations", []),
+        overview=result.get("overview"),
     )
 
 

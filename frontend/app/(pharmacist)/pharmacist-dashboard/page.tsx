@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import MaterialIcon from "@/components/MaterialIcon";
 import { ApiError, listPharmacistRequests, type ReviewRequestSummary } from "@/lib/api";
 import { getSession } from "@/lib/auth";
+import { formatVietnameseDateTime } from "@/lib/datetime";
 import { getInitials } from "@/lib/format";
 
 export default function PharmacistDashboardPage() {
@@ -71,7 +72,7 @@ export default function PharmacistDashboardPage() {
                 <span className="avatar avatar--large">{getInitials(r.patient_name)}</span>
                 <div>
                   <h2>{r.patient_name}</h2>
-                  <p>{new Date(r.thoi_gian_kiem_tra).toLocaleString("vi-VN")}</p>
+                  <p>{formatVietnameseDateTime(r.thoi_gian_kiem_tra)}</p>
                 </div>
               </div>
               <div className="patient-card__footer">

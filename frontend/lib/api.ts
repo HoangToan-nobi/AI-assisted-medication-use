@@ -9,11 +9,59 @@ export type InteractionExplanation = {
   medication_b_id?: string;
   muc_do?: Severity;
   giai_thich: string;
+  // Bản giọng điệu khoa học/chuyên nghiệp dành cho dược sĩ - chỉ có mặt khi gọi qua
+  // endpoint/luồng dành cho dược sĩ (giống xu_tri/thay_the/mo_ta bên dưới).
+  giai_thich_duoc_si?: string;
   nguon_trich_dan: string;
   // Chỉ có mặt khi gọi qua endpoint dành cho dược sĩ (GET /pharmacist/reviews/{id}).
   xu_tri?: string;
   thay_the_a?: string;
   thay_the_b?: string;
+  // Mô tả khoa học nguyên văn từ CSDL DDInter 2.0 (không qua AI diễn giải lại) -
+  // cũng chỉ dược sĩ mới thấy, giống xu_tri/thay_the.
+  mo_ta?: string;
+  // Chỉ có ở luồng kiểm tra theo tên thuốc (products/check) - hoạt chất gốc và
+  // danh sách tên thuốc (trong lần kiểm tra hiện tại) chứa hoạt chất đó, dùng để
+  // gộp (rollup) cạnh ở cấp thuốc trên đồ thị tương tác.
+  hoat_chat_a?: string;
+  hoat_chat_b?: string;
+  san_pham_a?: string[];
+  san_pham_b?: string[];
+};
+
+// Giải thích cấp thuốc (thuốc-với-thuốc) do backend tự tổng hợp + sinh riêng - chỉ
+// nhắc tên 2 thuốc, không lộ tên hoạt chất bên trong (khác InteractionExplanation).
+export type ProductLevelExplanation = {
+  thuoc_a: string;
+  thuoc_b: string;
+  muc_do?: Severity;
+  giai_thich: string;
+  giai_thich_duoc_si?: string;
+  nguon_trich_dan: string;
+};
+
+// Giải thích cấp đơn thuốc (đơn-với-đơn) - don_a_index/don_b_index là chỉ số đơn
+// theo đúng thứ tự mảng "prescriptions" đã gửi lên trong request.
+export type PrescriptionLevelExplanation = {
+  don_a: string;
+  don_b: string;
+  don_a_index: number;
+  don_b_index: number;
+  muc_do?: Severity;
+  giai_thich: string;
+  giai_thich_duoc_si?: string;
+  nguon_trich_dan: string;
+};
+
+// Đoạn tóm tắt tổng quan toàn bộ lần phân tích (chỉ luồng bệnh nhân) - LLM sinh 1
+// đoạn dựa trên thống kê + toàn bộ giải thích cấp thuốc-thuốc tìm được.
+export type InteractionOverviewExplanation = {
+  giai_thich: string;
+  so_cap_nang: number;
+  so_cap_trung_binh: number;
+  so_cap_nhe: number;
+  so_cap_chua_phan_loai: number;
+  tong_so_cap: number;
 };
 
 export type MedicationCheckResponse = {
@@ -25,6 +73,9 @@ export type MedicationCheckResponse = {
   // Chỉ có ở luồng kiểm tra theo tên thuốc (checkProducts/...).
   unknown_products?: string[];
   no_interaction_data_products?: string[];
+  product_explanations?: ProductLevelExplanation[];
+  prescription_explanations?: PrescriptionLevelExplanation[];
+  overview?: InteractionOverviewExplanation;
 };
 
 // Kết quả thô từ GET /pharmacist/reviews/{id} - chính là state agent đầy đủ
@@ -34,7 +85,12 @@ export type AgentCheckResult = {
   explanations?: InteractionExplanation[];
   has_severe?: boolean;
   has_unclassified?: boolean;
+  product_explanations?: ProductLevelExplanation[];
+  prescription_explanations?: PrescriptionLevelExplanation[];
 };
+
+// Payload gửi lên các endpoint /products/check - 1 phần tử = 1 đơn thuốc.
+export type PrescriptionCheckInput = { label: string; products: string[] };
 
 export type AuthResponse = {
   access_token: string;
@@ -218,20 +274,22 @@ export async function checkGuestMedications(medications: string[]): Promise<Medi
 }
 
 export async function checkProducts(
-  products: string[],
+  prescriptions: PrescriptionCheckInput[],
   token: string
 ): Promise<MedicationCheckResponse> {
   return request<MedicationCheckResponse>("/api/v1/products/check", {
     method: "POST",
     token,
-    body: JSON.stringify({ products }),
+    body: JSON.stringify({ prescriptions }),
   });
 }
 
-export async function checkGuestProducts(products: string[]): Promise<MedicationCheckResponse> {
+export async function checkGuestProducts(
+  prescriptions: PrescriptionCheckInput[]
+): Promise<MedicationCheckResponse> {
   return request<MedicationCheckResponse>("/api/v1/guest/products/check", {
     method: "POST",
-    body: JSON.stringify({ products }),
+    body: JSON.stringify({ prescriptions }),
   });
 }
 
@@ -344,13 +402,13 @@ export async function checkMedicationsAsPharmacist(
 }
 
 export async function checkProductsAsPharmacist(
-  products: string[],
+  prescriptions: PrescriptionCheckInput[],
   token: string
 ): Promise<MedicationCheckResponse> {
   return request<MedicationCheckResponse>("/api/v1/pharmacist/products/check", {
     method: "POST",
     token,
-    body: JSON.stringify({ products }),
+    body: JSON.stringify({ prescriptions }),
   });
 }
 

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import MaterialIcon from "@/components/MaterialIcon";
 import { ApiError, listPatientChecks, deletePatientCheck, deleteAllPatientChecks, type InteractionCheckSummary } from "@/lib/api";
 import { getSession } from "@/lib/auth";
+import { formatVietnameseDateTime } from "@/lib/datetime";
 
 export default function HistoryPage() {
   const router = useRouter();
@@ -79,13 +80,15 @@ export default function HistoryPage() {
             style={{ cursor: "pointer", position: "relative" }}
           >
             <div className="history-tile__top">
-              <span>{new Date(check.thoi_gian_kiem_tra).toLocaleString("vi-VN")}</span>
+              <span>{formatVietnameseDateTime(check.thoi_gian_kiem_tra)}</span>
               <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                <b className={check.trang_thai_xac_nhan === "da_xac_nhan" ? "history-status history-status--confirmed" : "history-status history-status--pending"}>
-                  <MaterialIcon name={check.trang_thai_xac_nhan === "da_xac_nhan" ? "check_circle" : "schedule"} size={14} />
-                  {check.trang_thai_xac_nhan === "da_xac_nhan" ? "Đã xác nhận" : "Chưa xác nhận"}
-                </b>
-                <button 
+                {check.co_canh_bao_nang && (
+                  <b className={check.trang_thai_xac_nhan === "da_xac_nhan" ? "history-status history-status--confirmed" : "history-status history-status--pending"}>
+                    <MaterialIcon name={check.trang_thai_xac_nhan === "da_xac_nhan" ? "check_circle" : "schedule"} size={14} />
+                    {check.trang_thai_xac_nhan === "da_xac_nhan" ? "Đã xác nhận" : "Chưa xác nhận"}
+                  </b>
+                )}
+                <button
                   onClick={(e) => handleDeleteCheck(e, check.id)}
                   style={{ background: "none", border: "none", color: "var(--danger)", cursor: "pointer", display: "flex" }}
                   title="Xóa"

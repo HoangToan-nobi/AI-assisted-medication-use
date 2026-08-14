@@ -40,10 +40,6 @@ export default function Sidebar({ onCheck, checking }: SidebarProps) {
         <MaterialIcon name="history" size={22} filled={isActive("/history")} />
         <span>Lịch sử</span>
       </Link>
-      <Link href="/emergency" className={`bottom-nav__item ${isActive("/emergency") ? "bottom-nav__item--active" : ""}`}>
-        <MaterialIcon name="call" size={22} filled={isActive("/emergency")} />
-        <span>Liên hệ</span>
-      </Link>
     </nav>
   );
 }

@@ -15,6 +15,7 @@ import {
   type MedicationItem,
 } from "@/lib/api";
 import { getSession } from "@/lib/auth";
+import { formatVietnameseDateTime } from "@/lib/datetime";
 
 export default function PatientDashboardPage() {
   const router = useRouter();
@@ -43,7 +44,10 @@ export default function PatientDashboardPage() {
     if (medications.length < 2) { setError("Cần ít nhất 2 loại thuốc trong hồ sơ để kiểm tra tương tác."); return; }
     setChecking(true); setError(null);
     try {
-      const result = await checkProducts(medications.map((m) => m.ten_thuoc), session.accessToken);
+      const result = await checkProducts(
+        [{ label: "Thuốc hiện tại", products: medications.map((m) => m.ten_thuoc) }],
+        session.accessToken
+      );
       window.sessionStorage.setItem("medguard_last_check", JSON.stringify(result));
       router.push("/check-result");
     } catch (err) { setError(err instanceof ApiError ? err.message : "Kiểm tra tương tác thất bại"); }
@@ -61,7 +65,6 @@ export default function PatientDashboardPage() {
   }
 
   if (!session) return null;
-  const hasMediumAlert = history.some((h) => h.co_canh_bao_nang);
   const unresolvedSevere = history.filter((h) => h.co_canh_bao_nang && h.trang_thai_xac_nhan !== "da_xac_nhan").length;
   const firstName = session.hoTen.split(" ").pop() || session.hoTen;
 
@@ -74,13 +77,6 @@ export default function PatientDashboardPage() {
         </div>
 
       </section>
-
-      {hasMediumAlert && (
-        <section className="dashboard-alert" aria-label="Cảnh báo tương tác">
-          <MaterialIcon name="warning" size={22} filled />
-          <div><strong>PHÁT HIỆN TƯƠNG TÁC CẦN LƯU Ý</strong><p>Hệ thống đã phát hiện tương tác giữa một số thuốc trong hồ sơ của bạn. Vui lòng mở kết quả kiểm tra để xem chi tiết.</p><small>Nguồn: Lần kiểm tra gần nhất qua Cơ sở dữ liệu Dược điển.</small></div>
-        </section>
-      )}
 
       {loading && <div className="loading-row"><span className="spinner" /> Đang tải hồ sơ...</div>}
       {error && <p className="error-text" role="alert">{error}</p>}
@@ -96,14 +92,13 @@ export default function PatientDashboardPage() {
               <div className="dashboard-med-card__footer"><span><MaterialIcon name="calendar_today" size={17} />{m.ngay_bat_dau ? `Bắt đầu: ${m.ngay_bat_dau}` : "Cập nhật hôm nay"}</span><button className="med-delete" onClick={() => handleDelete(m.id)} disabled={deletingId === m.id} aria-label={`Xóa ${m.ten_thuoc}`}>{deletingId === m.id ? <span className="spinner spinner--sm" /> : <MaterialIcon name="more_horiz" size={20} />}</button></div>
             </article>
           ))}
-          <Link href="/medications" className="dashboard-med-card dashboard-med-card--add"><MaterialIcon name="add_circle" size={23} /><span>Thêm thuốc mới</span></Link>
         </div>
       </section>
 
       <section className="dashboard-summary-row"><div><span className="dashboard-summary-number">{medications.length}</span><span> thuốc đang theo dõi</span></div><div><span className="dashboard-summary-number">{unresolvedSevere}</span><span> cảnh báo chưa xử lý</span></div></section>
       <Disclaimer />
 
-      {history.length > 0 && <section className="dashboard-history"><div className="dashboard-section__header"><h2>Lịch sử kiểm tra gần đây</h2><Link href="/check-result">Xem tất cả <MaterialIcon name="arrow_forward" size={17} /></Link></div>{history.slice(0, 3).map((h) => <button className="history-card" key={h.id} onClick={() => router.push(`/check-result?checkId=${h.id}`)}><span>{new Date(h.thoi_gian_kiem_tra).toLocaleString("vi-VN")}</span><strong>{h.co_canh_bao_nang ? "Có cảnh báo cần chú ý" : "Chưa phát hiện cảnh báo nghiêm trọng"}</strong><MaterialIcon name="chevron_right" size={20} /></button>)}</section>}
+      {history.length > 0 && <section className="dashboard-history"><div className="dashboard-section__header"><h2>Lịch sử kiểm tra gần đây</h2><Link href="/check-result">Xem tất cả <MaterialIcon name="arrow_forward" size={17} /></Link></div>{history.slice(0, 3).map((h) => <button className="history-card" key={h.id} onClick={() => router.push(`/check-result?checkId=${h.id}`)}><span>{formatVietnameseDateTime(h.thoi_gian_kiem_tra)}</span><strong>{h.co_canh_bao_nang ? "Có cảnh báo cần chú ý" : "Chưa phát hiện cảnh báo nghiêm trọng"}</strong><MaterialIcon name="chevron_right" size={20} /></button>)}</section>}
     </main>
   );
 }

@@ -63,8 +63,17 @@ class ProductSearchResult(BaseModel):
     ten_thuoc: str
 
 
-class ProductCheckRequest(BaseModel):
+class PrescriptionInput(BaseModel):
+    """1 đơn thuốc gửi lên từ frontend - "đơn thuốc" chỉ là khái niệm ở phía người
+    dùng nhập liệu, backend dùng label + danh sách thuốc này để tự tính cạnh cấp
+    thuốc/cấp đơn thuốc và sinh giải thích tương ứng (rollup_explain.py)."""
+
+    label: str = Field(..., min_length=1, max_length=100)
     products: list[str] = Field(..., min_length=1)
+
+
+class ProductCheckRequest(BaseModel):
+    prescriptions: list[PrescriptionInput] = Field(..., min_length=1)
 
 
 class AddProductRequest(BaseModel):
@@ -88,6 +97,15 @@ class MedicationCheckResponse(BaseModel):
     # trong CSDL, hoặc tìm thấy nhưng chưa có hoạt chất nào khớp DDInter để tra tương tác.
     unknown_products: list[str] = Field(default_factory=list)
     no_interaction_data_products: list[str] = Field(default_factory=list)
+    # Giải thích riêng cấp thuốc (thuốc-với-thuốc) và cấp đơn thuốc (đơn-với-đơn),
+    # chỉ nhắc tên ở đúng cấp đó - KHÔNG lấy nguyên văn giải thích cấp hoạt chất
+    # trong `explanations` như trước. prescription_explanations chỉ khác rỗng ở
+    # luồng dược sĩ (pharmacist/products/check) khi request có từ 2 đơn trở lên.
+    product_explanations: list[dict] = Field(default_factory=list)
+    prescription_explanations: list[dict] = Field(default_factory=list)
+    # Tóm tắt tổng quan toàn bộ lần phân tích - chỉ sinh cho luồng bệnh nhân
+    # (products/check, guest/products/check), None ở luồng dược sĩ.
+    overview: dict | None = None
 
 
 class InteractionCheckSummary(BaseModel):

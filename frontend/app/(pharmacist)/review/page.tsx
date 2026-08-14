@@ -1,10 +1,10 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import AlertCard from "@/components/AlertCard";
 import Disclaimer from "@/components/Disclaimer";
 import MaterialIcon from "@/components/MaterialIcon";
+import InteractionGraphExplorer from "@/components/graph/InteractionGraphExplorer";
 import {
   ApiError,
   getInteractionCheckDetail,
@@ -17,6 +17,8 @@ import {
   type PatientProfileInfo,
 } from "@/lib/api";
 import { getSession } from "@/lib/auth";
+import { productNamesFromExplanations } from "@/lib/interactionGraph";
+import type { Prescription } from "@/lib/prescription";
 
 function ReviewContent() {
   const router = useRouter();
@@ -57,6 +59,15 @@ function ReviewContent() {
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkId]);
+
+  // Dược sĩ xem lại cùng đúng graph phân cấp như bệnh nhân/tab tra cứu - dựng 1
+  // "đơn thuốc" tổng hợp từ danh sách thuốc xuất hiện trong các cặp giải thích
+  // (không có thông tin đơn thuốc gốc để tách theo đơn).
+  const prescriptions: Prescription[] = useMemo(() => {
+    if (!detail?.explanations) return [];
+    const names = productNamesFromExplanations(detail.explanations);
+    return [{ id: "review-check", label: "Thuốc đã kiểm tra", drugs: names.map((name) => ({ name, known: true })) }];
+  }, [detail]);
 
   async function handleConfirm() {
     if (!session || !checkId) return;
@@ -124,9 +135,19 @@ function ReviewContent() {
       )}
 
 
-      {detail?.explanations?.map((e, idx) => (
-        <AlertCard key={idx} thuocA={e.thuoc_a} thuocB={e.thuoc_b} severity={e.muc_do} description={e.giai_thich} source={e.nguon_trich_dan} management={e.xu_tri} />
-      ))}
+      {detail && prescriptions.length > 0 && (
+        <InteractionGraphExplorer
+          result={{
+            explanations: detail.explanations ?? [],
+            has_severe: detail.has_severe ?? false,
+            has_unclassified: detail.has_unclassified ?? false,
+            product_explanations: detail.product_explanations ?? [],
+            prescription_explanations: detail.prescription_explanations ?? [],
+          }}
+          prescriptions={prescriptions}
+          audience="pharmacist"
+        />
+      )}
           <Disclaimer />
         </div>
 

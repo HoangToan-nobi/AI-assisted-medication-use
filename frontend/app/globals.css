@@ -1071,6 +1071,27 @@ button.btn-severe:hover {
   color: var(--on-surface-variant);
 }
 
+.alert-science-box {
+  background: #f1f5fb;
+  border: 1px dashed #c3d3e8;
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-top: 10px;
+  color: #3a4c66;
+  font-size: 13.5px;
+  line-height: 20px;
+}
+
+.alert-science-box strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  color: #5b719a;
+}
+
 .alert-source {
   font-size: 13px;
   color: var(--on-surface-variant);
@@ -1215,6 +1236,16 @@ button.btn-severe:hover {
   color: var(--on-surface-variant);
   font-size: 14px;
   line-height: 20px;
+}
+.result-hero .pharmacist-prompt,
+.result-hero .pharmacist-prompt--done,
+.result-hero .pharmacist-prompt--confirmed,
+.result-hero .pharmacist-prompt--loading {
+  margin-top: 12px;
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
 }
 .result-list-heading {
   margin-top: 24px;
@@ -2514,6 +2545,29 @@ button,
 .interaction-page .page-intro {
   margin-bottom: 30px;
 }
+.page-intro--with-action {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.interaction-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  color: #4c5c72;
+  background: #eef1f4;
+  border: none;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.interaction-reset:hover {
+  background: #e2e6eb;
+}
 .interaction-page .page-intro h1 {
   font-size: 31px;
 }
@@ -2598,6 +2652,9 @@ button,
   min-height: 370px;
   padding: 22px;
 }
+.interaction-result {
+  margin-top: 22px;
+}
 .interaction-selection__header,
 .interaction-result__header {
   display: flex;
@@ -2610,6 +2667,19 @@ button,
   font-size: 18px;
   font-weight: 800;
 }
+.interaction-overview__summary {
+  margin: 16px 0;
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-container-low);
+}
+.interaction-overview__summary p:not(.eyebrow) {
+  margin-top: 4px;
+  color: var(--on-surface-variant);
+  font-size: 14px;
+  line-height: 21px;
+}
 .interaction-selection__header > span {
   display: inline-flex;
   align-items: center;
@@ -2621,6 +2691,9 @@ button,
   border-radius: 50%;
   font-size: 12px;
   font-weight: 800;
+}
+.interaction-selection__import {
+  margin: 10px 0 4px;
 }
 .interaction-selection__empty {
   display: flex;
@@ -2866,80 +2939,74 @@ button,
 .interaction-alert--mild p {
   color: #315c47;
 }
-.ddinter-graph {
+.tt-graph-canvas {
   position: relative;
-  min-height: 330px;
-  overflow: hidden;
+  min-height: 520px;
   border: 1px solid #d8e2ee;
   border-radius: 6px;
   background: radial-gradient(circle at center, #fbfdff 0, #f1f7fd 100%);
 }
-.ddinter-graph svg {
+.tt-graph-canvas svg {
   display: block;
   width: 100%;
-  height: 330px;
+  height: 520px;
+  overflow: hidden;
+  border-radius: 6px;
 }
-.ddinter-graph line {
-  transition:
-    stroke-width 0.2s,
-    opacity 0.2s,
-    filter 0.2s;
+.tt-graph-edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 8;
+  pointer-events: stroke;
+}
+.tt-graph-edge-group--clickable .tt-graph-edge-hit {
+  cursor: pointer;
+}
+.tt-graph-edge {
+  fill: none;
+  stroke-width: 1.6;
   stroke-linecap: round;
+  pointer-events: none;
+  transition:
+    opacity 0.18s ease,
+    stroke-width 0.18s ease;
 }
-.ddinter-graph:hover .ddinter-edge {
-  stroke-dasharray: 7 6;
-  animation: ddinter-edge-flow 1.25s linear infinite;
+.tt-graph-node {
+  cursor: default;
+  transition:
+    opacity 0.18s ease,
+    filter 0.18s ease;
 }
-.ddinter-edge:hover {
-  stroke-width: 3.5 !important;
-  filter: drop-shadow(0 0 3px currentColor);
-  animation-duration: 0.7s !important;
-  cursor: pointer;
-}
-.ddinter-node {
-  cursor: pointer;
-}
-.ddinter-node circle {
-  fill: #d5e5f7;
+.tt-graph-node circle {
   stroke: #fff;
   stroke-width: 1.7;
   filter: drop-shadow(0 3px 3px rgba(36, 65, 101, 0.18));
-  transition:
-    transform 0.2s,
-    fill 0.2s,
-    stroke 0.2s,
-    filter 0.2s;
 }
-.ddinter-node text {
-  fill: #1a3e78;
+.tt-graph-node__label {
+  fill: #111;
   font-family: var(--font-body);
-  font-size: 4px;
-  font-weight: 800;
+  font-size: 3.6px;
+  font-weight: 700;
   pointer-events: none;
 }
-.ddinter-node__label {
-  fill: #223c5c !important;
-  font-size: 3.5px !important;
-  font-weight: 700 !important;
+.tt-graph-tooltip {
+  position: absolute;
+  transform: translate(-50%, -112%);
+  background: #1c2f4c;
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(20, 35, 60, 0.25);
+  z-index: 5;
 }
-.ddinter-node:hover circle {
-  fill: #6d9ed6;
-  stroke: #244f91;
-  stroke-width: 2.4;
-  transform: scale(1.16);
-  transform-origin: center;
-  filter: drop-shadow(0 0 7px rgba(62, 111, 177, 0.55));
+.tt-graph-tooltip--below {
+  transform: translate(-50%, 12%);
 }
-.ddinter-node:hover text {
-  fill: #fff;
-}
-.ddinter-node--unknown circle {
-  fill: #dfe3e8;
-}
-.ddinter-node--unknown text {
-  fill: #6c7781;
-}
-.ddinter-legend {
+.tt-graph-legend {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
@@ -2947,52 +3014,247 @@ button,
   color: #64788f;
   font-size: 11px;
 }
-.ddinter-legend span {
+.tt-graph-legend span {
   display: inline-flex;
   align-items: center;
   gap: 5px;
 }
-.legend-dot {
+.tt-graph-legend__dot {
   width: 9px;
   height: 9px;
   display: inline-block;
   border-radius: 50%;
 }
-.legend-dot--severe {
+.tt-severity-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 12px 0 2px;
+  color: #4c5c72;
+  font-size: 12px;
+}
+.tt-severity-strip__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tt-legend-dot {
+  width: 9px;
+  height: 9px;
+  display: inline-block;
+  border-radius: 50%;
+}
+.tt-legend-dot--severe {
   background: #c94740;
 }
-.legend-dot--moderate {
+.tt-legend-dot--moderate {
   background: #c58a32;
 }
-.legend-dot--unknown {
+.tt-legend-dot--mild {
+  background: #5d9b78;
+}
+.tt-legend-dot--unknown {
   background: #8d98a4;
 }
-@keyframes ddinter-edge-flow {
-  to {
-    stroke-dashoffset: -26;
-  }
+.tt-graph-pair__notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  color: #8a6a38;
+  font-size: 12px;
 }
-
-/* Static interaction graph and click-only citations */
-.ddinter-graph:hover .ddinter-edge {
-  animation: none;
-  stroke-dasharray: none;
+.tt-graph-pair__actions {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-.ddinter-edge:hover {
-  stroke-width: initial !important;
-  filter: none;
+.tt-graph-pair__detail {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  color: #244c93;
+  background: #dbe8fb;
+  border: none;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tt-graph-pair__detail:hover {
+  background: #c9dcf5;
+}
+.tt-graph-pair__severe {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  color: #9b3029;
+  background: #f8d8d4;
+  border: none;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tt-graph-pair__severe:hover {
+  background: #f0c3bd;
+}
+.tt-graph-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 7px 14px;
+  color: #4c5c72;
+  background: #eef1f4;
+  border: none;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tt-graph-back:hover {
+  background: #e2e6eb;
+}
+.tt-severe-popup {
+  position: relative;
+  margin-bottom: 16px;
+  padding: 16px 44px 16px 16px;
+  background: #f8d8d4;
+  border: 1px solid #f0b8b2;
+  border-radius: 10px;
+}
+.tt-severe-popup__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  color: #9b3029;
+  font-size: 15px;
+}
+.tt-severe-popup__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 4px;
+  color: #9b3029;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.tt-severe-popup__close:hover {
+  color: #6f221d;
+}
+.pharmacist-prompt {
+  margin-top: 12px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #f3c8c4;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+.pharmacist-prompt__title {
+  margin-bottom: 8px;
+  color: #9b3029;
+  font-size: 15px;
+  font-weight: 600;
+}
+.pharmacist-prompt__cta {
+  padding: 10px 16px;
+  color: #fff;
+  background: #9b3029;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pharmacist-prompt__cta:hover {
+  background: #832721;
+}
+.pharmacist-prompt__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+.pharmacist-prompt__loading {
+  color: #64707e;
+  font-size: 13px;
+}
+.pharmacist-prompt__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: #fafafa;
+  border: 1px solid #eee;
+  border-radius: 6px;
+}
+.pharmacist-prompt__name {
+  color: #1a2b4c;
+  font-weight: 600;
+}
+.pharmacist-prompt__place {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  color: #64707e;
+  font-size: 12px;
+}
+.pharmacist-prompt__assign {
+  padding: 8px 16px;
+  color: #fff;
+  background: #244c93;
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pharmacist-prompt__assign:disabled {
+  background: #ccc;
   cursor: default;
 }
-.ddinter-node:hover circle {
-  fill: #d5e5f7;
-  stroke: #fff;
-  stroke-width: 1.7;
-  transform: none;
-  filter: drop-shadow(0 3px 3px rgba(36, 65, 101, 0.18));
+.pharmacist-prompt--done {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px 16px;
+  color: #397257;
+  background: #e5f3ea;
+  border: 1px solid #c8e6c9;
+  border-radius: 8px;
 }
-.ddinter-node:hover text {
-  fill: #1a3e78;
+.pharmacist-prompt--confirmed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px 16px;
+  color: #244c93;
+  background: #dbe8fb;
+  border: 1px solid #c3d7f5;
+  border-radius: 8px;
 }
+.pharmacist-prompt--loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #64707e;
+  font-size: 13px;
+}
+
+/* Click-only citations */
 .citation-wrap:hover .citation-popover,
 .citation-wrap:focus-within .citation-popover {
   display: none;
@@ -3638,15 +3900,6 @@ button,
 .citation-wrap:hover .citation-popover,
 .citation-wrap:focus-within .citation-popover {
   display: block;
-}
-.ddinter-graph:hover .ddinter-edge {
-  animation: none;
-  stroke-dasharray: none;
-}
-.ddinter-edge:hover {
-  stroke-width: 3.5 !important;
-  filter: drop-shadow(0 0 4px currentColor) !important;
-  cursor: pointer;
 }
 @media (max-width: 720px) {
   .interaction-workspace {

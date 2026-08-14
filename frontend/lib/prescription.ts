@@ -1,9 +1,26 @@
+import type { PrescriptionCheckInput } from "@/lib/api";
+
 export type SelectedDrug = { name: string; known: boolean };
 
 export type Prescription = { id: string; label: string; drugs: SelectedDrug[] };
 
 export function createPrescription(index: number): Prescription {
   return { id: `rx-${Date.now()}-${index}`, label: `Đơn thuốc ${index}`, drugs: [] };
+}
+
+// Bỏ các đơn rỗng rồi quy đổi sang payload gửi lên /products/check - đơn thuốc rỗng
+// không có ý nghĩa để backend tính cạnh cấp đơn, và schema yêu cầu mỗi đơn có ít
+// nhất 1 thuốc. Dùng CHÍNH danh sách đã lọc này (không phải `prescriptions` gốc) để
+// dựng đồ thị phía frontend, để chỉ số đơn khớp với don_a_index/don_b_index backend trả về.
+export function nonEmptyPrescriptions(prescriptions: Prescription[]): Prescription[] {
+  return prescriptions.filter((p) => p.drugs.length > 0);
+}
+
+export function toPrescriptionCheckInput(prescriptions: Prescription[]): PrescriptionCheckInput[] {
+  return nonEmptyPrescriptions(prescriptions).map((p) => ({
+    label: p.label,
+    products: p.drugs.map((d) => d.name),
+  }));
 }
 
 // Danh sách tên thuốc duy nhất (không phân biệt hoa thường), gộp từ mọi đơn thuốc, theo thứ tự xuất hiện.
