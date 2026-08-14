@@ -14,6 +14,5 @@ export default function BottomNav({ onCheck, checking }: BottomNavProps) {
     <Link href="/profile" className={`bottom-nav__item ${pathname === "/profile" || pathname.startsWith("/medications/") ? "bottom-nav__item--active" : ""}`}><MaterialIcon name="medication" size={22} filled={pathname === "/profile" || pathname.startsWith("/medications/")} /><span>Thuốc của tôi</span></Link>
     {onCheck ? <button type="button" className="bottom-nav__item" onClick={onCheck} disabled={checking}>{checking ? <span className="spinner spinner--sm" aria-hidden="true" /> : <MaterialIcon name="analytics" size={22} />}<span>{checking ? "Đang kiểm tra" : "Tương tác"}</span></button> : <Link href="/interaction" className={`bottom-nav__item ${active("/interaction")}`}><MaterialIcon name="analytics" size={22} filled={pathname === "/interaction"} /><span>Tương tác</span></Link>}
     <Link href="/history" className={`bottom-nav__item ${active("/history")}`}><MaterialIcon name="history" size={22} filled={pathname === "/history"} /><span>Lịch sử</span></Link>
-    <Link href="/emergency" className={`bottom-nav__item ${active("/emergency")}`}><MaterialIcon name="call" size={22} filled={pathname === "/emergency"} /><span>Liên hệ</span></Link>
   </nav>;
 }

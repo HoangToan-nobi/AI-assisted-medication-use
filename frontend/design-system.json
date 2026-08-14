@@ -1,7 +1,7 @@
 {
   "name": "Clinical Clarity",
   "brand": {
-    "productName": "MedCheck AI",
+    "productName": "MediCheck",
     "tagline": "Nền tảng kiểm tra tương tác thuốc thông minh",
     "stitchProjectId": "647866119666660647"
   },
@@ -80,13 +80,29 @@
     "headlineFont": "Hanken Grotesk",
     "bodyFont": "Inter",
     "labelFont": "Inter",
-    "headlineXl": { "fontSize": "32px", "fontWeight": "600", "lineHeight": "40px" },
-    "headlineLg": { "fontSize": "24px", "fontWeight": "600", "lineHeight": "32px" },
-    "headlineMd": { "fontSize": "20px", "fontWeight": "500", "lineHeight": "28px" },
+    "headlineXl": {
+      "fontSize": "32px",
+      "fontWeight": "600",
+      "lineHeight": "40px"
+    },
+    "headlineLg": {
+      "fontSize": "24px",
+      "fontWeight": "600",
+      "lineHeight": "32px"
+    },
+    "headlineMd": {
+      "fontSize": "20px",
+      "fontWeight": "500",
+      "lineHeight": "28px"
+    },
     "bodyLg": { "fontSize": "18px", "fontWeight": "400", "lineHeight": "28px" },
     "bodyMd": { "fontSize": "16px", "fontWeight": "400", "lineHeight": "24px" },
     "bodySm": { "fontSize": "15px", "fontWeight": "400", "lineHeight": "22px" },
-    "labelMd": { "fontSize": "14px", "fontWeight": "500", "lineHeight": "20px" },
+    "labelMd": {
+      "fontSize": "14px",
+      "fontWeight": "500",
+      "lineHeight": "20px"
+    },
     "labelSm": { "fontSize": "13px", "fontWeight": "600", "lineHeight": "18px" }
   },
   "spacing": {
@@ -115,9 +131,21 @@
       "mildBorderColor": "#974a00"
     },
     "statusBadge": {
-      "confirmed": { "background": "#d6e3ff", "text": "#00478d", "icon": "check_circle" },
-      "warning": { "background": "#ffdad5", "text": "#b8120b", "icon": "warning" },
-      "unconfirmed": { "background": "#d1e5f6", "text": "#424752", "icon": "help" },
+      "confirmed": {
+        "background": "#d6e3ff",
+        "text": "#00478d",
+        "icon": "check_circle"
+      },
+      "warning": {
+        "background": "#ffdad5",
+        "text": "#b8120b",
+        "icon": "warning"
+      },
+      "unconfirmed": {
+        "background": "#d1e5f6",
+        "text": "#424752",
+        "icon": "help"
+      },
       "urgent": { "background": "#ffdad5", "text": "#d52b1e", "icon": "bolt" }
     },
     "disclaimer": {

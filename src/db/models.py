@@ -8,6 +8,7 @@ from sqlalchemy import (
     Column,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     String,
     Text,
@@ -29,6 +30,7 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False)
     mat_khau_hash = Column(String(255), nullable=False)
     vai_tro = Column(String(20), nullable=False)  # patient | pharmacist
+    noi_cong_tac = Column(String(255), nullable=True)
     ngay_tao = Column(DateTime, default=datetime.utcnow)
 
 
@@ -37,14 +39,13 @@ class PatientProfile(Base):
     id = Column(String, primary_key=True, default=_uuid)
     user_id = Column(String, ForeignKey("users.id"))
     ngay_sinh = Column(Date)
+    gioi_tinh = Column(String(20))
+    can_nang = Column(Float)
+    chieu_cao = Column(Float)
     benh_nen_ghi_chu = Column(Text)
+    di_ung_thuoc = Column(Text)
+    tinh_trang_khac = Column(Text)
 
-
-class PharmacistAssignment(Base):
-    __tablename__ = "pharmacist_assignments"
-    id = Column(String, primary_key=True, default=_uuid)
-    pharmacist_id = Column(String, ForeignKey("users.id"))
-    patient_id = Column(String, ForeignKey("users.id"))
 
 
 class Medication(Base):
@@ -70,11 +71,43 @@ class MedicationAlias(Base):
     medication_id = Column(String, ForeignKey("medications.id"), nullable=False)
 
 
+class Product(Base):
+    """Thuốc theo tên biệt dược (VD: Panadol) — crawl từ CSDL thuốc/hoạt chất Việt Nam.
+
+    Khác Medication (hoạt chất chuẩn DDInter): 1 Product có thể gồm nhiều hoạt chất
+    (thuốc phối hợp) qua bảng ProductIngredient, nên không dùng chung 1 bảng.
+    """
+
+    __tablename__ = "products"
+    id = Column(String, primary_key=True, default=_uuid)
+    ten_thuoc = Column(String(500), nullable=False)
+    is_duoc_lieu = Column(Boolean, default=False)
+    loai = Column(String(50))  # ke_don | khong_ke_don
+    nguon_du_lieu = Column(String(100))
+
+
+class ProductIngredient(Base):
+    """Thành phần hoạt chất của 1 Product.
+
+    medication_id NULL khi ten_hoat_chat_clean không so khớp chính xác được với
+    Medication.ten_chuan_hoa nào trong CSDL DDInter (VD: dược liệu/cao thuốc không có
+    trong DDInter) — vẫn lưu để hiển thị thành phần, nhưng KHÔNG dùng để tra tương tác.
+    """
+
+    __tablename__ = "product_ingredients"
+    id = Column(String, primary_key=True, default=_uuid)
+    product_id = Column(String, ForeignKey("products.id"), nullable=False)
+    ten_hoat_chat_raw = Column(Text)
+    ten_hoat_chat_clean = Column(String(500))
+    medication_id = Column(String, ForeignKey("medications.id"), nullable=True)
+
+
 class PatientMedication(Base):
     __tablename__ = "patient_medications"
     id = Column(String, primary_key=True, default=_uuid)
     patient_id = Column(String, ForeignKey("users.id"))
-    medication_id = Column(String, ForeignKey("medications.id"))
+    medication_id = Column(String, ForeignKey("medications.id"), nullable=True)
+    product_id = Column(String, ForeignKey("products.id"), nullable=True)
     ngay_bat_dau = Column(Date)
     ngay_ket_thuc = Column(Date)
 

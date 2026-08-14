@@ -1,7 +1,11 @@
 import "./globals.css";
 
 export const metadata = {
+<<<<<<< HEAD
+  title: "MediCheck",
+=======
   title: "MedCheck AI",
+>>>>>>> origin/main
   description: "Nền tảng kiểm tra tương tác thuốc thông minh",
   icons: {
     icon: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A9%BA%3C/text%3E%3C/svg%3E",
@@ -21,7 +25,11 @@ export default function RootLayout({
     <html lang="vi">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
         <link
           href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap"
           rel="stylesheet"

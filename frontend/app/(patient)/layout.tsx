@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+<<<<<<< HEAD
+import Sidebar from "@/components/Sidebar";
+=======
 import BottomNav from "@/components/BottomNav";
+>>>>>>> origin/main
 import BrandLogo from "@/components/BrandLogo";
 import MaterialIcon from "@/components/MaterialIcon";
 import { clearSession, getSession, type Session } from "@/lib/auth";
@@ -39,8 +43,7 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
   return (
     <div className="app-shell app-shell--with-nav">
       <header className="patient-header">
-        <BrandLogo size="sm" />
-        <div className="patient-header__actions">
+        <div className="patient-header__actions" style={{ marginLeft: "auto" }}>
           <Link className="patient-header__name" href="/profile" title="Hồ sơ của tôi">{session.hoTen}</Link>
           <button className="icon-btn" onClick={logout} aria-label="Đăng xuất" title="Đăng xuất">
             <MaterialIcon name="logout" size={20} />
@@ -48,7 +51,7 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
         </div>
       </header>
       <div className="app-content">{children}</div>
-      <BottomNav />
+      <Sidebar />
       <span className="sr-only">Đang ở trang {pathname}</span>
     </div>
   );

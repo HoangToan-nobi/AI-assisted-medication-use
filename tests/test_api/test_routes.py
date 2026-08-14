@@ -2,7 +2,6 @@ import uuid
 
 import pytest
 
-from src.db.models import PharmacistAssignment
 from src.db.session import SessionLocal
 
 
@@ -114,15 +113,15 @@ async def test_add_and_list_patient_medications(client):
 
     add_resp = await client.post(
         f"/api/v1/patients/{patient_id}/medications",
-        json={"medication_name": "ibuprofen"},
+        json={"product_name": "ibuprofen"},
         headers=headers,
     )
     assert add_resp.status_code == 201, add_resp.text
-    assert add_resp.json()["ten_chuan_hoa"] == "Ibuprofen"
+    assert add_resp.json()["ten_thuoc"] == "Ibuprofen"
 
     invalid_resp = await client.post(
         f"/api/v1/patients/{patient_id}/medications",
-        json={"medication_name": "thuocxyzkhonghople"},
+        json={"product_name": "thuocxyzkhonghople"},
         headers=headers,
     )
     assert invalid_resp.status_code == 422
@@ -132,11 +131,11 @@ async def test_add_and_list_patient_medications(client):
     )
     assert list_resp.status_code == 200
     items = list_resp.json()
-    names = [m["ten_chuan_hoa"] for m in items]
+    names = [m["ten_thuoc"] for m in items]
     assert "Ibuprofen" in names
 
     # Xóa thuốc vừa thêm -> biến mất khỏi danh sách.
-    patient_medication_id = next(m["id"] for m in items if m["ten_chuan_hoa"] == "Ibuprofen")
+    patient_medication_id = next(m["id"] for m in items if m["ten_thuoc"] == "Ibuprofen")
     delete_resp = await client.delete(
         f"/api/v1/patients/{patient_id}/medications/{patient_medication_id}", headers=headers
     )
@@ -169,10 +168,8 @@ async def test_search_medications_matches_alias(client):
     assert "Acetylsalicylic acid" in names
 
 
-# TC-A05: dược sĩ chỉ thấy bệnh nhân được phân công, escalate cảnh báo nặng lên đầu,
-# và có thể xác nhận review -> patient không còn nằm trong danh sách "chưa xử lý".
 @pytest.mark.asyncio
-async def test_pharmacist_sees_assigned_patients_and_can_review(monkeypatch, mock_llm):
+async def test_pharmacist_receives_review_request_and_can_review(monkeypatch, mock_llm):
     monkeypatch.setattr("src.agents.nodes.explain_node.get_llm", lambda: mock_llm)
 
     from httpx import ASGITransport, AsyncClient
@@ -185,27 +182,6 @@ async def test_pharmacist_sees_assigned_patients_and_can_review(monkeypatch, moc
         patient_headers = _auth_headers(patient["access_token"])
         pharmacist_headers = _auth_headers(pharmacist["access_token"])
 
-        # Phan cong truc tiep qua DB (chua co endpoint admin phan cong trong pham vi MVP).
-        db = SessionLocal()
-        try:
-            db.add(
-                PharmacistAssignment(
-                    pharmacist_id=pharmacist["user_id"], patient_id=patient["user_id"]
-                )
-            )
-            db.commit()
-        finally:
-            db.close()
-
-        # Bệnh nhân chưa có cảnh báo nặng -> chưa xử lý = False.
-        before_resp = await client.get(
-            f"/api/v1/pharmacist/{pharmacist['user_id']}/patients", headers=pharmacist_headers
-        )
-        assert before_resp.status_code == 200
-        before = before_resp.json()
-        assert len(before) == 1
-        assert before[0]["co_canh_bao_nang_chua_xu_ly"] is False
-
         # Bệnh nhân tự kiểm tra một cặp thuốc thật mức "nang".
         check_resp = await client.post(
             "/api/v1/medications/check",
@@ -215,37 +191,26 @@ async def test_pharmacist_sees_assigned_patients_and_can_review(monkeypatch, moc
         assert check_resp.status_code == 200
         check_id = check_resp.json()["interaction_check_id"]
 
-        # Bệnh nhân xem lại lịch sử của chính mình - không thấy xu_tri.
-        patient_history_resp = await client.get(
-            f"/api/v1/patients/{patient['user_id']}/checks", headers=patient_headers
-        )
-        assert patient_history_resp.status_code == 200
-        assert len(patient_history_resp.json()) == 1
-        assert patient_history_resp.json()[0]["co_canh_bao_nang"] is True
+        # Dược sĩ chưa nhận được request nào.
+        before_resp = await client.get("/api/v1/pharmacist/requests", headers=pharmacist_headers)
+        assert before_resp.status_code == 200
+        assert len(before_resp.json()) == 0
 
-        patient_detail_resp = await client.get(
-            f"/api/v1/patients/{patient['user_id']}/checks/{check_id}", headers=patient_headers
+        # Bệnh nhân gửi yêu cầu review.
+        req_resp = await client.post(
+            f"/api/v1/checks/{check_id}/pharmacists/{pharmacist['user_id']}/request_review",
+            headers=patient_headers,
         )
-        assert patient_detail_resp.status_code == 200
-        assert all(
-            "xu_tri" not in e for e in patient_detail_resp.json()["explanations"]
-        )
+        assert req_resp.status_code == 201
 
-        # Dược sĩ xem danh sách check của bệnh nhân để chọn ra check cần xử lý.
-        pharmacist_checks_resp = await client.get(
-            f"/api/v1/pharmacist/patients/{patient['user_id']}/checks", headers=pharmacist_headers
-        )
-        assert pharmacist_checks_resp.status_code == 200
-        assert pharmacist_checks_resp.json()[0]["id"] == check_id
-        assert pharmacist_checks_resp.json()[0]["trang_thai_xac_nhan"] == "chua_xac_nhan"
-
-        after_resp = await client.get(
-            f"/api/v1/pharmacist/{pharmacist['user_id']}/patients", headers=pharmacist_headers
-        )
+        # Dược sĩ thấy request.
+        after_resp = await client.get("/api/v1/pharmacist/requests", headers=pharmacist_headers)
         after = after_resp.json()
-        assert after[0]["co_canh_bao_nang_chua_xu_ly"] is True
+        assert len(after) == 1
+        assert after[0]["check_id"] == check_id
+        assert after[0]["trang_thai_xac_nhan"] == "cho_xac_nhan"
 
-        # Dược sĩ khác (không được phân công) không xem được chi tiết.
+        # Dược sĩ khác không xem được chi tiết.
         other_pharmacist = await _register(client, "Duoc si khac", "pharmacist")
         forbidden_resp = await client.get(
             f"/api/v1/pharmacist/reviews/{check_id}",
@@ -253,7 +218,7 @@ async def test_pharmacist_sees_assigned_patients_and_can_review(monkeypatch, moc
         )
         assert forbidden_resp.status_code == 403
 
-        # Dược sĩ được phân công xem chi tiết đầy đủ - CÓ xu_tri (pharmacist-only).
+        # Dược sĩ được yêu cầu xem chi tiết đầy đủ - CÓ xu_tri (pharmacist-only).
         detail_resp = await client.get(
             f"/api/v1/pharmacist/reviews/{check_id}", headers=pharmacist_headers
         )
@@ -261,7 +226,7 @@ async def test_pharmacist_sees_assigned_patients_and_can_review(monkeypatch, moc
         detail = detail_resp.json()
         assert any("xu_tri" in e for e in detail["explanations"])
 
-        # Xác nhận review -> trạng thái "đã xác nhận", patient hết escalate.
+        # Xác nhận review -> trạng thái "đã xác nhận".
         review_resp = await client.post(
             "/api/v1/pharmacist/reviews",
             json={"interaction_check_id": check_id, "ghi_chu": "Da tu van benh nhan"},
@@ -270,7 +235,5 @@ async def test_pharmacist_sees_assigned_patients_and_can_review(monkeypatch, moc
         assert review_resp.status_code == 200
         assert review_resp.json()["trang_thai_xac_nhan"] == "da_xac_nhan"
 
-        final_resp = await client.get(
-            f"/api/v1/pharmacist/{pharmacist['user_id']}/patients", headers=pharmacist_headers
-        )
-        assert final_resp.json()[0]["co_canh_bao_nang_chua_xu_ly"] is False
+        final_resp = await client.get("/api/v1/pharmacist/requests", headers=pharmacist_headers)
+        assert final_resp.json()[0]["trang_thai_xac_nhan"] == "da_xac_nhan"
