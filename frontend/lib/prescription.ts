@@ -8,6 +8,20 @@ export function createPrescription(index: number): Prescription {
   return { id: `rx-${Date.now()}-${index}`, label: `Đơn thuốc ${index}`, drugs: [] };
 }
 
+// Quy đổi các đơn thuốc ĐÃ LƯU trong hồ sơ (PatientPrescription, có id thật từ
+// backend) sang Prescription cấp phiên làm việc của bàn cân tương tác - dùng khi
+// nhập "toàn bộ đơn từ hồ sơ" (mỗi đơn đã lưu -> đúng 1 panel trên bàn cân), khác
+// với import 1 đơn cụ thể vào 1 panel đang có sẵn (xem importFromProfile).
+export function fromSavedPrescriptions(
+  saved: { id: string; label: string; medications: { ten_thuoc: string }[] }[]
+): Prescription[] {
+  return saved.map((p, index) => ({
+    id: `rx-${Date.now()}-${index}`,
+    label: p.label,
+    drugs: p.medications.map((m) => ({ name: m.ten_thuoc, known: true })),
+  }));
+}
+
 // Bỏ các đơn rỗng rồi quy đổi sang payload gửi lên /products/check - đơn thuốc rỗng
 // không có ý nghĩa để backend tính cạnh cấp đơn, và schema yêu cầu mỗi đơn có ít
 // nhất 1 thuốc. Dùng CHÍNH danh sách đã lọc này (không phải `prescriptions` gốc) để

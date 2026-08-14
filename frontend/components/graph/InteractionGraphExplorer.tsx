@@ -36,9 +36,6 @@ export type InteractionGraphExplorerResult = Pick<
 type InteractionGraphExplorerProps = {
   result: InteractionGraphExplorerResult;
   prescriptions: Prescription[];
-  // Mở lại popup gợi ý nhờ dược sĩ ở nơi khác (nếu có) - truyền từ component cha
-  // đang giữ state đóng/mở popup đó; không truyền thì nút này không hiện.
-  onReopenSeverePopup?: () => void;
   // "pharmacist" ưu tiên bản giọng điệu khoa học (giai_thich_duoc_si) khi có; mặc
   // định "patient" luôn dùng bản thân thiện (giai_thich) - đúng field bệnh nhân
   // nhận được từ backend (giai_thich_duoc_si đã bị lược bỏ với bệnh nhân).
@@ -77,7 +74,7 @@ function drugNamesForRx(prescriptions: Prescription[], rxIndexes: number[]): str
 // Thân đồ thị + view-stack phân cấp đơn→thuốc→hoạt chất, không kèm popup nghiêm
 // trọng - dùng chung cho cả trang "Tra cứu tương tác" (qua InteractionResultView,
 // có popup riêng) và trang chi tiết lịch sử (check-result, không có popup dismiss được).
-export default function InteractionGraphExplorer({ result, prescriptions, onReopenSeverePopup, audience = "patient" }: InteractionGraphExplorerProps) {
+export default function InteractionGraphExplorer({ result, prescriptions, audience = "patient" }: InteractionGraphExplorerProps) {
   const boardMode = prescriptions.length > 1;
 
   const [viewStack, setViewStack] = useState<GraphLevel[]>(() =>
@@ -244,7 +241,7 @@ export default function InteractionGraphExplorer({ result, prescriptions, onReop
       />
       <SeverityCountStrip edges={edges} />
       {pairItems.length > 0 && (
-        <GraphPairList items={pairItems} onViewDetail={onEdgeSelect} onReopenSeverePopup={onReopenSeverePopup} />
+        <GraphPairList items={pairItems} onViewDetail={onEdgeSelect} />
       )}
       {pairItems.length === 0 && nodes.length > 0 && (
         <div className="interaction-alert interaction-alert--empty"><MaterialIcon name="info" size={20} /><span>Không tìm thấy tương tác nào trong cơ sở dữ liệu cho lựa chọn hiện tại.</span></div>

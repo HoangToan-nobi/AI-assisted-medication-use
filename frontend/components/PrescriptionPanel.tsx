@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import MaterialIcon from "@/components/MaterialIcon";
-import type { ProductSearchResult } from "@/lib/api";
+import type { PatientPrescription, ProductSearchResult } from "@/lib/api";
 import type { SelectedDrug } from "@/lib/prescription";
 
 type PrescriptionPanelProps = {
@@ -12,13 +12,19 @@ type PrescriptionPanelProps = {
   onAdd: (name: string, known?: boolean) => void;
   onRemoveDrug: (name: string) => void;
   onRemovePanel?: () => void;
-  onImport?: () => void;
+  // Đơn thuốc đã lưu trong hồ sơ (tab "Đơn thuốc của tôi") để chọn nhập vào panel
+  // này. 0 đơn -> ẩn hẳn nút; đúng 1 đơn -> bấm là nhập luôn (như hành vi cũ);
+  // từ 2 đơn trở lên -> hiện danh sách để chọn đúng 1 đơn.
+  savedPrescriptions?: PatientPrescription[];
+  onImportFrom?: (prescriptionId: string) => void;
   inputId: string;
 };
 
-export default function PrescriptionPanel({ label, drugs, search, onAdd, onRemoveDrug, onRemovePanel, onImport, inputId }: PrescriptionPanelProps) {
+export default function PrescriptionPanel({ label, drugs, search, onAdd, onRemoveDrug, onRemovePanel, savedPrescriptions, onImportFrom, inputId }: PrescriptionPanelProps) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<ProductSearchResult[]>([]);
+  const [importPickerOpen, setImportPickerOpen] = useState(false);
+  const importPickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (query.trim().length < 2) { setSuggestions([]); return; }
@@ -26,6 +32,21 @@ export default function PrescriptionPanel({ label, drugs, search, onAdd, onRemov
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
+
+  useEffect(() => {
+    if (!importPickerOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (importPickerRef.current && !importPickerRef.current.contains(e.target as Node)) setImportPickerOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [importPickerOpen]);
+
+  function handleImportClick() {
+    if (!savedPrescriptions || !onImportFrom) return;
+    if (savedPrescriptions.length === 1) onImportFrom(savedPrescriptions[0].id);
+    else setImportPickerOpen((open) => !open);
+  }
 
   function add(name: string, known = true) {
     onAdd(name, known);
@@ -44,10 +65,22 @@ export default function PrescriptionPanel({ label, drugs, search, onAdd, onRemov
         )}
       </div>
       <div className="prescription-panel__actions">
-        {onImport && (
-          <button type="button" className="prescription-panel__tool" onClick={onImport} title="Nhập từ hồ sơ thuốc đang dùng">
-            <MaterialIcon name="download" size={16} /><span>Nhập từ hồ sơ</span>
-          </button>
+        {savedPrescriptions && savedPrescriptions.length > 0 && onImportFrom && (
+          <div className="prescription-panel__import" ref={importPickerRef}>
+            <button type="button" className="prescription-panel__tool" onClick={handleImportClick} title="Nhập từ hồ sơ thuốc đang dùng">
+              <MaterialIcon name="download" size={16} /><span>Nhập từ hồ sơ</span>
+            </button>
+            {importPickerOpen && (
+              <ul className="prescription-panel__import-menu">
+                {savedPrescriptions.map((p) => (
+                  <li key={p.id} onClick={() => { onImportFrom(p.id); setImportPickerOpen(false); }}>
+                    <div><strong>{p.label}</strong><small>{p.medications.length} thuốc</small></div>
+                    <MaterialIcon name="chevron_right" size={17} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
         <button type="button" className="prescription-panel__tool" disabled title="Quét đơn thuốc bằng OCR — tính năng sắp ra mắt">
           <MaterialIcon name="photo_camera" size={16} /><span>Quét OCR</span>

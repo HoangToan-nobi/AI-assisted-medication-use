@@ -4,7 +4,6 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Disclaimer from "@/components/Disclaimer";
 import MaterialIcon from "@/components/MaterialIcon";
-import PharmacistReviewPrompt from "@/components/PharmacistReviewPrompt";
 import InteractionOverview from "@/components/graph/InteractionOverview";
 import { ApiError, getPatientCheckDetail, type MedicationCheckResponse } from "@/lib/api";
 import { getSession } from "@/lib/auth";
@@ -56,12 +55,11 @@ function CheckResultContent() {
           <p className="eyebrow">TÓM TẮT PHÂN TÍCH</p>
           <h2>{result.has_severe ? "Phát hiện cảnh báo nghiêm trọng" : result.has_unclassified ? "Chưa cập nhật đầy đủ dữ liệu" : "Chưa phát hiện cảnh báo nghiêm trọng"}</h2>
           <p>{result.has_severe ? "Vui lòng liên hệ dược sĩ hoặc bác sĩ để được tư vấn kịp thời." : result.has_unclassified ? "Một số tương tác chưa có đủ dữ liệu để kết luận an toàn." : "Hãy tiếp tục sử dụng thuốc theo đúng hướng dẫn chuyên môn."}</p>
-          {result.has_severe && <PharmacistReviewPrompt checkId={checkId ?? result.interaction_check_id} token={session?.accessToken} patientId={session?.userId} />}
         </div>
       </section>
 
       <div className="section__header result-list-heading"><h2 className="section__title"><MaterialIcon name="fact_check" size={20} /> Chi tiết tương tác</h2></div>
-      <InteractionOverview result={result} prescriptions={prescriptions} />
+      <InteractionOverview result={result} prescriptions={prescriptions} session={session} />
     </>}
     <Disclaimer />
     <button className="secondary btn-block" onClick={() => router.push("/history")}><MaterialIcon name="arrow_back" size={20} /> Về lịch sử kiểm tra</button>

@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
@@ -10,7 +10,9 @@ from src.db.models import (
     InteractionCheck,
     Medication,
     MedicationAlias,
+    Notification,
     PatientMedication,
+    PatientPrescription,
     PatientProfile,
     PharmacistReview,
     Product,
@@ -24,14 +26,20 @@ from src.models.schemas import (
     AuthResponse,
     ChatRequest,
     ChatResponse,
+    CreatePrescriptionRequest,
     InteractionCheckSummary,
     LoginRequest,
     MedicationCheckRequest,
     MedicationCheckResponse,
     MedicationItem,
     MedicationSearchResult,
+    NotificationItem,
+    PatientPrescriptionSummary,
     PatientProfileInfo,
+    PharmacistProfileInfo,
     PrescriptionInput,
+    RenamePrescriptionRequest,
+    RequestReviewRequest,
     ReviewRequestSummary,
     PharmacistSummary,
     PharmacistReviewRequest,
@@ -40,6 +48,7 @@ from src.models.schemas import (
     ProductSearchResult,
     RegisterRequest,
     UpdatePatientProfileRequest,
+    UpdatePharmacistProfileRequest,
 )
 from src.services.auth import create_token, hash_password, verify_password
 from src.services.rollup_explain import (
@@ -76,6 +85,33 @@ def _ensure_can_view_patient(current_user: User, patient_id: str, db: Session) -
         if review is not None:
             return
     raise HTTPException(status_code=403, detail="Không có quyền xem thuốc của bệnh nhân này")
+
+
+def _get_or_create_default_prescription(patient_id: str, db: Session) -> PatientPrescription:
+    """Đơn thuốc mặc định để "nhận nuôi" các PatientMedication chưa gắn đơn nào -
+    tự tạo lazy ở lần đầu cần đến (list, hoặc add không kèm prescription_id), thay
+    vì chạy 1 script backfill riêng. Cùng 1 đường đi cho dữ liệu cũ (tạo trước khi
+    có khái niệm đơn thuốc) lẫn bệnh nhân mới đăng ký."""
+    existing = (
+        db.query(PatientPrescription)
+        .filter(PatientPrescription.patient_id == patient_id)
+        .order_by(PatientPrescription.ngay_tao)
+        .first()
+    )
+    if existing is not None:
+        return existing
+
+    default = PatientPrescription(patient_id=patient_id, label="Đơn thuốc 1")
+    db.add(default)
+    db.flush()
+    (
+        db.query(PatientMedication)
+        .filter(PatientMedication.patient_id == patient_id, PatientMedication.prescription_id.is_(None))
+        .update({"prescription_id": default.id})
+    )
+    db.commit()
+    db.refresh(default)
+    return default
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -465,6 +501,17 @@ async def check_products_as_pharmacist(
 # ---- Hồ sơ thuốc bệnh nhân ----
 
 
+def _medication_item(pm: PatientMedication, product: Product) -> MedicationItem:
+    return MedicationItem(
+        id=pm.id,
+        product_id=product.id,
+        ten_thuoc=product.ten_thuoc,
+        prescription_id=pm.prescription_id,
+        ngay_bat_dau=pm.ngay_bat_dau,
+        ngay_ket_thuc=pm.ngay_ket_thuc,
+    )
+
+
 @router.get("/patients/{patient_id}/medications", response_model=list[MedicationItem])
 async def list_patient_medications(
     patient_id: str,
@@ -479,16 +526,7 @@ async def list_patient_medications(
         .filter(PatientMedication.patient_id == patient_id)
         .all()
     )
-    return [
-        MedicationItem(
-            id=pm.id,
-            product_id=product.id,
-            ten_thuoc=product.ten_thuoc,
-            ngay_bat_dau=pm.ngay_bat_dau,
-            ngay_ket_thuc=pm.ngay_ket_thuc,
-        )
-        for pm, product in rows
-    ]
+    return [_medication_item(pm, product) for pm, product in rows]
 
 
 @router.post(
@@ -513,8 +551,16 @@ async def add_patient_medication(
             status_code=422, detail=f"Không tìm thấy thuốc '{request.product_name}' trong CSDL"
         )
 
+    if request.prescription_id:
+        prescription = db.get(PatientPrescription, request.prescription_id)
+        if prescription is None or prescription.patient_id != patient_id:
+            raise HTTPException(status_code=404, detail="Không tìm thấy đơn thuốc")
+    else:
+        prescription = _get_or_create_default_prescription(patient_id, db)
+
     pm = PatientMedication(
         patient_id=patient_id,
+        prescription_id=prescription.id,
         product_id=product.id,
         ngay_bat_dau=date.today(),
     )
@@ -522,13 +568,7 @@ async def add_patient_medication(
     db.commit()
     db.refresh(pm)
 
-    return MedicationItem(
-        id=pm.id,
-        product_id=product.id,
-        ten_thuoc=product.ten_thuoc,
-        ngay_bat_dau=pm.ngay_bat_dau,
-        ngay_ket_thuc=None,
-    )
+    return _medication_item(pm, product)
 
 
 @router.delete("/patients/{patient_id}/medications/{patient_medication_id}", status_code=204)
@@ -546,6 +586,124 @@ async def remove_patient_medication(
         raise HTTPException(status_code=404, detail="Không tìm thấy thuốc trong hồ sơ")
 
     db.delete(pm)
+    db.commit()
+
+
+# ---- Đơn thuốc đã lưu trong hồ sơ (tab "Đơn thuốc của tôi") ----
+
+
+@router.get("/patients/{patient_id}/prescriptions", response_model=list[PatientPrescriptionSummary])
+async def list_patient_prescriptions(
+    patient_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[PatientPrescriptionSummary]:
+    _ensure_can_view_patient(current_user, patient_id, db)
+
+    # Tự tạo đơn mặc định + "nhận nuôi" thuốc mồ côi (nếu có) ở lần load đầu tiên -
+    # xem _get_or_create_default_prescription.
+    _get_or_create_default_prescription(patient_id, db)
+
+    prescriptions = (
+        db.query(PatientPrescription)
+        .filter(PatientPrescription.patient_id == patient_id)
+        .order_by(PatientPrescription.ngay_tao)
+        .all()
+    )
+    rows = (
+        db.query(PatientMedication, Product)
+        .join(Product, Product.id == PatientMedication.product_id)
+        .filter(PatientMedication.patient_id == patient_id)
+        .all()
+    )
+    meds_by_prescription: dict[str, list[MedicationItem]] = {}
+    for pm, product in rows:
+        meds_by_prescription.setdefault(pm.prescription_id, []).append(_medication_item(pm, product))
+
+    return [
+        PatientPrescriptionSummary(id=p.id, label=p.label, medications=meds_by_prescription.get(p.id, []))
+        for p in prescriptions
+    ]
+
+
+@router.post(
+    "/patients/{patient_id}/prescriptions",
+    response_model=PatientPrescriptionSummary,
+    status_code=201,
+)
+async def create_patient_prescription(
+    patient_id: str,
+    request: CreatePrescriptionRequest,
+    current_user: User = Depends(require_role("patient")),
+    db: Session = Depends(get_db),
+) -> PatientPrescriptionSummary:
+    if current_user.id != patient_id:
+        raise HTTPException(status_code=403, detail="Chỉ tự tạo đơn thuốc cho chính mình")
+
+    prescription = PatientPrescription(patient_id=patient_id, label=request.label.strip())
+    db.add(prescription)
+    db.commit()
+    db.refresh(prescription)
+    return PatientPrescriptionSummary(id=prescription.id, label=prescription.label, medications=[])
+
+
+@router.patch(
+    "/patients/{patient_id}/prescriptions/{prescription_id}",
+    response_model=PatientPrescriptionSummary,
+)
+async def rename_patient_prescription(
+    patient_id: str,
+    prescription_id: str,
+    request: RenamePrescriptionRequest,
+    current_user: User = Depends(require_role("patient")),
+    db: Session = Depends(get_db),
+) -> PatientPrescriptionSummary:
+    if current_user.id != patient_id:
+        raise HTTPException(status_code=403, detail="Chỉ tự sửa đơn thuốc của chính mình")
+
+    prescription = db.get(PatientPrescription, prescription_id)
+    if prescription is None or prescription.patient_id != patient_id:
+        raise HTTPException(status_code=404, detail="Không tìm thấy đơn thuốc")
+
+    prescription.label = request.label.strip()
+    db.commit()
+    db.refresh(prescription)
+
+    rows = (
+        db.query(PatientMedication, Product)
+        .join(Product, Product.id == PatientMedication.product_id)
+        .filter(PatientMedication.prescription_id == prescription.id)
+        .all()
+    )
+    return PatientPrescriptionSummary(
+        id=prescription.id,
+        label=prescription.label,
+        medications=[_medication_item(pm, product) for pm, product in rows],
+    )
+
+
+@router.delete("/patients/{patient_id}/prescriptions/{prescription_id}", status_code=204)
+async def delete_patient_prescription(
+    patient_id: str,
+    prescription_id: str,
+    current_user: User = Depends(require_role("patient")),
+    db: Session = Depends(get_db),
+) -> None:
+    if current_user.id != patient_id:
+        raise HTTPException(status_code=403, detail="Chỉ tự xóa đơn thuốc của chính mình")
+
+    prescription = db.get(PatientPrescription, prescription_id)
+    if prescription is None or prescription.patient_id != patient_id:
+        raise HTTPException(status_code=404, detail="Không tìm thấy đơn thuốc")
+
+    remaining = (
+        db.query(PatientPrescription).filter(PatientPrescription.patient_id == patient_id).count()
+    )
+    if remaining <= 1:
+        raise HTTPException(status_code=400, detail="Phải giữ lại ít nhất 1 đơn thuốc trong hồ sơ")
+
+    db.query(PatientMedication).filter(PatientMedication.prescription_id == prescription_id).delete()
+    db.delete(prescription)
     db.commit()
 
 
@@ -732,6 +890,11 @@ async def get_patient_check_detail(
         explanations=_strip_pharmacist_fields(result.get("explanations", [])),
         has_severe=result.get("has_severe", False),
         has_unclassified=result.get("has_unclassified", False),
+        unknown_products=result.get("unknown_products", []),
+        no_interaction_data_products=result.get("no_interaction_data_products", []),
+        product_explanations=_strip_pharmacist_fields(result.get("product_explanations", [])),
+        prescription_explanations=_strip_pharmacist_fields(result.get("prescription_explanations", [])),
+        overview=result.get("overview"),
     )
 
 @router.delete("/patients/{patient_id}/checks", status_code=204)
@@ -788,6 +951,7 @@ async def list_pharmacists(
             id=p.id,
             ho_ten=p.ho_ten,
             noi_cong_tac=p.noi_cong_tac,
+            mo_ta_ngan=p.mo_ta_ngan,
         )
         for p in pharmacists
     ]
@@ -797,13 +961,14 @@ async def list_pharmacists(
 async def request_review(
     check_id: str,
     pharmacist_id: str,
+    request: RequestReviewRequest = RequestReviewRequest(),
     current_user: User = Depends(require_role("patient")),
     db: Session = Depends(get_db),
 ):
     check = db.get(InteractionCheck, check_id)
     if check is None or check.patient_id != current_user.id:
         raise HTTPException(status_code=404, detail="Không tìm thấy lịch sử tra cứu của bạn")
-    
+
     pharmacist = db.get(User, pharmacist_id)
     if pharmacist is None or pharmacist.vai_tro != "pharmacist":
         raise HTTPException(status_code=404, detail="Không tìm thấy dược sĩ")
@@ -816,7 +981,11 @@ async def request_review(
         review = PharmacistReview(
             interaction_check_id=check_id,
             pharmacist_id=pharmacist_id,
-            trang_thai_xac_nhan="cho_xac_nhan"
+            trang_thai_xac_nhan="cho_xac_nhan",
+            gui_kem_ho_so=request.gui_kem_ho_so,
+            ten_nguoi_duoc_kiem_tra=request.ten_nguoi_duoc_kiem_tra,
+            ngay_sinh_nhap_tay=request.ngay_sinh_nhap_tay,
+            ghi_chu_nhap_tay=request.ghi_chu_nhap_tay,
         )
         db.add(review)
         db.commit()
@@ -845,7 +1014,11 @@ async def list_pharmacist_requests(
                 patient_name=patient.ho_ten,
                 thoi_gian_kiem_tra=check.thoi_gian_kiem_tra,
                 co_canh_bao_nang=check.co_canh_bao_nang,
-                trang_thai_xac_nhan=review.trang_thai_xac_nhan
+                trang_thai_xac_nhan=review.trang_thai_xac_nhan,
+                gui_kem_ho_so=review.gui_kem_ho_so or False,
+                ten_nguoi_duoc_kiem_tra=review.ten_nguoi_duoc_kiem_tra,
+                ngay_sinh_nhap_tay=review.ngay_sinh_nhap_tay,
+                ghi_chu_nhap_tay=review.ghi_chu_nhap_tay,
             )
         )
 
@@ -907,6 +1080,15 @@ async def submit_pharmacist_review(
 
     review.ghi_chu = request.ghi_chu
     review.trang_thai_xac_nhan = "da_xac_nhan"
+    review.thoi_gian_xac_nhan = datetime.utcnow()
+    db.add(Notification(
+        patient_id=check.patient_id,
+        pharmacist_review_id=review.id,
+        noi_dung=(
+            f"Dược sĩ {current_user.ho_ten} đã xác nhận yêu cầu tra cứu ngày "
+            f"{check.thoi_gian_kiem_tra:%d/%m/%Y}."
+        ),
+    ))
     db.commit()
     db.refresh(review)
 
@@ -916,6 +1098,98 @@ async def submit_pharmacist_review(
         trang_thai_xac_nhan=review.trang_thai_xac_nhan,
         ghi_chu=review.ghi_chu or "",
     )
+
+
+# ---- Hồ sơ cá nhân dược sĩ ----
+
+
+@router.get("/pharmacists/{pharmacist_id}/profile", response_model=PharmacistProfileInfo)
+async def get_pharmacist_profile(
+    pharmacist_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PharmacistProfileInfo:
+    pharmacist = db.get(User, pharmacist_id)
+    if pharmacist is None or pharmacist.vai_tro != "pharmacist":
+        raise HTTPException(status_code=404, detail="Không tìm thấy dược sĩ")
+    return PharmacistProfileInfo(
+        ho_ten=pharmacist.ho_ten,
+        noi_cong_tac=pharmacist.noi_cong_tac,
+        mo_ta_ngan=pharmacist.mo_ta_ngan,
+    )
+
+
+@router.patch("/pharmacists/{pharmacist_id}/profile", response_model=PharmacistProfileInfo)
+async def update_pharmacist_profile(
+    pharmacist_id: str,
+    request: UpdatePharmacistProfileRequest,
+    current_user: User = Depends(require_role("pharmacist")),
+    db: Session = Depends(get_db),
+) -> PharmacistProfileInfo:
+    if current_user.id != pharmacist_id:
+        raise HTTPException(status_code=403, detail="Chỉ tự sửa hồ sơ của chính mình")
+
+    if request.ho_ten:
+        current_user.ho_ten = request.ho_ten
+    current_user.noi_cong_tac = request.noi_cong_tac
+    current_user.mo_ta_ngan = request.mo_ta_ngan
+    db.commit()
+    db.refresh(current_user)
+
+    return PharmacistProfileInfo(
+        ho_ten=current_user.ho_ten,
+        noi_cong_tac=current_user.noi_cong_tac,
+        mo_ta_ngan=current_user.mo_ta_ngan,
+    )
+
+
+# ---- Thông báo ----
+
+
+@router.get("/patients/{patient_id}/notifications", response_model=list[NotificationItem])
+async def list_patient_notifications(
+    patient_id: str,
+    current_user: User = Depends(require_role("patient")),
+    db: Session = Depends(get_db),
+) -> list[NotificationItem]:
+    if current_user.id != patient_id:
+        raise HTTPException(status_code=403, detail="Chỉ tự xem thông báo của chính mình")
+
+    rows = (
+        db.query(Notification, PharmacistReview)
+        .outerjoin(PharmacistReview, Notification.pharmacist_review_id == PharmacistReview.id)
+        .filter(Notification.patient_id == patient_id)
+        .order_by(Notification.thoi_gian_tao.desc())
+        .all()
+    )
+    return [
+        NotificationItem(
+            id=n.id,
+            noi_dung=n.noi_dung,
+            da_doc=n.da_doc,
+            thoi_gian_tao=n.thoi_gian_tao,
+            interaction_check_id=review.interaction_check_id if review else None,
+        )
+        for n, review in rows
+    ]
+
+
+@router.post("/patients/{patient_id}/notifications/{notification_id}/read", status_code=204)
+async def mark_notification_read(
+    patient_id: str,
+    notification_id: str,
+    current_user: User = Depends(require_role("patient")),
+    db: Session = Depends(get_db),
+) -> None:
+    if current_user.id != patient_id:
+        raise HTTPException(status_code=403, detail="Chỉ tự cập nhật thông báo của chính mình")
+
+    notification = db.get(Notification, notification_id)
+    if notification is None or notification.patient_id != patient_id:
+        raise HTTPException(status_code=404, detail="Không tìm thấy thông báo")
+
+    notification.da_doc = True
+    db.commit()
 
 
 @router.post("/pharmacist/medications/check", response_model=MedicationCheckResponse)

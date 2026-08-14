@@ -9,12 +9,11 @@ import {
   ApiError,
   getInteractionCheckDetail,
   getPatientProfile,
-  listPatientMedications,
   listPharmacistRequests,
   submitPharmacistReview,
   type AgentCheckResult,
-  type MedicationItem,
   type PatientProfileInfo,
+  type ReviewRequestSummary,
 } from "@/lib/api";
 import { getSession } from "@/lib/auth";
 import { productNamesFromExplanations } from "@/lib/interactionGraph";
@@ -24,9 +23,8 @@ function ReviewContent() {
   const router = useRouter();
   const checkId = useSearchParams().get("checkId");
   const session = getSession();
-  const [patientName, setPatientName] = useState<string | null>(null);
+  const [reviewRequest, setReviewRequest] = useState<ReviewRequestSummary | null>(null);
   const [profile, setProfile] = useState<PatientProfileInfo | null>(null);
-  const [medications, setMedications] = useState<MedicationItem[]>([]);
   const [detail, setDetail] = useState<AgentCheckResult | null>(null);
   const [ghiChu, setGhiChu] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -36,20 +34,17 @@ function ReviewContent() {
 
   useEffect(() => {
     if (!session || !checkId) return;
-    
+
     setLoading(true);
-    // Fetch requests to get patient info, then fetch profile/meds
     listPharmacistRequests(session.accessToken).then(requests => {
       const req = requests.find(r => r.check_id === checkId);
       if (req) {
-        setPatientName(req.patient_name);
-        Promise.all([
-          listPatientMedications(req.patient_id, session.accessToken),
-          getPatientProfile(req.patient_id, session.accessToken)
-        ]).then(([meds, profileInfo]) => {
-          setMedications(meds);
-          setProfile(profileInfo);
-        }).catch(err => console.error(err));
+        setReviewRequest(req);
+        // Chỉ đọc hồ sơ cá nhân (chung, không snapshot) khi bệnh nhân CHỌN gửi kèm -
+        // nếu không, dùng đúng thông tin tự nhập lúc gửi yêu cầu (xem req bên dưới).
+        if (req.gui_kem_ho_so) {
+          getPatientProfile(req.patient_id, session.accessToken).then(setProfile).catch(err => console.error(err));
+        }
       }
     }).catch(err => console.error(err));
 
@@ -68,6 +63,10 @@ function ReviewContent() {
     const names = productNamesFromExplanations(detail.explanations);
     return [{ id: "review-check", label: "Thuốc đã kiểm tra", drugs: names.map((name) => ({ name, known: true })) }];
   }, [detail]);
+
+  // Chỉ hiện ĐÚNG danh sách thuốc của LẦN TRA CỨU NÀY (từ detail.explanations),
+  // không phải "đơn thuốc của tôi" chung của bệnh nhân.
+  const productNames = prescriptions[0]?.drugs.map((d) => d.name) ?? [];
 
   async function handleConfirm() {
     if (!session || !checkId) return;
@@ -101,7 +100,7 @@ function ReviewContent() {
         </button>
         <div>
           <p className="eyebrow">XEM XÉT CHUYÊN MÔN</p>
-          <h1 className="page-header__title">{patientName ? `Hồ sơ: ${patientName}` : "Chi tiết cảnh báo"}</h1>
+          <h1 className="page-header__title">{reviewRequest ? `Hồ sơ: ${reviewRequest.patient_name}` : "Chi tiết cảnh báo"}</h1>
         </div>
       </div>
 
@@ -112,23 +111,32 @@ function ReviewContent() {
         <div className="review-layout__main">
           {!loading && (
         <section className="panel profile-medications">
-          <div className="dashboard-section__header"><h2>Hồ sơ bệnh nhân</h2></div>
-          {(profile?.ngay_sinh || profile?.benh_nen_ghi_chu) ? (
+          <div className="dashboard-section__header"><h2>Thông tin người được kiểm tra</h2></div>
+          {reviewRequest?.gui_kem_ho_so ? (
+            (profile?.ngay_sinh || profile?.benh_nen_ghi_chu) ? (
+              <div className="field" style={{ marginBottom: 16 }}>
+                {profile?.ngay_sinh && <p><strong>Ngày sinh:</strong> {profile.ngay_sinh}</p>}
+                {profile?.benh_nen_ghi_chu && <p><strong>Bệnh nền / ghi chú:</strong> {profile.benh_nen_ghi_chu}</p>}
+              </div>
+            ) : (
+              <p className="empty-state__hint">Bệnh nhân chưa cập nhật thông tin cá nhân.</p>
+            )
+          ) : reviewRequest?.ten_nguoi_duoc_kiem_tra ? (
             <div className="field" style={{ marginBottom: 16 }}>
-              {profile?.ngay_sinh && <p><strong>Ngày sinh:</strong> {profile.ngay_sinh}</p>}
-              {profile?.benh_nen_ghi_chu && <p><strong>Bệnh nền / ghi chú:</strong> {profile.benh_nen_ghi_chu}</p>}
+              <p><strong>Người được kiểm tra:</strong> {reviewRequest.ten_nguoi_duoc_kiem_tra}</p>
+              {reviewRequest.ngay_sinh_nhap_tay && <p><strong>Ngày sinh:</strong> {reviewRequest.ngay_sinh_nhap_tay}</p>}
+              {reviewRequest.ghi_chu_nhap_tay && <p><strong>Ghi chú:</strong> {reviewRequest.ghi_chu_nhap_tay}</p>}
             </div>
           ) : (
-            <p className="empty-state__hint">Bệnh nhân chưa cập nhật thông tin cá nhân.</p>
+            <p className="empty-state__hint">Người bệnh không gửi kèm thông tin cá nhân.</p>
           )}
-          {medications.length === 0 && <p className="empty-state__hint">Chưa có thuốc nào trong hồ sơ.</p>}
-          {medications.map((item) => (
-            <article className="profile-medication" key={item.id}>
+
+          <h3 style={{ marginBottom: 8 }}>Thuốc trong lần tra cứu này</h3>
+          {productNames.length === 0 && <p className="empty-state__hint">Không có thuốc nào.</p>}
+          {productNames.map((name) => (
+            <article className="profile-medication" key={name}>
               <span className="profile-medication__icon"><MaterialIcon name="medication" size={22} /></span>
-              <div>
-                <strong>{item.ten_thuoc}</strong>
-                <p>{item.ngay_bat_dau ? `Bắt đầu từ ${item.ngay_bat_dau}` : "Mới thêm"}</p>
-              </div>
+              <div><strong>{name}</strong></div>
             </article>
           ))}
         </section>
