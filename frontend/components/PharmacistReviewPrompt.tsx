@@ -128,11 +128,11 @@ export default function PharmacistReviewPrompt({ checkId, token, patientId, onAs
         </button>
         <p className="pharmacist-prompt__title">Gửi yêu cầu tới <strong>{selected.ho_ten}</strong></p>
         <div className="pharmacist-prompt__attach-toggle">
-          <label>
+          <label className={attachProfile ? "pharmacist-prompt__attach-option pharmacist-prompt__attach-option--active" : "pharmacist-prompt__attach-option"}>
             <input type="radio" name="attach-mode" checked={attachProfile} onChange={() => setAttachProfile(true)} />
             Gửi kèm hồ sơ cá nhân của tôi
           </label>
-          <label>
+          <label className={!attachProfile ? "pharmacist-prompt__attach-option pharmacist-prompt__attach-option--active" : "pharmacist-prompt__attach-option"}>
             <input type="radio" name="attach-mode" checked={!attachProfile} onChange={() => setAttachProfile(false)} />
             Nhập thông tin khác (tra cứu hộ người khác)
           </label>
@@ -161,7 +161,7 @@ export default function PharmacistReviewPrompt({ checkId, token, patientId, onAs
         <div className="pharmacist-prompt__list">
           {pharmacistsLoading ? <p className="pharmacist-prompt__loading">Đang tải danh sách dược sĩ...</p> : pharmacists.map((p) => (
             <button type="button" className="pharmacist-prompt__item" key={p.id} onClick={() => handleSelectPharmacist(p)}>
-              <div>
+              <div className="pharmacist-prompt__item-body">
                 <div className="pharmacist-prompt__name">{p.ho_ten}</div>
                 {p.noi_cong_tac && <div className="pharmacist-prompt__place"><MaterialIcon name="location_on" size={14} />{p.noi_cong_tac}</div>}
                 <div className="pharmacist-prompt__bio">{p.mo_ta_ngan || "Chưa cập nhật thông tin"}</div>

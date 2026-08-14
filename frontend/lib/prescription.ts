@@ -8,18 +8,28 @@ export function createPrescription(index: number): Prescription {
   return { id: `rx-${Date.now()}-${index}`, label: `Đơn thuốc ${index}`, drugs: [] };
 }
 
-// Quy đổi các đơn thuốc ĐÃ LƯU trong hồ sơ (PatientPrescription, có id thật từ
-// backend) sang Prescription cấp phiên làm việc của bàn cân tương tác - dùng khi
-// nhập "toàn bộ đơn từ hồ sơ" (mỗi đơn đã lưu -> đúng 1 panel trên bàn cân), khác
-// với import 1 đơn cụ thể vào 1 panel đang có sẵn (xem importFromProfile).
-export function fromSavedPrescriptions(
+
+// Gộp các đơn ĐÃ LƯU trong hồ sơ vào bàn cân hiện tại theo nhãn (label): đơn trên
+// bàn cân đã có nhãn trùng thì cộng dồn thêm thuốc mới (bỏ trùng) vào panel đó,
+// nhãn chưa từng xuất hiện thì thêm panel mới - để import nhiều lần liên tiếp (VD
+// lưu thêm 1 đơn mới rồi bấm "Kiểm tra tương tác" lại) nối tiếp nhau thay vì ghi
+// đè mất các đơn/thuốc đã có sẵn trên bàn cân từ lần import hoặc chỉnh sửa trước đó.
+export function mergeSavedIntoPrescriptions(
+  current: Prescription[],
   saved: { id: string; label: string; medications: { ten_thuoc: string }[] }[]
 ): Prescription[] {
-  return saved.map((p, index) => ({
-    id: `rx-${Date.now()}-${index}`,
-    label: p.label,
-    drugs: p.medications.map((m) => ({ name: m.ten_thuoc, known: true })),
-  }));
+  const next = current.map((p) => ({ ...p, drugs: [...p.drugs] }));
+  saved.forEach((source, index) => {
+    const newDrugs = source.medications.map((m) => ({ name: m.ten_thuoc, known: true }));
+    const target = next.find((p) => p.label === source.label);
+    if (target) {
+      const existing = new Set(target.drugs.map((d) => d.name.toLowerCase()));
+      target.drugs.push(...newDrugs.filter((d) => !existing.has(d.name.toLowerCase())));
+    } else {
+      next.push({ id: `rx-${Date.now()}-${index}`, label: source.label, drugs: newDrugs });
+    }
+  });
+  return next;
 }
 
 // Bỏ các đơn rỗng rồi quy đổi sang payload gửi lên /products/check - đơn thuốc rỗng

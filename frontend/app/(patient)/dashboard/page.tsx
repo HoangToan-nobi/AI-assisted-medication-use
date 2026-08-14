@@ -111,20 +111,28 @@ export default function PatientDashboardPage() {
       <section className="dashboard-section">
         <div className="dashboard-section__header"><h2>Đơn thuốc của tôi</h2><Link href="/profile?tab=prescriptions">Xem tất cả <MaterialIcon name="arrow_forward" size={17} /></Link></div>
         {!loading && totalMedications === 0 && <div className="empty-state"><MaterialIcon name="medication" size={40} /><strong>Chưa có thuốc trong hồ sơ</strong><span>Thêm thuốc để bắt đầu kiểm tra tương tác.</span></div>}
-        {prescriptions.filter((p) => p.medications.length > 0).map((p) => (
-          <div className="dashboard-prescription-group" key={p.id}>
-            <h3 className="dashboard-prescription-group__title">{p.label}</h3>
-            <div className="dashboard-med-grid">
-              {p.medications.map((m) => (
-                <article className="dashboard-med-card" key={m.id}>
-                  <div className="dashboard-med-card__top"><h3>{m.ten_thuoc}</h3><span className={`med-status ${m.ngay_bat_dau ? "med-status--confirmed" : "med-status--pending"}`}>{m.ngay_bat_dau ? "Đã xác nhận" : "Chưa xác nhận"}</span></div>
-                  <p className="dashboard-med-card__instruction">{m.ngay_bat_dau ? "Đang được theo dõi trong hồ sơ thuốc." : "Được thêm bởi bệnh nhân hôm nay."}</p>
-                  <div className="dashboard-med-card__footer"><span><MaterialIcon name="calendar_today" size={17} />{m.ngay_bat_dau ? `Bắt đầu: ${m.ngay_bat_dau}` : "Cập nhật hôm nay"}</span><button className="med-delete" onClick={() => handleDelete(p.id, m.id)} disabled={deletingId === m.id} aria-label={`Xóa ${m.ten_thuoc}`}>{deletingId === m.id ? <span className="spinner spinner--sm" /> : <MaterialIcon name="more_horiz" size={20} />}</button></div>
-                </article>
-              ))}
-            </div>
+        {totalMedications > 0 && (
+          <div className="prescription-board prescription-board--slider">
+            {prescriptions.filter((p) => p.medications.length > 0).map((p) => (
+              <div className="prescription-panel panel prescription-panel--readonly" key={p.id}>
+                <div className="prescription-panel__header">
+                  <h3>{p.label}</h3>
+                </div>
+                <div className="prescription-panel__list">
+                  {p.medications.map((m) => (
+                    <div className="selected-medication" key={m.id}>
+                      <span className="selected-medication__icon"><MaterialIcon name="medication" size={18} /></span>
+                      <div><strong>{m.ten_thuoc}</strong><small>{m.ngay_bat_dau ? `Bắt đầu từ ${m.ngay_bat_dau}` : "Được thêm hôm nay"}</small></div>
+                      <button type="button" onClick={() => handleDelete(p.id, m.id)} disabled={deletingId === m.id} aria-label={`Xóa ${m.ten_thuoc}`}>
+                        {deletingId === m.id ? <span className="spinner spinner--sm" /> : <MaterialIcon name="close" size={17} />}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
       </section>
 
       <section className="dashboard-summary-row"><div><span className="dashboard-summary-number">{totalMedications}</span><span> thuốc đang theo dõi</span></div><div><span className="dashboard-summary-number">{unresolvedSevere}</span><span> cảnh báo chưa xử lý</span></div></section>

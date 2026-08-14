@@ -20,6 +20,10 @@ export type InteractionExplanation = {
   // Mô tả khoa học nguyên văn từ CSDL DDInter 2.0 (không qua AI diễn giải lại) -
   // cũng chỉ dược sĩ mới thấy, giống xu_tri/thay_the.
   mo_ta?: string;
+  // Bản dịch nguyên văn (không qua diễn giải, chỉ dịch sát nghĩa) từ tiếng Anh sang
+  // tiếng Việt của mo_ta/xu_tri gốc - cùng mức truy cập, chỉ dược sĩ mới thấy.
+  mo_ta_dich?: string;
+  xu_tri_dich?: string;
   // Chỉ có ở luồng kiểm tra theo tên thuốc (products/check) - hoạt chất gốc và
   // danh sách tên thuốc (trong lần kiểm tra hiện tại) chứa hoạt chất đó, dùng để
   // gộp (rollup) cạnh ở cấp thuốc trên đồ thị tương tác.
@@ -38,6 +42,10 @@ export type ProductLevelExplanation = {
   giai_thich: string;
   giai_thich_duoc_si?: string;
   nguon_trich_dan: string;
+  // Bản dịch nguyên văn (Anh -> Việt) của mo_ta/xu_tri lấy từ cặp hoạt chất góp
+  // phần nặng nhất - chỉ dược sĩ mới thấy, giống ProductLevelExplanation khác.
+  mo_ta_dich?: string;
+  xu_tri_dich?: string;
 };
 
 // Giải thích cấp đơn thuốc (đơn-với-đơn) - don_a_index/don_b_index là chỉ số đơn
@@ -53,8 +61,8 @@ export type PrescriptionLevelExplanation = {
   nguon_trich_dan: string;
 };
 
-// Đoạn tóm tắt tổng quan toàn bộ lần phân tích (chỉ luồng bệnh nhân) - LLM sinh 1
-// đoạn dựa trên thống kê + toàn bộ giải thích cấp thuốc-thuốc tìm được.
+// Đoạn tóm tắt tổng quan toàn bộ lần phân tích (cả luồng bệnh nhân và dược sĩ, khác
+// giọng điệu) - LLM sinh 1 đoạn dựa trên thống kê + toàn bộ giải thích cấp thuốc-thuốc tìm được.
 export type InteractionOverviewExplanation = {
   giai_thich: string;
   so_cap_nang: number;
@@ -76,6 +84,10 @@ export type MedicationCheckResponse = {
   product_explanations?: ProductLevelExplanation[];
   prescription_explanations?: PrescriptionLevelExplanation[];
   overview?: InteractionOverviewExplanation;
+  // Ghi chú dược sĩ để lại khi xác nhận lần kiểm tra này - chỉ có ở
+  // getPatientCheckDetail khi đã có dược sĩ xác nhận, undefined mọi trường hợp khác.
+  ghi_chu_duoc_si?: string;
+  ten_duoc_si_xac_nhan?: string;
 };
 
 // Kết quả thô từ GET /pharmacist/reviews/{id} - chính là state agent đầy đủ

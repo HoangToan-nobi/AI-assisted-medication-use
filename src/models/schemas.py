@@ -125,9 +125,14 @@ class MedicationCheckResponse(BaseModel):
     # luồng dược sĩ (pharmacist/products/check) khi request có từ 2 đơn trở lên.
     product_explanations: list[dict] = Field(default_factory=list)
     prescription_explanations: list[dict] = Field(default_factory=list)
-    # Tóm tắt tổng quan toàn bộ lần phân tích - chỉ sinh cho luồng bệnh nhân
-    # (products/check, guest/products/check), None ở luồng dược sĩ.
+    # Tóm tắt tổng quan toàn bộ lần phân tích - sinh cho cả luồng bệnh nhân và dược
+    # sĩ, khác nhau ở giọng điệu (xem build_overview_explanation).
     overview: dict | None = None
+    # Ghi chú dược sĩ để lại khi xác nhận lần kiểm tra này (PharmacistReview.ghi_chu)
+    # - chỉ có ở GET /patients/{id}/checks/{check_id} khi đã có dược sĩ xác nhận,
+    # None ở mọi trường hợp khác (lần kiểm tra mới chạy, guest, chưa ai xác nhận).
+    ghi_chu_duoc_si: str | None = None
+    ten_duoc_si_xac_nhan: str | None = None
 
 
 class InteractionCheckSummary(BaseModel):

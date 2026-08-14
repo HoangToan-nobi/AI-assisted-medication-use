@@ -57,12 +57,23 @@ from src.services.rollup_explain import (
     build_prescription_explanations,
     build_product_edges,
     build_product_explanations,
+    filter_cross_prescription_edges,
 )
 
 router = APIRouter()
 
 # Field chỉ dành cho vai trò dược sĩ (GD6 mục 7.2) - không trả cho bệnh nhân.
-_PHARMACIST_ONLY_FIELDS = {"xu_tri", "thay_the_a", "thay_the_b", "mo_ta", "giai_thich_duoc_si"}
+_PHARMACIST_ONLY_FIELDS = {
+    "xu_tri",
+    "thay_the_a",
+    "thay_the_b",
+    "mo_ta",
+    "giai_thich_duoc_si",
+    # Bản dịch nguyên văn (không qua diễn giải) từ tiếng Anh sang tiếng Việt của
+    # mo_ta/xu_tri - cùng mức truy cập với mo_ta/xu_tri gốc.
+    "mo_ta_dich",
+    "xu_tri_dich",
+}
 
 
 def _strip_pharmacist_fields(items: list[dict]) -> list[dict]:
@@ -372,14 +383,14 @@ async def _run_product_check(
 ) -> tuple[dict, list[str], list[str]]:
     """Dùng chung cho patient/guest/pharmacist: resolve tên thuốc -> hoạt chất, chạy agent
     hiện có, gắn tên thuốc (biệt dược) vào kết quả, rồi tự tính + sinh giải thích riêng
-    cho cấp thuốc.
+    cho cấp thuốc. Cả 2 luồng đều sinh overview (tóm tắt tổng quan) - khác nhau ở
+    audience truyền vào build_overview_explanation (giọng thân thiện cho bệnh nhân,
+    khoa học/chuyên nghiệp cho dược sĩ).
 
     for_pharmacist=True (công cụ tra cứu độc lập của dược sĩ, vẫn giữ drill-down đầy
-    đủ): sinh thêm prescription_explanations (cấp đơn) khi có từ 2 đơn trở lên,
-    KHÔNG sinh overview.
-    for_pharmacist=False (luồng bệnh nhân, chỉ còn graph thuốc-thuốc + tóm tắt):
-    sinh overview, KHÔNG sinh prescription_explanations (không còn UI nào dùng tới,
-    tránh tốn LLM call vô ích).
+    đủ): sinh thêm prescription_explanations (cấp đơn) khi có từ 2 đơn trở lên.
+    for_pharmacist=False (luồng bệnh nhân): KHÔNG sinh prescription_explanations
+    (không còn UI nào dùng tới, tránh tốn LLM call vô ích).
     """
     flat_products, origins_by_input = _flatten_prescriptions(prescriptions)
     ingredient_names, ingredient_to_products, unknown, no_data, canonical_by_input = _resolve_products(
@@ -398,16 +409,27 @@ async def _run_product_check(
     )
 
     product_edges = build_product_edges(result["explanations"])
-    result["product_explanations"] = await build_product_explanations(product_edges)
 
-    if for_pharmacist and len(prescriptions) > 1:
-        product_origins: dict[str, set[int]] = {}
+    product_origins: dict[str, set[int]] = {}
+    if len(prescriptions) > 1:
         for input_key, rx_indexes in origins_by_input.items():
             canonical = canonical_by_input.get(input_key)
             if not canonical:
                 continue
             product_origins.setdefault(canonical.lower(), set()).update(rx_indexes)
 
+    # So từ 2 đơn trở lên (cả bệnh nhân lẫn dược sĩ): chỉ tính tương tác GIỮA các
+    # đơn khác nhau cho cấp thuốc + tóm tắt tổng quan - bỏ tương tác trong cùng 1
+    # đơn, vì so nhiều đơn chỉ nhằm phát hiện rủi ro mới phát sinh khi gộp chung,
+    # không phải rà lại từng đơn đang dùng riêng lẻ.
+    overview_product_edges = (
+        filter_cross_prescription_edges(product_edges, product_origins)
+        if len(prescriptions) > 1
+        else product_edges
+    )
+    result["product_explanations"] = await build_product_explanations(overview_product_edges)
+
+    if for_pharmacist and len(prescriptions) > 1:
         labels = [p.label for p in prescriptions]
         prescription_edges = build_prescription_edges(product_edges, product_origins)
         result["prescription_explanations"] = await build_prescription_explanations(
@@ -416,10 +438,11 @@ async def _run_product_check(
     else:
         result["prescription_explanations"] = []
 
-    if for_pharmacist:
-        result["overview"] = None
-    else:
-        result["overview"] = await build_overview_explanation(product_edges, result["product_explanations"])
+    result["overview"] = await build_overview_explanation(
+        overview_product_edges,
+        result["product_explanations"],
+        audience="pharmacist" if for_pharmacist else "patient",
+    )
 
     return result, unknown, no_data
 
@@ -840,6 +863,16 @@ def _review_status(db: Session, check_id: str, pharmacist_id: str | None = None)
     return review.trang_thai_xac_nhan if review else "chua_xac_nhan"
 
 
+def _review_note(db: Session, check_id: str) -> tuple[str | None, str | None]:
+    """Ghi chú dược sĩ để lại khi xác nhận (nếu có) + tên dược sĩ đó, để hiển thị lại
+    cho bệnh nhân ở trang chi tiết lịch sử (xem get_patient_check_detail)."""
+    review = db.query(PharmacistReview).filter_by(interaction_check_id=check_id).first()
+    if not review or not review.ghi_chu:
+        return None, None
+    pharmacist = db.get(User, review.pharmacist_id) if review.pharmacist_id else None
+    return review.ghi_chu, pharmacist.ho_ten if pharmacist else None
+
+
 @router.get("/patients/{patient_id}/checks", response_model=list[InteractionCheckSummary])
 async def list_patient_checks(
     patient_id: str,
@@ -884,6 +917,7 @@ async def get_patient_check_detail(
         raise HTTPException(status_code=404, detail="Không tìm thấy interaction_check")
 
     result = check.ket_qua_json or {}
+    ghi_chu_duoc_si, ten_duoc_si_xac_nhan = _review_note(db, check_id)
     return MedicationCheckResponse(
         interaction_check_id=check.id,
         ranked_results=_strip_pharmacist_fields(result.get("ranked_results", [])),
@@ -895,6 +929,8 @@ async def get_patient_check_detail(
         product_explanations=_strip_pharmacist_fields(result.get("product_explanations", [])),
         prescription_explanations=_strip_pharmacist_fields(result.get("prescription_explanations", [])),
         overview=result.get("overview"),
+        ghi_chu_duoc_si=ghi_chu_duoc_si,
+        ten_duoc_si_xac_nhan=ten_duoc_si_xac_nhan,
     )
 
 @router.delete("/patients/{patient_id}/checks", status_code=204)

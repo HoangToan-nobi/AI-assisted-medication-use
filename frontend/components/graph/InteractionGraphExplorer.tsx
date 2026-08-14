@@ -186,6 +186,8 @@ export default function InteractionGraphExplorer({ result, prescriptions, audien
         description: backendItem ? pickText(backendItem, audience) : fallback?.giai_thich ?? "",
         source: backendItem?.nguon_trich_dan ?? fallback?.nguon_trich_dan ?? "",
         hasIncompletePair: e.hasIncompletePair,
+        scientificDescription: backendItem?.mo_ta_dich ?? fallback?.mo_ta_dich,
+        management: backendItem?.xu_tri_dich ?? fallback?.xu_tri_dich,
       };
     });
     onEdgeSelect = (edgeId) => {
@@ -216,8 +218,8 @@ export default function InteractionGraphExplorer({ result, prescriptions, audien
       severity: e.muc_do,
       description: pickText(e.pairs[0], audience),
       source: e.pairs[0]?.nguon_trich_dan ?? "",
-      management: e.pairs[0]?.xu_tri,
-      scientificDescription: e.pairs[0]?.mo_ta,
+      management: e.pairs[0]?.xu_tri_dich,
+      scientificDescription: e.pairs[0]?.mo_ta_dich,
     }));
     onEdgeSelect = undefined; // cấp đáy - không có "xem chi tiết" tiếp
   }

@@ -1284,7 +1284,7 @@ button.btn-severe:hover {
   line-height: 22px;
 }
 
-.result-hero {
+.pharmacist-note-box {
   display: flex;
   gap: 12px;
   align-items: flex-start;
@@ -1293,47 +1293,13 @@ button.btn-severe:hover {
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
   background: var(--surface-container-lowest);
-}
-.result-hero--severe {
-  background: var(--severe-container);
-  border-color: rgba(213, 43, 30, 0.25);
-}
-.result-hero--safe {
-  background: var(--primary-fixed);
-}
-.result-hero__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 52px;
-  height: 52px;
-  flex: 0 0 auto;
-  border-radius: var(--radius);
-  background: var(--surface-container-lowest);
   color: var(--primary);
 }
-.result-hero--severe .result-hero__icon {
-  color: var(--severe);
-}
-.result-hero h2 {
-  font-size: 18px;
-  font-weight: 600;
-  margin: 2px 0 4px;
-}
-.result-hero p:not(.eyebrow) {
-  color: var(--on-surface-variant);
+.pharmacist-note-box p:not(.eyebrow) {
+  margin-top: 4px;
+  color: var(--on-surface);
   font-size: 14px;
   line-height: 20px;
-}
-.result-hero .pharmacist-prompt,
-.result-hero .pharmacist-prompt--done,
-.result-hero .pharmacist-prompt--confirmed,
-.result-hero .pharmacist-prompt--loading {
-  margin-top: 12px;
-  padding: 0;
-  background: none;
-  border: none;
-  box-shadow: none;
 }
 .result-list-heading {
   margin-top: 24px;
@@ -3066,22 +3032,17 @@ button,
 }
 .tt-graph-canvas {
   position: relative;
-  min-height: 520px;
-  border: 1px solid #d8e2ee;
-  border-radius: 6px;
-  background: radial-gradient(circle at center, #fbfdff 0, #f1f7fd 100%);
+  min-height: 680px;
 }
 .tt-graph-canvas svg {
   display: block;
   width: 100%;
-  height: 520px;
-  overflow: hidden;
-  border-radius: 6px;
+  height: 680px;
 }
 .tt-graph-edge-hit {
   fill: none;
   stroke: transparent;
-  stroke-width: 8;
+  stroke-width: 0.8;
   pointer-events: stroke;
 }
 .tt-graph-edge-group--clickable .tt-graph-edge-hit {
@@ -3089,7 +3050,7 @@ button,
 }
 .tt-graph-edge {
   fill: none;
-  stroke-width: 1.6;
+  stroke-width: 0.8;
   stroke-linecap: round;
   pointer-events: none;
   transition:
@@ -3099,24 +3060,34 @@ button,
 .tt-graph-node {
   cursor: default;
   transition:
-    opacity 0.18s ease,
+    transform 0.18s ease,
     filter 0.18s ease;
 }
-.tt-graph-node circle {
-  stroke: #fff;
-  stroke-width: 1.7;
+.tt-graph-node__fill {
+  transition: opacity 0.18s ease;
   filter: drop-shadow(0 3px 3px rgba(36, 65, 101, 0.18));
 }
+.tt-graph-node__ring {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.7;
+  pointer-events: none;
+  /* Cố ý trễ hơn 1 nhịp so với lõi (.tt-graph-node__fill mờ/hiện tức thời) - tạo
+     hiệu ứng vòng ngoài "đuổi theo" lõi khi hover 1 node/cạnh làm mờ các node khác. */
+  transition: opacity 0.18s ease 0.07s;
+}
 .tt-graph-node__label {
-  fill: #111;
+  fill: #fff;
   font-family: var(--font-body);
-  font-size: 3.6px;
+  font-size: 2.6px;
   font-weight: 700;
   pointer-events: none;
+  filter: drop-shadow(0 0 1.2px rgba(0, 0, 0, 0.55));
+  transition: opacity 0.18s ease;
 }
 .tt-graph-tooltip {
   position: absolute;
-  transform: translate(-50%, -112%);
+  transform: translate(-50%, calc(-100% - 14px));
   background: #1c2f4c;
   color: #fff;
   padding: 6px 10px;
@@ -3129,7 +3100,7 @@ button,
   z-index: 5;
 }
 .tt-graph-tooltip--below {
-  transform: translate(-50%, 12%);
+  transform: translate(-50%, 14px);
 }
 .tt-graph-legend {
   display: flex;
@@ -3330,10 +3301,13 @@ button,
   display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 100%;
   margin-top: 12px;
   max-height: 260px;
+  overflow-x: hidden;
   overflow-y: auto;
   padding-right: 2px;
+  box-sizing: border-box;
 }
 .pharmacist-prompt__loading {
   color: #64707e;
@@ -3352,28 +3326,40 @@ button,
   border: 1px solid #eee;
   border-radius: 6px;
   cursor: pointer;
+  box-sizing: border-box;
 }
 .pharmacist-prompt__item:hover {
   background: #eef4fc;
   border-color: #c7d8ef;
 }
+.pharmacist-prompt__item-body {
+  min-width: 0;
+  flex: 1;
+}
 .pharmacist-prompt__name {
   color: #1a2b4c;
   font-weight: 600;
+  overflow-wrap: break-word;
 }
 .pharmacist-prompt__place {
-  display: inline-flex;
-  align-items: center;
+  display: flex;
+  align-items: flex-start;
   gap: 4px;
   margin-top: 4px;
   color: #64707e;
   font-size: 12px;
+  overflow-wrap: break-word;
+}
+.pharmacist-prompt__place .material-symbols-outlined {
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 .pharmacist-prompt__bio {
   margin-top: 4px;
   color: #64707e;
   font-size: 12px;
   line-height: 16px;
+  overflow-wrap: break-word;
 }
 .pharmacist-prompt__attach-toggle {
   display: flex;
@@ -3382,11 +3368,33 @@ button,
   margin: 12px 0;
   font-size: 13px;
 }
-.pharmacist-prompt__attach-toggle label {
+.pharmacist-prompt__attach-option {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  padding: 10px 12px;
+  color: var(--on-surface);
+  background: #fafafa;
+  border: 1px solid #eee;
+  border-radius: 8px;
   cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.pharmacist-prompt__attach-option:hover {
+  background: #f2f6fb;
+}
+.pharmacist-prompt__attach-option--active {
+  background: #eef4fc;
+  border-color: #244c93;
+  color: #1a2b4c;
+  font-weight: 600;
+}
+.pharmacist-prompt__attach-option input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: #244c93;
 }
 .pharmacist-prompt__manual-form {
   display: flex;
@@ -3762,8 +3770,29 @@ button,
   margin-bottom: 10px;
 }
 .prescription-panel__header h3 {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
   font-size: 15px;
   font-weight: 800;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.prescription-panel__header-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+}
+.prescription-panel__edit {
+  min-height: unset;
+  padding: 5px;
+  color: #6c7f95;
+  background: transparent;
+  box-shadow: none;
+}
+.prescription-panel__edit:hover {
+  color: #244c93;
 }
 .prescription-panel__actions {
   display: flex;
@@ -4297,13 +4326,6 @@ button,
   color: #687b91;
   font-size: 12px;
   line-height: 1.45;
-}
-.result-hero--unknown {
-  background: #edf0f3;
-  border-color: #cbd2da;
-}
-.result-hero--unknown .result-hero__icon {
-  color: #687582;
 }
 .check-result-page .alert-card {
   font-family: var(--font-body);

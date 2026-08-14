@@ -7,7 +7,7 @@ import PrescriptionPanel from "@/components/PrescriptionPanel";
 import InteractionResultView from "@/components/graph/InteractionResultView";
 import { ApiError, checkGuestProducts, checkProducts, listPatientPrescriptions, searchGuestProducts, searchProducts, type MedicationCheckResponse, type PatientPrescription } from "@/lib/api";
 import { getSession } from "@/lib/auth";
-import { createPrescription, fromSavedPrescriptions, mergedDrugNames, nonEmptyPrescriptions, toPrescriptionCheckInput, type Prescription } from "@/lib/prescription";
+import { createPrescription, mergeSavedIntoPrescriptions, mergedDrugNames, nonEmptyPrescriptions, toPrescriptionCheckInput, type Prescription } from "@/lib/prescription";
 
 // Lưu tạm các đơn/thuốc đang nhập dở và kết quả phân tích gần nhất trong phiên
 // trình duyệt, để reload trang hoặc chuyển sang tab khác rồi quay lại Tra cứu
@@ -77,9 +77,11 @@ function InteractionPageContent() {
       .then((saved) => {
         setSavedPrescriptions(saved);
         // Chỉ điều hướng tới đây kèm ?import=profile (VD từ nút "Kiểm tra tương tác"
-        // ở tab Đơn thuốc của tôi) mới tự nạp TOÀN BỘ đơn đã lưu thành các panel
-        // tương ứng - bấm thẳng vào tab Tương tác không tự ý ghi đè bàn cân.
-        if (shouldImportFromProfile && saved.length > 0) setPrescriptions(fromSavedPrescriptions(saved));
+        // ở tab Đơn thuốc của tôi) mới tự nạp đơn đã lưu thành các panel tương ứng -
+        // bấm thẳng vào tab Tương tác không tự ý ghi đè bàn cân. Gộp theo nhãn đơn
+        // (mergeSavedIntoPrescriptions) thay vì thay thế toàn bộ, để import nhiều
+        // lần liên tiếp nối tiếp nhau vào bàn cân thay vì xóa mất lần import trước.
+        if (shouldImportFromProfile && saved.length > 0) setPrescriptions((prev) => mergeSavedIntoPrescriptions(prev, saved));
       })
       .catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -168,7 +170,7 @@ function InteractionPageContent() {
     </section>
 
     {error && <p className="error-text" role="alert">{error}</p>}
-    {result && ((result.unknown_products?.length ?? 0) > 0 || (result.no_interaction_data_products?.length ?? 0) > 0) && <div className="guest-mode-banner"><MaterialIcon name="info" size={18} /><span>{result.unknown_products && result.unknown_products.length > 0 && `Không tìm thấy trong CSDL: ${result.unknown_products.join(", ")}. `}{result.no_interaction_data_products && result.no_interaction_data_products.length > 0 && `Chưa có dữ liệu hoạt chất để kiểm tra tương tác: ${result.no_interaction_data_products.join(", ")}.`}</span></div>}
+    {result && (result.unknown_products?.length ?? 0) > 0 && <div className="guest-mode-banner"><MaterialIcon name="info" size={18} /><span>Không tìm thấy trong CSDL: {result.unknown_products!.join(", ")}.</span></div>}
 
     <section className="prescription-board-wrap">
       <div className="prescription-board prescription-board--slider">

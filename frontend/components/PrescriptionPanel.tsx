@@ -17,14 +17,21 @@ type PrescriptionPanelProps = {
   // từ 2 đơn trở lên -> hiện danh sách để chọn đúng 1 đơn.
   savedPrescriptions?: PatientPrescription[];
   onImportFrom?: (prescriptionId: string) => void;
+  // Cho phép đổi tên đơn thuốc qua nút sửa (bấm mới cho sửa). Không truyền prop
+  // này thì tên đơn hiển thị tĩnh, không sửa được (VD: bàn cân tương tác của bệnh nhân).
+  onRename?: (label: string) => void;
   inputId: string;
 };
 
-export default function PrescriptionPanel({ label, drugs, search, onAdd, onRemoveDrug, onRemovePanel, savedPrescriptions, onImportFrom, inputId }: PrescriptionPanelProps) {
+export default function PrescriptionPanel({ label, drugs, search, onAdd, onRemoveDrug, onRemovePanel, savedPrescriptions, onImportFrom, onRename, inputId }: PrescriptionPanelProps) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<ProductSearchResult[]>([]);
   const [importPickerOpen, setImportPickerOpen] = useState(false);
   const importPickerRef = useRef<HTMLDivElement>(null);
+  const [editingLabel, setEditingLabel] = useState(false);
+  const [draftLabel, setDraftLabel] = useState(label);
+
+  useEffect(() => setDraftLabel(label), [label]);
 
   useEffect(() => {
     if (query.trim().length < 2) { setSuggestions([]); return; }
@@ -54,15 +61,44 @@ export default function PrescriptionPanel({ label, drugs, search, onAdd, onRemov
     setSuggestions([]);
   }
 
+  function saveLabel() {
+    const trimmed = draftLabel.trim();
+    setEditingLabel(false);
+    if (!trimmed || trimmed === label) { setDraftLabel(label); return; }
+    onRename?.(trimmed);
+  }
+
   return (
     <div className="prescription-panel panel">
       <div className="prescription-panel__header">
-        <h3>{label}</h3>
-        {onRemovePanel && (
-          <button type="button" className="prescription-panel__remove" onClick={onRemovePanel} aria-label={`Xóa ${label}`}>
-            <MaterialIcon name="close" size={18} />
-          </button>
+        {editingLabel && onRename ? (
+          <input
+            className="prescription-panel__label-input"
+            value={draftLabel}
+            onChange={(e) => setDraftLabel(e.target.value)}
+            onBlur={saveLabel}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+              if (e.key === "Escape") { setDraftLabel(label); setEditingLabel(false); }
+            }}
+            aria-label="Tên đơn thuốc"
+            autoFocus
+          />
+        ) : (
+          <h3>{label}</h3>
         )}
+        <div className="prescription-panel__header-actions">
+          {onRename && !editingLabel && (
+            <button type="button" className="prescription-panel__edit" onClick={() => setEditingLabel(true)} aria-label="Sửa tên đơn thuốc" title="Sửa tên đơn thuốc">
+              <MaterialIcon name="edit" size={16} />
+            </button>
+          )}
+          {onRemovePanel && (
+            <button type="button" className="prescription-panel__remove" onClick={onRemovePanel} aria-label={`Xóa ${label}`}>
+              <MaterialIcon name="close" size={18} />
+            </button>
+          )}
+        </div>
       </div>
       <div className="prescription-panel__actions">
         {savedPrescriptions && savedPrescriptions.length > 0 && onImportFrom && (

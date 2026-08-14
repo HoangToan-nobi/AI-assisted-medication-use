@@ -36,6 +36,7 @@ export default function PatientPrescriptionPanel({
   const [removingPanel, setRemovingPanel] = useState(false);
   const [label, setLabel] = useState(prescription.label);
   const [renaming, setRenaming] = useState(false);
+  const [editingLabel, setEditingLabel] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => setLabel(prescription.label), [prescription.label]);
@@ -63,6 +64,7 @@ export default function PatientPrescriptionPanel({
 
   async function saveLabel() {
     const trimmed = label.trim();
+    setEditingLabel(false);
     if (!trimmed || trimmed === prescription.label) { setLabel(prescription.label); return; }
     setRenaming(true); setError(null);
     try { await onRename(trimmed); }
@@ -80,21 +82,36 @@ export default function PatientPrescriptionPanel({
   return (
     <div className="prescription-panel panel">
       <div className="prescription-panel__header">
-        <input
-          className="prescription-panel__label-input"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          onBlur={saveLabel}
-          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-          disabled={renaming}
-          aria-label="Tên đơn thuốc"
-        />
-        {renaming && <span className="spinner spinner--sm" />}
-        {canRemove && (
-          <button type="button" className="prescription-panel__remove" onClick={() => void removePanel()} disabled={removingPanel} aria-label={`Xóa ${prescription.label}`}>
-            {removingPanel ? <span className="spinner spinner--sm" /> : <MaterialIcon name="close" size={18} />}
-          </button>
+        {editingLabel ? (
+          <input
+            className="prescription-panel__label-input"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            onBlur={saveLabel}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+              if (e.key === "Escape") { setLabel(prescription.label); setEditingLabel(false); }
+            }}
+            disabled={renaming}
+            aria-label="Tên đơn thuốc"
+            autoFocus
+          />
+        ) : (
+          <h3>{prescription.label}</h3>
         )}
+        {renaming && <span className="spinner spinner--sm" />}
+        <div className="prescription-panel__header-actions">
+          {!editingLabel && (
+            <button type="button" className="prescription-panel__edit" onClick={() => setEditingLabel(true)} aria-label="Sửa tên đơn thuốc" title="Sửa tên đơn thuốc">
+              <MaterialIcon name="edit" size={16} />
+            </button>
+          )}
+          {canRemove && (
+            <button type="button" className="prescription-panel__remove" onClick={() => void removePanel()} disabled={removingPanel} aria-label={`Xóa ${prescription.label}`}>
+              {removingPanel ? <span className="spinner spinner--sm" /> : <MaterialIcon name="close" size={18} />}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="interaction-search__input">
