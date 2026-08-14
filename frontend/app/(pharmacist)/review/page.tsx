@@ -67,6 +67,7 @@ function ReviewContent() {
   // Chỉ hiện ĐÚNG danh sách thuốc của LẦN TRA CỨU NÀY (từ detail.explanations),
   // không phải "đơn thuốc của tôi" chung của bệnh nhân.
   const productNames = prescriptions[0]?.drugs.map((d) => d.name) ?? [];
+  const isConfirmed = reviewRequest?.trang_thai_xac_nhan === "da_xac_nhan";
 
   async function handleConfirm() {
     if (!session || !checkId) return;
@@ -74,6 +75,7 @@ function ReviewContent() {
     try {
       await submitPharmacistReview(checkId, ghiChu, session.accessToken);
       setSubmitted(true);
+      router.replace("/pharmacist-dashboard");
     } catch (err) { setError(err instanceof ApiError ? err.message : "Không xác nhận được"); }
     finally { setSubmitting(false); }
   }
@@ -160,7 +162,23 @@ function ReviewContent() {
         </div>
 
         <div className="review-layout__sidebar">
-          {checkId && (
+          {checkId && isConfirmed ? (
+            <section className="review-form panel" style={{ margin: 0 }}>
+              <div className="section__header">
+                <h2 className="section__title"><MaterialIcon name="check_circle" size={20} /> Đã xem xét</h2>
+              </div>
+              <p className="eyebrow" style={{ marginBottom: 10 }}>NHẬN XÉT ĐÃ LƯU</p>
+              <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{reviewRequest.ghi_chu || "Dược sĩ chưa để lại ghi chú."}</p>
+              {reviewRequest.thoi_gian_xac_nhan && (
+                <p className="empty-state__hint" style={{ marginTop: 14 }}>
+                  Xác nhận lúc {new Date(reviewRequest.thoi_gian_xac_nhan).toLocaleString("vi-VN")}
+                </p>
+              )}
+              <button className="secondary" style={{ marginTop: 18 }} onClick={() => router.push("/pharmacist-dashboard")}>
+                <MaterialIcon name="arrow_back" size={18} /> Về trang chủ
+              </button>
+            </section>
+          ) : checkId && (
             <section className="review-form panel" style={{ margin: 0 }}>
               <div className="section__header"><h2 className="section__title"><MaterialIcon name="edit_note" size={20} /> Ghi nhận xét chuyên môn</h2></div>
               <div className="field">

@@ -10,6 +10,7 @@ import { drugOrigins, isCrossPrescription, mergedDrugNames, type Prescription } 
 import GraphPairList, { type GraphPairItem } from "./GraphPairList";
 import InteractionGraphView, { type GraphEdgeVM, type GraphNodeVM } from "./InteractionGraphView";
 import SeverityCountStrip from "./SeverityCountStrip";
+import MediFox from "@/components/MediFox";
 
 type InteractionOverviewProps = {
   result: MedicationCheckResponse;
@@ -138,7 +139,17 @@ export default function InteractionOverview({ result, prescriptions, session, au
   const pairItems: GraphPairItem[] = mergedUnclassifiedItem ? [...classifiedPairItems, mergedUnclassifiedItem] : classifiedPairItems;
 
   return (
-    <section className="interaction-result panel">
+    <>
+      {audience === "pharmacist" && result.has_severe && (
+        <aside className="interaction-mascot-note interaction-mascot-note--alert">
+          <MediFox variant="alert" className="interaction-mascot-note__image" />
+          <div>
+            <strong>Cáo Medi nhắc bạn cần lưu ý</strong>
+            <p>Hãy đọc kỹ cảnh báo và trao đổi với bác sĩ hoặc dược sĩ trước khi dùng thuốc.</p>
+          </div>
+        </aside>
+      )}
+      <section className="interaction-result panel">
       <div className="interaction-result__header">
         <div><p className="eyebrow">ĐỒ THỊ TƯƠNG TÁC</p><h2>{title}</h2></div>
         <span className={result.has_severe ? "result-pill result-pill--danger" : result.has_unclassified ? "result-pill result-pill--unknown" : "result-pill"}>
@@ -175,6 +186,7 @@ export default function InteractionOverview({ result, prescriptions, session, au
       {pairItems.length === 0 && allNodes.length > 0 && (
         <div className="interaction-alert interaction-alert--empty"><MaterialIcon name="info" size={20} /><span>Không tìm thấy tương tác nào trong cơ sở dữ liệu cho lựa chọn hiện tại.</span></div>
       )}
-    </section>
+      </section>
+    </>
   );
 }

@@ -19,6 +19,7 @@ import {
 } from "@/lib/api";
 import { getSession } from "@/lib/auth";
 import { formatVietnameseDateTime } from "@/lib/datetime";
+import MediFox from "@/components/MediFox";
 
 export default function PatientDashboardPage() {
   const router = useRouter();
@@ -85,13 +86,19 @@ export default function PatientDashboardPage() {
 
   return (
     <main className="dashboard-page">
-      <section className="dashboard-hero" style={{ background: "linear-gradient(to right, #ffe1cc 0%, #d2e3fc 100%)", padding: "32px", borderRadius: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px" }}>
+      <section className="dashboard-hero dashboard-hero--patient">
         <div>
           <h1 className="dashboard-title" style={{ margin: 0, fontSize: "28px", color: "#1a2b4c" }}>Xin chào, {firstName}</h1>
-          <p style={{ marginTop: "8px", color: "#4a5b7c", fontSize: "15px" }}>Tóm tắt sức khỏe hôm nay của bạn có vẻ rất tốt.</p>
+          <p className="dashboard-subtitle">Hãy dành vài phút kiểm tra đơn thuốc để dùng thuốc an toàn và yên tâm hơn mỗi ngày.</p>
         </div>
+        <MediFox variant="welcome" className="dashboard-hero__mascot" alt="Cáo Medi đồng hành cùng bạn" />
 
       </section>
+
+      <aside className="mascot-tip">
+        <MediFox variant="wellbeing" className="mascot-tip__image" />
+        <div><p className="eyebrow">GỢI Ý TỪ CÁO MEDI</p><strong>Không tự ý mua hoặc dùng thuốc khi chưa có hướng dẫn của bác sĩ.</strong><span>Nếu có băn khoăn về thuốc, hãy hỏi bác sĩ hoặc dược sĩ trước khi sử dụng.</span></div>
+      </aside>
 
       {loading && <div className="loading-row"><span className="spinner" /> Đang tải hồ sơ...</div>}
       {error && <p className="error-text" role="alert">{error}</p>}
@@ -110,7 +117,7 @@ export default function PatientDashboardPage() {
 
       <section className="dashboard-section">
         <div className="dashboard-section__header"><h2>Đơn thuốc của tôi</h2><Link href="/profile?tab=prescriptions">Xem tất cả <MaterialIcon name="arrow_forward" size={17} /></Link></div>
-        {!loading && totalMedications === 0 && <div className="empty-state"><MaterialIcon name="medication" size={40} /><strong>Chưa có thuốc trong hồ sơ</strong><span>Thêm thuốc để bắt đầu kiểm tra tương tác.</span></div>}
+        {!loading && totalMedications === 0 && <div className="empty-state"><MediFox variant="empty" className="empty-state__mascot" /><strong>Chưa có thuốc trong hồ sơ</strong><span>Thêm thuốc để bắt đầu kiểm tra tương tác.</span></div>}
         {totalMedications > 0 && (
           <div className="prescription-board prescription-board--slider">
             {prescriptions.filter((p) => p.medications.length > 0).map((p) => (

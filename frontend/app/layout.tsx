@@ -1,4 +1,5 @@
 import "./globals.css";
+import FrontendBootGate from "@/components/FrontendBootGate";
 
 export const metadata = {
   title: "MediCheck",
@@ -35,7 +36,10 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <FrontendBootGate />
+      </body>
     </html>
   );
 }
