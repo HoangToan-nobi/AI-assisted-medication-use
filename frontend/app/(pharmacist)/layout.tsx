@@ -5,6 +5,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { getInitials } from "@/lib/format";
 import { clearSession, getSession, type Session } from "@/lib/auth";
+import BrandLogo from "@/components/BrandLogo";
+import MaterialIcon from "@/components/MaterialIcon";
 
 export default function PharmacistLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -30,29 +32,30 @@ export default function PharmacistLayout({ children }: { children: React.ReactNo
   if (!checked || !session) return null;
 
   return (
-    <>
-      <nav className="nav">
-        <span className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            🛡️
-          </span>
-          MedGuard AI
-        </span>
-        <div className="nav-links">
-          <Link href="/patients" className={`nav-link ${pathname === "/patients" ? "active" : ""}`}>
-            Bệnh nhân phụ trách
-          </Link>
-        </div>
-        <span className="spacer" />
-        <div className="nav-user">
-          <span className="avatar">{getInitials(session.hoTen)}</span>
-          <span className="nav-user-name">{session.hoTen}</span>
-          <button className="ghost" onClick={handleLogout}>
-            Đăng xuất
+    <div className="app-shell app-shell--with-nav">
+      <header className="patient-header">
+        <div className="patient-header__actions" style={{ marginLeft: "auto" }}>
+          <span className="patient-header__name" title="Hồ sơ dược sĩ">{session.hoTen}</span>
+          <button className="icon-btn" onClick={handleLogout} aria-label="Đăng xuất" title="Đăng xuất">
+            <MaterialIcon name="logout" size={20} />
           </button>
         </div>
+      </header>
+      <div className="app-content">{children}</div>
+      <nav className="bottom-nav sidebar" aria-label="Điều hướng chính">
+        <div style={{ padding: "16px 16px 32px 0px" }}>
+          <BrandLogo size="sm" />
+        </div>
+        <Link href="/pharmacist-dashboard" className={`bottom-nav__item ${pathname === "/pharmacist-dashboard" ? "bottom-nav__item--active" : ""}`}>
+          <MaterialIcon name="home" size={22} filled={pathname === "/pharmacist-dashboard"} />
+          <span>Trang chủ</span>
+        </Link>
+        <Link href="/pharmacist-lookup" className={`bottom-nav__item ${pathname === "/pharmacist-lookup" ? "bottom-nav__item--active" : ""}`}>
+          <MaterialIcon name="analytics" size={22} filled={pathname === "/pharmacist-lookup"} />
+          <span>Tra cứu tương tác</span>
+        </Link>
       </nav>
-      {children}
-    </>
+      <span className="sr-only">Đang ở trang {pathname}</span>
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-version: "3.8"
+
 
 services:
   backend:
@@ -11,6 +11,8 @@ services:
       - .env
     volumes:
       - ./data:/app/data
+      - ./src:/app/src
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -22,10 +24,16 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: builder
     ports:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
     depends_on:
       - backend
     restart: unless-stopped

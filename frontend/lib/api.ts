@@ -9,11 +9,59 @@ export type InteractionExplanation = {
   medication_b_id?: string;
   muc_do?: Severity;
   giai_thich: string;
+  // Bản giọng điệu khoa học/chuyên nghiệp dành cho dược sĩ - chỉ có mặt khi gọi qua
+  // endpoint/luồng dành cho dược sĩ (giống xu_tri/thay_the/mo_ta bên dưới).
+  giai_thich_duoc_si?: string;
   nguon_trich_dan: string;
   // Chỉ có mặt khi gọi qua endpoint dành cho dược sĩ (GET /pharmacist/reviews/{id}).
   xu_tri?: string;
   thay_the_a?: string;
   thay_the_b?: string;
+  // Mô tả khoa học nguyên văn từ CSDL DDInter 2.0 (không qua AI diễn giải lại) -
+  // cũng chỉ dược sĩ mới thấy, giống xu_tri/thay_the.
+  mo_ta?: string;
+  // Chỉ có ở luồng kiểm tra theo tên thuốc (products/check) - hoạt chất gốc và
+  // danh sách tên thuốc (trong lần kiểm tra hiện tại) chứa hoạt chất đó, dùng để
+  // gộp (rollup) cạnh ở cấp thuốc trên đồ thị tương tác.
+  hoat_chat_a?: string;
+  hoat_chat_b?: string;
+  san_pham_a?: string[];
+  san_pham_b?: string[];
+};
+
+// Giải thích cấp thuốc (thuốc-với-thuốc) do backend tự tổng hợp + sinh riêng - chỉ
+// nhắc tên 2 thuốc, không lộ tên hoạt chất bên trong (khác InteractionExplanation).
+export type ProductLevelExplanation = {
+  thuoc_a: string;
+  thuoc_b: string;
+  muc_do?: Severity;
+  giai_thich: string;
+  giai_thich_duoc_si?: string;
+  nguon_trich_dan: string;
+};
+
+// Giải thích cấp đơn thuốc (đơn-với-đơn) - don_a_index/don_b_index là chỉ số đơn
+// theo đúng thứ tự mảng "prescriptions" đã gửi lên trong request.
+export type PrescriptionLevelExplanation = {
+  don_a: string;
+  don_b: string;
+  don_a_index: number;
+  don_b_index: number;
+  muc_do?: Severity;
+  giai_thich: string;
+  giai_thich_duoc_si?: string;
+  nguon_trich_dan: string;
+};
+
+// Đoạn tóm tắt tổng quan toàn bộ lần phân tích (chỉ luồng bệnh nhân) - LLM sinh 1
+// đoạn dựa trên thống kê + toàn bộ giải thích cấp thuốc-thuốc tìm được.
+export type InteractionOverviewExplanation = {
+  giai_thich: string;
+  so_cap_nang: number;
+  so_cap_trung_binh: number;
+  so_cap_nhe: number;
+  so_cap_chua_phan_loai: number;
+  tong_so_cap: number;
 };
 
 export type MedicationCheckResponse = {
@@ -22,6 +70,12 @@ export type MedicationCheckResponse = {
   explanations: InteractionExplanation[];
   has_severe: boolean;
   has_unclassified: boolean;
+  // Chỉ có ở luồng kiểm tra theo tên thuốc (checkProducts/...).
+  unknown_products?: string[];
+  no_interaction_data_products?: string[];
+  product_explanations?: ProductLevelExplanation[];
+  prescription_explanations?: PrescriptionLevelExplanation[];
+  overview?: InteractionOverviewExplanation;
 };
 
 // Kết quả thô từ GET /pharmacist/reviews/{id} - chính là state agent đầy đủ
@@ -31,7 +85,12 @@ export type AgentCheckResult = {
   explanations?: InteractionExplanation[];
   has_severe?: boolean;
   has_unclassified?: boolean;
+  product_explanations?: ProductLevelExplanation[];
+  prescription_explanations?: PrescriptionLevelExplanation[];
 };
+
+// Payload gửi lên các endpoint /products/check - 1 phần tử = 1 đơn thuốc.
+export type PrescriptionCheckInput = { label: string; products: string[] };
 
 export type AuthResponse = {
   access_token: string;
@@ -42,8 +101,8 @@ export type AuthResponse = {
 
 export type MedicationItem = {
   id: string;
-  medication_id: string;
-  ten_chuan_hoa: string;
+  product_id: string;
+  ten_thuoc: string;
   ngay_bat_dau: string | null;
   ngay_ket_thuc: string | null;
 };
@@ -51,6 +110,11 @@ export type MedicationItem = {
 export type MedicationSearchResult = {
   id: string;
   ten_chuan_hoa: string;
+};
+
+export type ProductSearchResult = {
+  id: string;
+  ten_thuoc: string;
 };
 
 export type PatientSummary = {
@@ -144,6 +208,21 @@ export async function searchMedications(
   );
 }
 
+export async function searchGuestMedications(q: string): Promise<MedicationSearchResult[]> {
+  return request<MedicationSearchResult[]>(`/api/v1/guest/medications/search?q=${encodeURIComponent(q)}`);
+}
+
+export async function searchProducts(q: string, token: string): Promise<ProductSearchResult[]> {
+  return request<ProductSearchResult[]>(
+    `/api/v1/products/search?q=${encodeURIComponent(q)}`,
+    { token }
+  );
+}
+
+export async function searchGuestProducts(q: string): Promise<ProductSearchResult[]> {
+  return request<ProductSearchResult[]>(`/api/v1/guest/products/search?q=${encodeURIComponent(q)}`);
+}
+
 export async function listPatientMedications(
   patientId: string,
   token: string
@@ -153,13 +232,13 @@ export async function listPatientMedications(
 
 export async function addPatientMedication(
   patientId: string,
-  medicationName: string,
+  productName: string,
   token: string
 ): Promise<MedicationItem> {
   return request<MedicationItem>(`/api/v1/patients/${patientId}/medications`, {
     method: "POST",
     token,
-    body: JSON.stringify({ medication_name: medicationName }),
+    body: JSON.stringify({ product_name: productName }),
   });
 }
 
@@ -187,6 +266,33 @@ export async function checkMedications(
   });
 }
 
+export async function checkGuestMedications(medications: string[]): Promise<MedicationCheckResponse> {
+  return request<MedicationCheckResponse>("/api/v1/guest/medications/check", {
+    method: "POST",
+    body: JSON.stringify({ medications }),
+  });
+}
+
+export async function checkProducts(
+  prescriptions: PrescriptionCheckInput[],
+  token: string
+): Promise<MedicationCheckResponse> {
+  return request<MedicationCheckResponse>("/api/v1/products/check", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ prescriptions }),
+  });
+}
+
+export async function checkGuestProducts(
+  prescriptions: PrescriptionCheckInput[]
+): Promise<MedicationCheckResponse> {
+  return request<MedicationCheckResponse>("/api/v1/guest/products/check", {
+    method: "POST",
+    body: JSON.stringify({ prescriptions }),
+  });
+}
+
 export async function listPatientChecks(
   patientId: string,
   token: string
@@ -204,20 +310,63 @@ export async function getPatientCheckDetail(
   });
 }
 
-// ---- Dược sĩ ----
-
-export async function listPharmacistPatients(
-  pharmacistId: string,
-  token: string
-): Promise<PatientSummary[]> {
-  return request<PatientSummary[]>(`/api/v1/pharmacist/${pharmacistId}/patients`, { token });
-}
-
-export async function listPatientChecksForPharmacist(
+export async function deleteAllPatientChecks(
   patientId: string,
   token: string
-): Promise<InteractionCheckSummary[]> {
-  return request<InteractionCheckSummary[]>(`/api/v1/pharmacist/patients/${patientId}/checks`, {
+): Promise<void> {
+  return request<void>(`/api/v1/patients/${patientId}/checks`, {
+    method: "DELETE",
+    token,
+  });
+}
+
+export async function deletePatientCheck(
+  patientId: string,
+  checkId: string,
+  token: string
+): Promise<void> {
+  return request<void>(`/api/v1/patients/${patientId}/checks/${checkId}`, {
+    method: "DELETE",
+    token,
+  });
+}
+
+// ---- Dược sĩ ----
+
+export interface PharmacistSummary {
+  id: string;
+  ho_ten: string;
+  noi_cong_tac?: string;
+}
+
+export async function getPharmacists(token: string): Promise<PharmacistSummary[]> {
+  return request<PharmacistSummary[]>("/api/v1/pharmacists", { token });
+}
+
+export async function requestReview(
+  checkId: string,
+  pharmacistId: string,
+  token: string
+): Promise<{ message: string }> {
+  return request<{ message: string }>(`/api/v1/checks/${checkId}/pharmacists/${pharmacistId}/request_review`, {
+    method: "POST",
+    token,
+  });
+}
+
+export interface ReviewRequestSummary {
+  check_id: string;
+  patient_id: string;
+  patient_name: string;
+  thoi_gian_kiem_tra: string;
+  co_canh_bao_nang: boolean;
+  trang_thai_xac_nhan: string;
+}
+
+export async function listPharmacistRequests(
+  token: string
+): Promise<ReviewRequestSummary[]> {
+  return request<ReviewRequestSummary[]>(`/api/v1/pharmacist/requests`, {
     token,
   });
 }
@@ -238,5 +387,59 @@ export async function submitPharmacistReview(
     method: "POST",
     token,
     body: JSON.stringify({ interaction_check_id: checkId, ghi_chu: ghiChu }),
+  });
+}
+
+export async function checkMedicationsAsPharmacist(
+  medications: string[],
+  token: string
+): Promise<MedicationCheckResponse> {
+  return request<MedicationCheckResponse>("/api/v1/pharmacist/medications/check", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ medications }),
+  });
+}
+
+export async function checkProductsAsPharmacist(
+  prescriptions: PrescriptionCheckInput[],
+  token: string
+): Promise<MedicationCheckResponse> {
+  return request<MedicationCheckResponse>("/api/v1/pharmacist/products/check", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ prescriptions }),
+  });
+}
+
+// ---- Hồ sơ cá nhân bệnh nhân ----
+
+export type PatientProfileInfo = {
+  ho_ten: string | null;
+  ngay_sinh: string | null;
+  gioi_tinh: string | null;
+  can_nang: number | null;
+  chieu_cao: number | null;
+  benh_nen_ghi_chu: string | null;
+  di_ung_thuoc: string | null;
+  tinh_trang_khac: string | null;
+};
+
+export async function getPatientProfile(
+  patientId: string,
+  token: string
+): Promise<PatientProfileInfo> {
+  return request<PatientProfileInfo>(`/api/v1/patients/${patientId}/profile`, { token });
+}
+
+export async function updatePatientProfile(
+  patientId: string,
+  data: Partial<PatientProfileInfo>,
+  token: string
+): Promise<PatientProfileInfo> {
+  return request<PatientProfileInfo>(`/api/v1/patients/${patientId}/profile`, {
+    method: "PATCH",
+    token,
+    body: JSON.stringify(data),
   });
 }
