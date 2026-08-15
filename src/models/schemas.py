@@ -119,6 +119,17 @@ class MedicationCheckResponse(BaseModel):
     # trong CSDL, hoặc tìm thấy nhưng chưa có hoạt chất nào khớp DDInter để tra tương tác.
     unknown_products: list[str] = Field(default_factory=list)
     no_interaction_data_products: list[str] = Field(default_factory=list)
+    # Toàn bộ tên thuốc đã nhập ở lần kiểm tra này (kể cả thuốc không có tương tác
+    # với thuốc nào khác) - dùng để vẽ đủ node trên đồ thị khi xem lại lịch sử/dược
+    # sĩ review, thay vì suy ra danh sách thuốc từ các cặp trong explanations (sẽ
+    # thiếu thuốc không có cặp tương tác nào).
+    checked_products: list[str] = Field(default_factory=list)
+    # Đúng cấu trúc đơn thuốc gốc đã gửi lên (label + danh sách thuốc mỗi đơn), theo
+    # đúng thứ tự khớp với don_a_index/don_b_index của prescription_explanations -
+    # để xem lại lịch sử/dược sĩ review vẫn dựng được đúng "bàn cân" nhiều đơn như
+    # lúc kiểm tra, thay vì gộp hết thuốc vào 1 đơn ảo duy nhất (mất khả năng lọc
+    # tương tác GIỮA các đơn). Rỗng ở dữ liệu lịch sử cũ lưu trước khi field này tồn tại.
+    prescriptions: list[PrescriptionInput] = Field(default_factory=list)
     # Giải thích riêng cấp thuốc (thuốc-với-thuốc) và cấp đơn thuốc (đơn-với-đơn),
     # chỉ nhắc tên ở đúng cấp đó - KHÔNG lấy nguyên văn giải thích cấp hoạt chất
     # trong `explanations` như trước. prescription_explanations chỉ khác rỗng ở
@@ -128,11 +139,24 @@ class MedicationCheckResponse(BaseModel):
     # Tóm tắt tổng quan toàn bộ lần phân tích - sinh cho cả luồng bệnh nhân và dược
     # sĩ, khác nhau ở giọng điệu (xem build_overview_explanation).
     overview: dict | None = None
+    # Tương tác thuốc-thực phẩm/thuốc-bệnh nền (DDInter 2.0 DFI/DDSI) - thông tin
+    # CHUNG theo từng hoạt chất đang kiểm tra, không lọc theo hồ sơ bệnh nền cá nhân
+    # (xem food_disease_explain.py). mo_ta_dich/xu_tri_dich chỉ dược sĩ mới thấy.
+    food_interactions: list[dict] = Field(default_factory=list)
+    disease_interactions: list[dict] = Field(default_factory=list)
+    # Câu liệt kê cố định (không qua LLM) tên thực phẩm/bệnh nền cần lưu ý, ghép thêm
+    # vào bảng tóm tắt tổng quan sau đoạn overview.giai_thich do LLM sinh.
+    canh_bao_thuc_pham_benh_nen: str | None = None
     # Ghi chú dược sĩ để lại khi xác nhận lần kiểm tra này (PharmacistReview.ghi_chu)
     # - chỉ có ở GET /patients/{id}/checks/{check_id} khi đã có dược sĩ xác nhận,
     # None ở mọi trường hợp khác (lần kiểm tra mới chạy, guest, chưa ai xác nhận).
     ghi_chu_duoc_si: str | None = None
     ten_duoc_si_xac_nhan: str | None = None
+    # Câu hỏi bệnh nhân đã gửi kèm yêu cầu xét duyệt (nếu có) và câu trả lời tương
+    # ứng của dược sĩ - cùng điều kiện hiển thị với ghi_chu_duoc_si ở trên (chỉ có
+    # ở getPatientCheckDetail khi đã có dược sĩ xác nhận).
+    cau_hoi_benh_nhan: str | None = None
+    cau_tra_loi_duoc_si: str | None = None
 
 
 class InteractionCheckSummary(BaseModel):
@@ -171,6 +195,10 @@ class ReviewRequestSummary(BaseModel):
     # ở chế độ chỉ xem mà không cần tạo một lượt xác nhận mới.
     ghi_chu: str | None = None
     thoi_gian_xac_nhan: datetime | None = None
+    # Câu hỏi bệnh nhân gửi kèm (không bắt buộc) và câu trả lời tương ứng của dược
+    # sĩ - tách riêng khỏi ghi_chu (nhận xét chung).
+    cau_hoi: str | None = None
+    cau_tra_loi: str | None = None
 
 
 class RequestReviewRequest(BaseModel):
@@ -182,11 +210,16 @@ class RequestReviewRequest(BaseModel):
     ten_nguoi_duoc_kiem_tra: str | None = Field(default=None, max_length=255)
     ngay_sinh_nhap_tay: date | None = None
     ghi_chu_nhap_tay: str | None = Field(default=None, max_length=2000)
+    # Câu hỏi muốn hỏi dược sĩ về lần kiểm tra này - không bắt buộc.
+    cau_hoi: str | None = Field(default=None, max_length=2000)
 
 
 class PharmacistReviewRequest(BaseModel):
     interaction_check_id: str = Field(..., min_length=1)
     ghi_chu: str = Field(default="", max_length=2000)
+    # Câu trả lời cho cau_hoi bệnh nhân đã gửi (nếu có) - không bắt buộc, vì bệnh
+    # nhân có thể không hỏi gì cả lúc gửi yêu cầu.
+    cau_tra_loi: str | None = Field(default=None, max_length=2000)
 
 
 class PharmacistReviewResponse(BaseModel):
@@ -194,6 +227,7 @@ class PharmacistReviewResponse(BaseModel):
     interaction_check_id: str
     trang_thai_xac_nhan: str
     ghi_chu: str
+    cau_tra_loi: str | None = None
 
 
 # ---- Hồ sơ cá nhân dược sĩ ----

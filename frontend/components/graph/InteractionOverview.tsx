@@ -5,23 +5,47 @@ import MaterialIcon from "@/components/MaterialIcon";
 import PharmacistReviewPrompt from "@/components/PharmacistReviewPrompt";
 import type { MedicationCheckResponse, Severity } from "@/lib/api";
 import type { Session } from "@/lib/auth";
-import { buildPrescriptionGraph, buildProductGraph, withDataOnly } from "@/lib/interactionGraph";
-import { drugOrigins, isCrossPrescription, mergedDrugNames, type Prescription } from "@/lib/prescription";
-import GraphPairList, { type GraphPairItem } from "./GraphPairList";
+import { assignGroupColors, buildPrescriptionGraph, buildProductGraph, withDataOnly } from "@/lib/interactionGraph";
+import { drugOrigins, firstPrescriptionIndex, isCrossPrescription, mergedDrugNames, type Prescription } from "@/lib/prescription";
+import type { GraphPairItem } from "./GraphPairList";
+import InteractionDetailTabs from "./InteractionDetailTabs";
 import InteractionGraphView, { type GraphEdgeVM, type GraphNodeVM } from "./InteractionGraphView";
 import SeverityCountStrip from "./SeverityCountStrip";
 import MediFox from "@/components/MediFox";
 
+// Chỉ cần đúng các field này để dựng đồ thị/tóm tắt - để component dùng chung
+// được cho cả MedicationCheckResponse (bệnh nhân) lẫn AgentCheckResult (dược sĩ
+// xem lại 1 yêu cầu xét duyệt cụ thể, không có interaction_check_id vì endpoint
+// GET /pharmacist/reviews/{id} trả nguyên state agent, không kèm field đó).
+export type InteractionOverviewResult = Pick<
+  MedicationCheckResponse,
+  | "explanations"
+  | "has_severe"
+  | "has_unclassified"
+  | "product_explanations"
+  | "overview"
+  | "food_interactions"
+  | "disease_interactions"
+  | "canh_bao_thuc_pham_benh_nen"
+> & {
+  interaction_check_id?: string;
+};
+
 type InteractionOverviewProps = {
-  result: MedicationCheckResponse;
+  result: InteractionOverviewResult;
   prescriptions: Prescription[];
   // Mở lại popup gợi ý nhờ dược sĩ ở nơi khác (nếu có).
   session: Session | null;
   // "pharmacist": bàn cân tra cứu độc lập của dược sĩ (pharmacist-lookup) - ưu
-  // tiên bản giọng điệu khoa học/chuyên nghiệp (giai_thich_duoc_si) khi có, và ẩn
-  // hẳn khung "Nhờ dược sĩ xác nhận" (dành cho bệnh nhân, vô nghĩa với chính dược
-  // sĩ). Mặc định "patient" - đúng hành vi cũ.
+  // tiên bản giọng điệu khoa học/chuyên nghiệp (giai_thich_duoc_si) khi có. Mặc
+  // định "patient" - đúng hành vi cũ.
   audience?: "patient" | "pharmacist";
+  // Khung "Nhờ dược sĩ xác nhận" - mặc định hiện đúng khi audience="patient" (hành
+  // vi cũ). Cho phép tắt riêng dù audience="patient", dùng khi DƯỢC SĨ xem lại 1
+  // yêu cầu xét duyệt cụ thể (trang review): vẫn muốn giọng văn/nội dung y hệt
+  // bệnh nhân (audience="patient" mặc định) nhưng khung mời "nhờ dược sĩ xác nhận"
+  // vô nghĩa với chính dược sĩ.
+  showReviewPrompt?: boolean;
 };
 
 function pickText(item: { giai_thich: string; giai_thich_duoc_si?: string } | undefined, audience: "patient" | "pharmacist"): string {
@@ -30,14 +54,21 @@ function pickText(item: { giai_thich: string; giai_thich_duoc_si?: string } | un
 }
 
 // Kết quả cho luồng bệnh nhân: không còn phân cấp drill-down (đơn -> thuốc ->
-// hoạt chất) như InteractionGraphExplorer (vẫn dùng cho dược sĩ) - chỉ còn 1 đồ
-// thị (nút = đơn thuốc nếu so nhiều đơn, ngược lại = thuốc) + 1 đoạn tóm tắt tổng
-// quan do LLM sinh (result.overview), và 1 nút bấm để bung/ẩn danh sách chi tiết
-// TỪNG CẶP THUỐC-THUỐC (không còn hoạt chất-hoạt chất hay đơn-đơn nữa). Cũng dùng
-// lại cho bàn cân tra cứu độc lập của dược sĩ (audience="pharmacist").
-export default function InteractionOverview({ result, prescriptions, session, audience = "patient" }: InteractionOverviewProps) {
+// hoạt chất) như InteractionGraphExplorer (không còn nơi nào dùng, giữ lại nếu
+// cần khôi phục drill-down sau này) - chỉ còn 1 đồ thị (nút = đơn thuốc nếu so
+// nhiều đơn, ngược lại = thuốc) + 1 đoạn tóm tắt tổng quan do LLM sinh
+// (result.overview), và 1 nút bấm để bung/ẩn danh sách chi tiết TỪNG CẶP
+// THUỐC-THUỐC (không còn hoạt chất-hoạt chất hay đơn-đơn nữa). Cũng dùng lại cho
+// bàn cân tra cứu độc lập của dược sĩ (audience="pharmacist") và trang dược sĩ
+// xem xét 1 yêu cầu xét duyệt cụ thể (showReviewPrompt={false}, audience mặc
+// định "patient" để giọng văn y hệt bệnh nhân).
+export default function InteractionOverview({ result, prescriptions, session, audience = "patient", showReviewPrompt = audience === "patient" }: InteractionOverviewProps) {
   const boardMode = prescriptions.length > 1;
   const [expanded, setExpanded] = useState(false);
+  // Chỉ có ý nghĩa khi boardMode: mặc định đồ thị gộp theo ĐƠN THUỐC (như cũ) -
+  // bấm nút mới bung ra xem chi tiết cấp THUỐC giữa các đơn (mỗi đơn 1 màu, có chú
+  // thích). Không reset về false khi đổi kết quả - hành vi giống hệt "expanded".
+  const [showDrugLevel, setShowDrugLevel] = useState(false);
 
   const origins = useMemo(() => drugOrigins(prescriptions), [prescriptions]);
   const dataExplanations = useMemo(() => withDataOnly(result.explanations), [result]);
@@ -66,13 +97,28 @@ export default function InteractionOverview({ result, prescriptions, session, au
     return map;
   }, [result]);
 
-  const title = boardMode ? "Tương tác giữa các đơn thuốc" : "Tương tác giữa các thuốc";
+  // Board mode có 2 chế độ xem đồ thị: mặc định theo ĐƠN (showDrugLevel=false),
+  // bấm nút "Xem chi tiết theo thuốc" chuyển sang theo THUỐC (showDrugLevel=true) -
+  // vẫn CHỈ gồm cạnh GIỮA các đơn khác nhau (productEdges đã lọc sẵn ở trên), mỗi
+  // node thuốc tô theo màu của đơn chứa nó (drugLevelGroups), có chú thích màu.
+  const showingPrescriptionNodes = boardMode && !showDrugLevel;
+  const title = boardMode
+    ? (showDrugLevel ? "Tương tác thuốc giữa các đơn thuốc" : "Tương tác giữa các đơn thuốc")
+    : "Tương tác giữa các thuốc";
 
-  const allNodes: GraphNodeVM[] = boardMode
+  const drugLevelGroups = useMemo(
+    () => (boardMode ? assignGroupColors(prescriptions.map((p, i) => ({ id: `rx-${i}`, label: p.label }))) : []),
+    [boardMode, prescriptions]
+  );
+  const graphGroups = boardMode && showDrugLevel ? drugLevelGroups : [];
+
+  const allNodes: GraphNodeVM[] = showingPrescriptionNodes
     ? prescriptions.map((p, i) => ({ id: `rx-${i}`, label: p.label, groupId: `rx-${i}` }))
+    : boardMode
+    ? mergedDrugNames(prescriptions).map((name) => ({ id: name, label: name, groupId: `rx-${firstPrescriptionIndex(origins, name)}` }))
     : mergedDrugNames(prescriptions).map((name) => ({ id: name, label: name, groupId: name }));
 
-  const allEdges: GraphEdgeVM[] = boardMode
+  const allEdges: GraphEdgeVM[] = showingPrescriptionNodes
     ? prescriptionEdges.map((e) => ({
         id: `rx-${e.prescriptionAIndex}::rx-${e.prescriptionBIndex}`,
         sourceId: `rx-${e.prescriptionAIndex}`,
@@ -138,6 +184,10 @@ export default function InteractionOverview({ result, prescriptions, session, au
   } : null;
   const pairItems: GraphPairItem[] = mergedUnclassifiedItem ? [...classifiedPairItems, mergedUnclassifiedItem] : classifiedPairItems;
 
+  // Tổng số mục ở nút bấm bung/ẩn - gộp cả 3 loại (thuốc-thuốc/thực phẩm/bệnh nền),
+  // khớp đúng số tab sẽ hiện trong InteractionDetailTabs bên dưới.
+  const totalDetailCount = rawPairItems.length + (result.food_interactions?.length ?? 0) + (result.disease_interactions?.length ?? 0);
+
   return (
     <>
       {audience === "pharmacist" && result.has_severe && (
@@ -157,7 +207,13 @@ export default function InteractionOverview({ result, prescriptions, session, au
         </span>
       </div>
 
-      <InteractionGraphView nodes={nodes} edges={edges} groups={[]} ariaLabel={title} />
+      {boardMode && (
+        <button type="button" className="interaction-pairs__toggle interaction-graph-level-toggle" onClick={() => setShowDrugLevel((v) => !v)}>
+          <MaterialIcon name={showDrugLevel ? "list_alt" : "medication"} size={17} />
+          {showDrugLevel ? "Xem theo đơn thuốc" : "Xem chi tiết theo thuốc"}
+        </button>
+      )}
+      <InteractionGraphView nodes={nodes} edges={edges} groups={graphGroups} ariaLabel={title} />
 
       <SeverityCountStrip edges={productEdges} />
 
@@ -165,25 +221,33 @@ export default function InteractionOverview({ result, prescriptions, session, au
         <div className="interaction-overview__summary">
           <p className="eyebrow">TÓM TẮT TỔNG QUAN</p>
           <p>{result.overview.giai_thich}</p>
+          {/* Câu liệt kê cố định (không qua LLM) thực phẩm cần tránh/bệnh nền cần
+              thận trọng - backend ghép sẵn thành 1 câu, xem build_food_disease_warning_line. */}
+          {result.canh_bao_thuc_pham_benh_nen && <p>{result.canh_bao_thuc_pham_benh_nen}</p>}
         </div>
       )}
 
-      {audience === "patient" && (
+      {showReviewPrompt && result.interaction_check_id && (
         <section className="pharmacist-review-section">
           <PharmacistReviewPrompt checkId={result.interaction_check_id} token={session?.accessToken} patientId={session?.userId} />
         </section>
       )}
 
-      {rawPairItems.length > 0 && (
+      {totalDetailCount > 0 && (
         <button type="button" className="interaction-pairs__toggle" onClick={() => setExpanded((v) => !v)}>
           <MaterialIcon name={expanded ? "visibility_off" : "visibility"} size={17} />
-          {expanded ? "Ẩn chi tiết tương tác" : `Xem chi tiết ${rawPairItems.length} cặp tương tác thuốc`}
+          {expanded ? "Ẩn chi tiết" : "Xem chi tiết"}
         </button>
       )}
-      {expanded && pairItems.length > 0 && (
-        <GraphPairList items={pairItems} />
+      {expanded && (
+        <InteractionDetailTabs
+          drugPairItems={pairItems}
+          foodItems={result.food_interactions ?? []}
+          diseaseItems={result.disease_interactions ?? []}
+          audience={audience}
+        />
       )}
-      {pairItems.length === 0 && allNodes.length > 0 && (
+      {totalDetailCount === 0 && allNodes.length > 0 && (
         <div className="interaction-alert interaction-alert--empty"><MaterialIcon name="info" size={20} /><span>Không tìm thấy tương tác nào trong cơ sở dữ liệu cho lựa chọn hiện tại.</span></div>
       )}
       </section>

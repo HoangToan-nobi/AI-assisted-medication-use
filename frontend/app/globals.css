@@ -1196,6 +1196,19 @@ button.primary:hover,
   margin-top: 10px;
 }
 
+.alert-detail-tabs {
+  margin-top: 10px;
+}
+
+.alert-detail-tabs__nav {
+  margin-bottom: 0;
+}
+
+.alert-detail-tabs .alert-science-box,
+.alert-detail-tabs .alert-action-box {
+  margin-top: 8px;
+}
+
 .severity-nang {
   border-left-color: var(--severe);
 }
@@ -3396,27 +3409,18 @@ button,
 .pharmacist-prompt__name {
   color: #1a2b4c;
   font-weight: 600;
-  overflow-wrap: break-word;
-}
-.pharmacist-prompt__place {
-  display: flex;
-  align-items: flex-start;
-  gap: 4px;
-  margin-top: 4px;
-  color: #64707e;
-  font-size: 12px;
-  overflow-wrap: break-word;
-}
-.pharmacist-prompt__place .material-symbols-outlined {
-  flex-shrink: 0;
-  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .pharmacist-prompt__bio {
   margin-top: 4px;
   color: #64707e;
   font-size: 12px;
   line-height: 16px;
-  overflow-wrap: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .pharmacist-prompt__attach-toggle {
   display: flex;
@@ -3815,6 +3819,9 @@ button,
 }
 .interaction-pairs__toggle:hover {
   background: #dbe8fb;
+}
+.interaction-detail-tabs__nav {
+  margin-top: 4px;
 }
 .interaction-workspace--board {
   grid-template-columns: minmax(0, 1fr);

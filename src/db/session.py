@@ -32,11 +32,16 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     _ensure_column("patient_medications", "prescription_id", "TEXT REFERENCES patient_prescriptions(id)")
     _ensure_column("users", "mo_ta_ngan", "TEXT")
+    _ensure_column("users", "noi_cong_tac", "VARCHAR(255)")
     _ensure_column("pharmacist_reviews", "gui_kem_ho_so", "BOOLEAN DEFAULT 0")
     _ensure_column("pharmacist_reviews", "ten_nguoi_duoc_kiem_tra", "TEXT")
     _ensure_column("pharmacist_reviews", "ngay_sinh_nhap_tay", "DATE")
     _ensure_column("pharmacist_reviews", "ghi_chu_nhap_tay", "TEXT")
     _ensure_column("pharmacist_reviews", "thoi_gian_xac_nhan", "DATETIME")
+    _ensure_column("pharmacist_reviews", "cau_hoi", "TEXT")
+    _ensure_column("pharmacist_reviews", "cau_tra_loi", "TEXT")
+    _ensure_column("food_interactions", "thuc_pham_vi", "VARCHAR(255)")
+    _ensure_column("disease_interactions", "ten_benh_vi", "VARCHAR(255)")
 
 
 def get_db() -> Session:

@@ -76,6 +76,16 @@ export function drugOrigins(prescriptions: Prescription[]): Map<string, Set<numb
   return origins;
 }
 
+// Chỉ số đơn ĐẦU TIÊN (nhỏ nhất) chứa thuốc này - dùng để gán màu nhóm cho node cấp
+// thuốc trên đồ thị nhiều đơn (mỗi đơn 1 màu cố định, xem assignGroupColors trong
+// interactionGraph.ts). 1 thuốc hiếm khi thuộc nhiều đơn cùng lúc, nhưng nếu có thì
+// quy ước tô theo đơn có chỉ số nhỏ nhất để nhất quán giữa các lần render.
+export function firstPrescriptionIndex(origins: Map<string, Set<number>>, drugName: string): number {
+  const set = origins.get(drugName.toLowerCase());
+  if (!set || set.size === 0) return 0;
+  return Math.min(...set);
+}
+
 // Một cặp tương tác được coi là "giữa các đơn" trừ khi cả hai thuốc chỉ xuất hiện, và cùng xuất hiện, trong đúng 1 đơn thuốc.
 export function isCrossPrescription(origins: Map<string, Set<number>>, nameA?: string, nameB?: string): boolean {
   if (!nameA || !nameB) return false;

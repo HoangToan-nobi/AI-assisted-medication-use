@@ -6,10 +6,12 @@ from src.services.tone_prompt import (
     SAFETY_RULES,
     TONE_PATIENT_MARKER,
     TONE_PHARMACIST_MARKER,
+    TRANSLATION_MARKER,
     parse_tones,
+    split_translation_block,
 )
 
-_TRANSLATION_MARKER = "[BẢN_DỊCH]"
+_TRANSLATION_FIELDS = [("mô tả:", "mo_ta_dich"), ("xử trí:", "xu_tri_dich")]
 
 _SYSTEM_PROMPT = (
     "Bạn là một dược sĩ đang giải thích một tương tác giữa HAI HOẠT CHẤT cụ thể, "
@@ -32,7 +34,7 @@ _SYSTEM_PROMPT = (
     "khoa nằm ngoài đó. Diễn đạt tự nhiên, đa dạng cách nói giữa các lần trả lời — "
     "tránh dùng đi dùng lại một câu công thức y hệt.\n\n"
     f"{FORMAT_INSTRUCTIONS}\n\n{SAFETY_RULES}\n\n"
-    f"Sau 2 phần trên, thêm PHẦN THỨ BA bắt đầu bằng đúng dòng {_TRANSLATION_MARKER} "
+    f"Sau 2 phần trên, thêm PHẦN THỨ BA bắt đầu bằng đúng dòng {TRANSLATION_MARKER} "
     "— phần này KHÔNG áp dụng các quy tắc an toàn bên trên vì đây là BẢN DỊCH NGUYÊN "
     "VĂN, không phải diễn giải lại: dịch sát nghĩa, đầy đủ, KHÔNG rút gọn, KHÔNG "
     "thêm/bớt thông tin, từ tiếng Anh sang tiếng Việt đúng 'Mô tả CSDL' và 'Xử trí "
@@ -40,25 +42,6 @@ _SYSTEM_PROMPT = (
     "Mô tả: <bản dịch nguyên văn Mô tả CSDL>\n"
     "Xử trí: <bản dịch nguyên văn Xử trí CSDL, để trống nếu tin nhắn không có Xử trí CSDL>"
 )
-
-
-def _split_translation(raw: str) -> tuple[str, str | None, str | None]:
-    """Tách phần dịch nguyên văn (bắt đầu bằng _TRANSLATION_MARKER, do LLM luôn đặt
-    SAU marker dược sĩ) ra khỏi phần còn lại TRƯỚC khi gọi parse_tones - nếu không
-    tách trước, parse_tones sẽ dính luôn đoạn dịch vào cuối bản dược sĩ vì nó chỉ
-    biết dừng ở hết chuỗi."""
-    if _TRANSLATION_MARKER not in raw:
-        return raw, None, None
-    rest, block = raw.split(_TRANSLATION_MARKER, 1)
-    mo_ta_vi: str | None = None
-    xu_tri_vi: str | None = None
-    for line in block.strip().splitlines():
-        line = line.strip()
-        if line.lower().startswith("mô tả:"):
-            mo_ta_vi = line.split(":", 1)[1].strip() or None
-        elif line.lower().startswith("xử trí:"):
-            xu_tri_vi = line.split(":", 1)[1].strip() or None
-    return rest, mo_ta_vi, xu_tri_vi
 
 # Cắt bớt Interaction/References_info dài (thật, có outlier tới 17-27k ký tự) trước
 # khi đưa vào prompt LLM để tránh phí token/tràn context (GD6 mục 7.5). Bản đầy đủ
@@ -153,7 +136,7 @@ async def explain_node(state: MedCheckState) -> dict:
                 {"role": "user", "content": prompt},
             ]
         )
-        tones_text, mo_ta_vi, xu_tri_vi = _split_translation(response.content or "")
+        tones_text, translated = split_translation_block(response.content or "", _TRANSLATION_FIELDS)
         patient_text, pharmacist_text = parse_tones(tones_text)
 
         explanations.append(
@@ -166,8 +149,8 @@ async def explain_node(state: MedCheckState) -> dict:
                 # Bản dịch nguyên văn (không qua diễn giải) từ tiếng Anh sang tiếng
                 # Việt của mo_ta/xu_tri gốc trong CSDL - chỉ dược sĩ mới thấy (xem
                 # _PHARMACIST_ONLY_FIELDS ở routes.py), đặt cạnh giai_thich_duoc_si.
-                "mo_ta_dich": mo_ta_vi,
-                "xu_tri_dich": xu_tri_vi,
+                "mo_ta_dich": translated["mo_ta_dich"],
+                "xu_tri_dich": translated["xu_tri_dich"],
             }
         )
 

@@ -1,11 +1,15 @@
+import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from src.api.routes import router
 from src.config import get_settings
 from src.db.session import init_db
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -32,6 +36,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    # Đảm bảo lỗi 500 vẫn có CORS header (mặc định Starlette xử lý exception chưa bắt
+    # ở ServerErrorMiddleware, nằm ngoài CORSMiddleware, nên trình duyệt thấy network error
+    # thay vì lỗi 500 thật - khiến frontend luôn hiện thông báo lỗi chung chung).
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+
 
 app.include_router(router, prefix="/api/v1")
 
