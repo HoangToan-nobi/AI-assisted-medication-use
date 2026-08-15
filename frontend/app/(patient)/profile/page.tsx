@@ -147,6 +147,7 @@ function ProfilePageContent() {
               : "Quản lý các đơn thuốc đang sử dụng — thêm, đổi tên hoặc xóa đơn để kiểm tra tương tác thuốc."}
           </p>
         </div>
+        <span className="profile-intro__state"><MaterialIcon name="verified_user" size={18} /> Hồ sơ bảo mật</span>
       </section>
 
       {activeTab === "personal" && (

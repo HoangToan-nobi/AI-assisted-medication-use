@@ -6,6 +6,7 @@ import MaterialIcon from "@/components/MaterialIcon";
 import { ApiError, listPatientChecks, deletePatientCheck, deleteAllPatientChecks, type InteractionCheckSummary } from "@/lib/api";
 import { getSession } from "@/lib/auth";
 import { formatVietnameseDateTime } from "@/lib/datetime";
+import MediFox from "@/components/MediFox";
 
 type StatusFilter = "all" | "da_xac_nhan" | "cho_xac_nhan" | "chua_xac_nhan";
 
@@ -102,7 +103,7 @@ export default function HistoryPage() {
 
       {checks.length === 0 && !error && (
         <div className="empty-state">
-          <MaterialIcon name="history" size={40} />
+          <MediFox variant="empty" className="empty-state__mascot" />
           <strong>Chưa có lịch sử kiểm tra</strong>
           <span>Các lần kiểm tra tương tác sẽ xuất hiện ở đây.</span>
         </div>

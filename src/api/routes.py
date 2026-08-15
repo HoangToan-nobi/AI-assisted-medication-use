@@ -1055,6 +1055,8 @@ async def list_pharmacist_requests(
                 ten_nguoi_duoc_kiem_tra=review.ten_nguoi_duoc_kiem_tra,
                 ngay_sinh_nhap_tay=review.ngay_sinh_nhap_tay,
                 ghi_chu_nhap_tay=review.ghi_chu_nhap_tay,
+                ghi_chu=review.ghi_chu,
+                thoi_gian_xac_nhan=review.thoi_gian_xac_nhan,
             )
         )
 

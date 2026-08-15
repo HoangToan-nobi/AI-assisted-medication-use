@@ -8,6 +8,7 @@ import InteractionResultView from "@/components/graph/InteractionResultView";
 import { ApiError, checkGuestProducts, checkProducts, listPatientPrescriptions, searchGuestProducts, searchProducts, type MedicationCheckResponse, type PatientPrescription } from "@/lib/api";
 import { getSession } from "@/lib/auth";
 import { createPrescription, mergeSavedIntoPrescriptions, mergedDrugNames, nonEmptyPrescriptions, toPrescriptionCheckInput, type Prescription } from "@/lib/prescription";
+import MediFox from "@/components/MediFox";
 
 // Lưu tạm các đơn/thuốc đang nhập dở và kết quả phân tích gần nhất trong phiên
 // trình duyệt, để reload trang hoặc chuyển sang tab khác rồi quay lại Tra cứu
@@ -55,13 +56,36 @@ function loadDraftResultPrescriptions(): Prescription[] | null {
   }
 }
 
+function parseLandingDrugs(value: string | null): string[] {
+  if (!value) return [];
+  const seen = new Set<string>();
+  return value
+    .split(/[,;|\n]/)
+    .map((name) => name.trim())
+    .filter((name) => {
+      const key = name.toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 2);
+}
+
 function InteractionPageContent() {
   const session = getSession();
+  const searchParams = useSearchParams();
   // Chỉ tự nhập thuốc từ hồ sơ khi được điều hướng tới từ nút "Kiểm tra tương tác"
   // (ví dụ ở trang Hồ sơ, gắn ?import=profile) - không tự ý ghi đè khi người dùng
   // chỉ đơn thuần bấm vào tab "Tương tác" trên thanh điều hướng.
-  const shouldImportFromProfile = useSearchParams().get("import") === "profile";
-  const [prescriptions, setPrescriptions] = useState<Prescription[]>(() => loadDraftPrescriptions() ?? [createPrescription(1)]);
+  const shouldImportFromProfile = searchParams.get("import") === "profile";
+  const landingDrugs = parseLandingDrugs(searchParams.get("drugs"));
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>(() => {
+    if (landingDrugs.length) {
+      const prescription = createPrescription(1);
+      return [{ ...prescription, drugs: landingDrugs.map((name) => ({ name, known: true })) }];
+    }
+    return loadDraftPrescriptions() ?? [createPrescription(1)];
+  });
   const [savedPrescriptions, setSavedPrescriptions] = useState<PatientPrescription[]>([]);
   const [result, setResult] = useState<MedicationCheckResponse | null>(() => loadDraftResult());
   const [resultPrescriptions, setResultPrescriptions] = useState<Prescription[] | null>(() => loadDraftResultPrescriptions());
@@ -190,6 +214,7 @@ function InteractionPageContent() {
       <button className="interaction-run" type="button" onClick={() => void runCheck()} disabled={loading || mergedDrugNames(prescriptions).length < 2}>
         <MaterialIcon name="analytics" size={19} />{loading ? "Đang phân tích..." : "Phân tích tương tác"}
       </button>
+      {loading && <div className="mascot-loading" role="status"><MediFox variant="loading" className="mascot-loading__image" /><span>Cáo Medi đang rà soát các tương tác thuốc...</span></div>}
     </section>
 
     {result && <InteractionResultView result={result} prescriptions={resultPrescriptions ?? []} session={session} />}

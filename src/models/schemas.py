@@ -167,6 +167,10 @@ class ReviewRequestSummary(BaseModel):
     ten_nguoi_duoc_kiem_tra: str | None = None
     ngay_sinh_nhap_tay: date | None = None
     ghi_chu_nhap_tay: str | None = None
+    # Nội dung và thời điểm dược sĩ đã xác nhận, để có thể mở lại hồ sơ đã xử lý
+    # ở chế độ chỉ xem mà không cần tạo một lượt xác nhận mới.
+    ghi_chu: str | None = None
+    thoi_gian_xac_nhan: datetime | None = None
 
 
 class RequestReviewRequest(BaseModel):

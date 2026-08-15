@@ -14,6 +14,7 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
   const pathname = usePathname();
   const [session, setSession] = useState<Session | null>(null);
   const [checked, setChecked] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     const current = getSession();
@@ -38,7 +39,7 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
   }
 
   return (
-    <div className="app-shell app-shell--with-nav">
+    <div className={`app-shell app-shell--with-nav ${sidebarCollapsed ? "app-shell--sidebar-collapsed" : ""}`}>
       <header className="patient-header">
         <div className="patient-header__actions" style={{ marginLeft: "auto" }}>
           <NotificationBell patientId={session.userId} token={session.accessToken} />
@@ -49,7 +50,7 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
         </div>
       </header>
       <div className="app-content">{children}</div>
-      <Sidebar />
+      <Sidebar collapsed={sidebarCollapsed} onToggleCollapsed={() => setSidebarCollapsed((current) => !current)} />
       <span className="sr-only">Đang ở trang {pathname}</span>
     </div>
   );

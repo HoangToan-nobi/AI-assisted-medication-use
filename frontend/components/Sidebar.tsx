@@ -6,9 +6,9 @@ import { usePathname, useSearchParams } from "next/navigation";
 import MaterialIcon from "@/components/MaterialIcon";
 import BrandLogo from "@/components/BrandLogo";
 
-type SidebarProps = { onCheck?: () => void; checking?: boolean };
+type SidebarProps = { onCheck?: () => void; checking?: boolean; collapsed?: boolean; onToggleCollapsed?: () => void };
 
-function SidebarContent({ onCheck, checking }: SidebarProps) {
+function SidebarContent({ onCheck, checking, collapsed = false, onToggleCollapsed }: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isActive = (path: string) => pathname === path;
@@ -17,9 +17,12 @@ function SidebarContent({ onCheck, checking }: SidebarProps) {
   const isPrescriptionsActive = (pathname === "/profile" && isPrescriptionsTab) || pathname.startsWith("/medications/");
 
   return (
-    <nav className="bottom-nav sidebar" aria-label="Điều hướng chính">
-      <div style={{ padding: "16px 16px 32px 0px" }}>
-        <BrandLogo size="sm" />
+    <nav className={`bottom-nav sidebar ${collapsed ? "sidebar--collapsed" : ""}`} aria-label="Điều hướng chính">
+      <div className="sidebar__brand-row">
+        <Link href="/dashboard" className="sidebar__brand-link" aria-label="Về trang chủ MediCheck">
+          <BrandLogo size="sm" className="sidebar__brand" />
+        </Link>
+        {onToggleCollapsed && <button type="button" className="sidebar__toggle" onClick={onToggleCollapsed} aria-label={collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"} title={collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}><MaterialIcon name={collapsed ? "keyboard_double_arrow_right" : "keyboard_double_arrow_left"} size={22} /></button>}
       </div>
       <Link href="/dashboard" className={`bottom-nav__item ${isActive("/dashboard") ? "bottom-nav__item--active" : ""}`}>
         <MaterialIcon name="home" size={22} filled={isActive("/dashboard")} />

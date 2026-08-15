@@ -449,6 +449,8 @@ export interface ReviewRequestSummary {
   ten_nguoi_duoc_kiem_tra: string | null;
   ngay_sinh_nhap_tay: string | null;
   ghi_chu_nhap_tay: string | null;
+  ghi_chu: string | null;
+  thoi_gian_xac_nhan: string | null;
 }
 
 export async function listPharmacistRequests(

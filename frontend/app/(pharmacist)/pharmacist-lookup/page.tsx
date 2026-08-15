@@ -7,6 +7,7 @@ import InteractionOverview from "@/components/graph/InteractionOverview";
 import { ApiError, checkProductsAsPharmacist, searchProducts, type MedicationCheckResponse } from "@/lib/api";
 import { getSession } from "@/lib/auth";
 import { createPrescription, mergedDrugNames, nonEmptyPrescriptions, toPrescriptionCheckInput, type Prescription } from "@/lib/prescription";
+import MediFox from "@/components/MediFox";
 
 // Cùng bàn cân (PrescriptionPanel + prescription-board) và cùng khung kết quả
 // (InteractionOverview, audience="pharmacist") với luồng "Tương tác" của bệnh
@@ -103,6 +104,7 @@ export default function PharmacistLookupPage() {
         <button className="interaction-run" type="button" onClick={() => void runCheck()} disabled={loading || mergedDrugNames(prescriptions).length < 2}>
           <MaterialIcon name="analytics" size={19} />{loading ? "Đang phân tích..." : "Phân tích tương tác"}
         </button>
+        {loading && <div className="pharmacist-mascot-loading" role="status"><MediFox variant="loading" className="pharmacist-mascot-loading__image" /><strong>Cáo Medi đang rà soát các tương tác thuốc...</strong></div>}
       </section>
 
       {result && <InteractionOverview result={result} prescriptions={resultPrescriptions ?? []} session={session} audience="pharmacist" />}

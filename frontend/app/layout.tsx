@@ -1,10 +1,11 @@
 import "./globals.css";
+import FrontendBootGate from "@/components/FrontendBootGate";
 
 export const metadata = {
   title: "MediCheck",
   description: "Nền tảng kiểm tra tương tác thuốc thông minh",
   icons: {
-    icon: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A9%BA%3C/text%3E%3C/svg%3E",
+    icon: "/Bộ nhận diện y tế/1-cropped.png",
   },
 };
 
@@ -35,7 +36,10 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <FrontendBootGate />
+      </body>
     </html>
   );
 }
