@@ -24,14 +24,36 @@ const CONFIG: Record<Severity, { label: string; tag: string; icon: string; class
   chua_phan_loai: { label: "Chưa phân loại", tag: "Chưa rõ", icon: "help", className: "severity-chua-phan-loai" },
 };
 
+type DetailTab = "science" | "management";
+
 export default function AlertCard({ thuocA, thuocB, severity, description, source, management, scientificDescription }: AlertCardProps) {
   const [sourceOpen, setSourceOpen] = useState(false);
+  // Dữ liệu gốc + xử trí gốc chỉ dược sĩ mới nhận được (bệnh nhân luôn undefined,
+  // backend đã tự ẩn) - gộp vào 2 tab bấm để mở, thay vì 2 khối luôn hiện sẵn, đỡ
+  // rối thẻ cảnh báo khi dược sĩ chỉ cần liếc qua mô tả chính.
+  const [activeTab, setActiveTab] = useState<DetailTab | null>(null);
   const config = severity ? CONFIG[severity] : { label: "Không đủ dữ liệu", tag: "Chưa cập nhật", icon: "block", className: "severity-none" };
   return <article className={`alert-card ${config.className}`} data-severity={severity ?? "none"}>
     <div className="alert-card-header"><span className="alert-icon-wrap"><MaterialIcon name={config.icon} size={22} filled /></span><div className="alert-card-body"><span className="alert-severity-tag">{config.tag}</span><h3>{thuocA && thuocB ? `${config.label}: ${thuocA} + ${thuocB}` : config.label}</h3></div></div>
     <p className="alert-description">{description}</p>
-    {scientificDescription && <div className="alert-science-box"><strong>Mô tả khoa học (dịch nguyên văn từ CSDL DDInter 2.0)</strong>{scientificDescription}</div>}
-    {management && <div className="alert-action-box"><strong>Khuyến nghị xử trí (dịch nguyên văn từ CSDL DDInter 2.0)</strong>{management}</div>}
+    {(scientificDescription || management) && (
+      <div className="alert-detail-tabs">
+        <div className="profile-tabs alert-detail-tabs__nav">
+          {scientificDescription && (
+            <button type="button" className={`profile-tabs__item ${activeTab === "science" ? "profile-tabs__item--active" : ""}`} aria-expanded={activeTab === "science"} onClick={() => setActiveTab((t) => (t === "science" ? null : "science"))}>
+              <MaterialIcon name="science" size={15} /> Dữ liệu tương tác gốc
+            </button>
+          )}
+          {management && (
+            <button type="button" className={`profile-tabs__item ${activeTab === "management" ? "profile-tabs__item--active" : ""}`} aria-expanded={activeTab === "management"} onClick={() => setActiveTab((t) => (t === "management" ? null : "management"))}>
+              <MaterialIcon name="medical_information" size={15} /> Cách xử lý gốc
+            </button>
+          )}
+        </div>
+        {activeTab === "science" && scientificDescription && <div className="alert-science-box"><strong>Mô tả khoa học (dịch nguyên văn từ CSDL DDInter 2.0)</strong>{scientificDescription}</div>}
+        {activeTab === "management" && management && <div className="alert-action-box"><strong>Khuyến nghị xử trí (dịch nguyên văn từ CSDL DDInter 2.0)</strong>{management}</div>}
+      </div>
+    )}
     <div className={`citation-wrap ${sourceOpen ? "citation-wrap--open" : ""}`}><button type="button" className="citation-trigger" aria-expanded={sourceOpen} aria-label={`Xem nguồn: ${source}`} onClick={() => setSourceOpen((open) => !open)}><MaterialIcon name="database" size={15} /> <span className="citation-trigger__text">{source || "Nguồn trích dẫn"}</span><MaterialIcon name={sourceOpen ? "expand_less" : "expand_more"} size={16} /></button><div className="citation-popover" role="tooltip"><span className="citation-popover__label">NGUỒN THAM KHẢO</span><strong>{source || "Chưa có thông tin nguồn"}</strong><p>Nhấn lại nút nguồn để thu gọn thông tin tham khảo.</p></div></div>
   </article>;
 }

@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Disclaimer from "@/components/Disclaimer";
 import MaterialIcon from "@/components/MaterialIcon";
-import InteractionGraphExplorer from "@/components/graph/InteractionGraphExplorer";
+import InteractionOverview from "@/components/graph/InteractionOverview";
 import {
   ApiError,
   getInteractionCheckDetail,
@@ -17,7 +17,7 @@ import {
 } from "@/lib/api";
 import { getSession } from "@/lib/auth";
 import { productNamesFromExplanations } from "@/lib/interactionGraph";
-import type { Prescription } from "@/lib/prescription";
+import { mergedDrugNames, type Prescription } from "@/lib/prescription";
 
 function ReviewContent() {
   const router = useRouter();
@@ -27,6 +27,7 @@ function ReviewContent() {
   const [profile, setProfile] = useState<PatientProfileInfo | null>(null);
   const [detail, setDetail] = useState<AgentCheckResult | null>(null);
   const [ghiChu, setGhiChu] = useState("");
+  const [cauTraLoi, setCauTraLoi] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -55,25 +56,41 @@ function ReviewContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkId]);
 
-  // Dược sĩ xem lại cùng đúng graph phân cấp như bệnh nhân/tab tra cứu - dựng 1
-  // "đơn thuốc" tổng hợp từ danh sách thuốc xuất hiện trong các cặp giải thích
-  // (không có thông tin đơn thuốc gốc để tách theo đơn).
+  // Dược sĩ xem lại ĐÚNG Y HỆT những gì bệnh nhân đã thấy (đồ thị, tóm tắt tổng
+  // quan, chi tiết từng cặp, sắp xếp theo mức độ) - dùng chung InteractionOverview
+  // với trang check-result của bệnh nhân. Ưu tiên đúng cấu trúc đơn thuốc gốc
+  // (detail.prescriptions) để dựng lại đúng "bàn cân" nhiều đơn như lúc bệnh nhân
+  // kiểm tra (đồ thị + chi tiết chỉ tính tương tác GIỮA các đơn khi có từ 2 đơn
+  // trở lên). Dữ liệu lịch sử cũ chưa có field này rơi về gộp thành 1 "đơn thuốc"
+  // tổng hợp như hành vi cũ - ưu tiên checked_products (đầy đủ mọi thuốc đã nhập,
+  // kể cả thuốc không có tương tác); chỉ suy ra từ các cặp giải thích khi cả 2
+  // field trên đều chưa có.
   const prescriptions: Prescription[] = useMemo(() => {
-    if (!detail?.explanations) return [];
-    const names = productNamesFromExplanations(detail.explanations);
+    if (!detail) return [];
+    if (detail.prescriptions?.length) {
+      return detail.prescriptions.map((p, i) => ({
+        id: `review-check-${i}`,
+        label: p.label,
+        drugs: p.products.map((name) => ({ name, known: true })),
+      }));
+    }
+    const names = detail.checked_products?.length
+      ? detail.checked_products
+      : productNamesFromExplanations(detail.explanations ?? []);
     return [{ id: "review-check", label: "Thuốc đã kiểm tra", drugs: names.map((name) => ({ name, known: true })) }];
   }, [detail]);
 
   // Chỉ hiện ĐÚNG danh sách thuốc của LẦN TRA CỨU NÀY (từ detail.explanations),
-  // không phải "đơn thuốc của tôi" chung của bệnh nhân.
-  const productNames = prescriptions[0]?.drugs.map((d) => d.name) ?? [];
+  // không phải "đơn thuốc của tôi" chung của bệnh nhân - gộp từ MỌI đơn (không chỉ
+  // đơn đầu tiên) để không thiếu thuốc khi bệnh nhân so nhiều đơn cùng lúc.
+  const productNames = mergedDrugNames(prescriptions);
   const isConfirmed = reviewRequest?.trang_thai_xac_nhan === "da_xac_nhan";
 
   async function handleConfirm() {
     if (!session || !checkId) return;
     setSubmitting(true); setError(null);
     try {
-      await submitPharmacistReview(checkId, ghiChu, session.accessToken);
+      await submitPharmacistReview(checkId, ghiChu, session.accessToken, cauTraLoi.trim() || undefined);
       setSubmitted(true);
       router.replace("/pharmacist-dashboard");
     } catch (err) { setError(err instanceof ApiError ? err.message : "Không xác nhận được"); }
@@ -135,27 +152,49 @@ function ReviewContent() {
 
           <h3 style={{ marginBottom: 8 }}>Thuốc trong lần tra cứu này</h3>
           {productNames.length === 0 && <p className="empty-state__hint">Không có thuốc nào.</p>}
-          {productNames.map((name) => (
-            <article className="profile-medication" key={name}>
-              <span className="profile-medication__icon"><MaterialIcon name="medication" size={22} /></span>
-              <div><strong>{name}</strong></div>
-            </article>
-          ))}
+          {/* Y hệt style bàn cân "Tra cứu tương tác" của bệnh nhân (prescription-board
+              slider, mỗi đơn 1 thẻ cuộn ngang) - chỉ bỏ mọi control chỉnh sửa (tìm
+              thuốc, đổi tên, xóa) vì dược sĩ chỉ xem lại, không sửa được đơn của
+              bệnh nhân. */}
+          {productNames.length > 0 && (
+            <div className="prescription-board-wrap">
+              <div className="prescription-board prescription-board--slider">
+                {prescriptions.map((p) => (
+                  <div className="prescription-panel panel" key={p.id}>
+                    <div className="prescription-panel__header"><h3>{p.label}</h3></div>
+                    <div className="prescription-panel__list">
+                      {p.drugs.length === 0 && <p className="prescription-panel__empty">Chưa có thuốc nào trong đơn này.</p>}
+                      {p.drugs.map((drug) => (
+                        <div className="selected-medication" key={drug.name}>
+                          <span className="selected-medication__icon"><MaterialIcon name="medication" size={18} /></span>
+                          <div><strong>{drug.name}</strong></div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
       )}
 
 
       {detail && prescriptions.length > 0 && (
-        <InteractionGraphExplorer
+        <InteractionOverview
           result={{
             explanations: detail.explanations ?? [],
             has_severe: detail.has_severe ?? false,
             has_unclassified: detail.has_unclassified ?? false,
             product_explanations: detail.product_explanations ?? [],
-            prescription_explanations: detail.prescription_explanations ?? [],
+            overview: detail.overview,
+            food_interactions: detail.food_interactions ?? [],
+            disease_interactions: detail.disease_interactions ?? [],
+            canh_bao_thuc_pham_benh_nen: detail.canh_bao_thuc_pham_benh_nen,
           }}
           prescriptions={prescriptions}
-          audience="pharmacist"
+          session={session}
+          showReviewPrompt={false}
         />
       )}
           <Disclaimer />
@@ -167,6 +206,14 @@ function ReviewContent() {
               <div className="section__header">
                 <h2 className="section__title"><MaterialIcon name="check_circle" size={20} /> Đã xem xét</h2>
               </div>
+              {reviewRequest.cau_hoi && (
+                <div className="field" style={{ marginBottom: 16 }}>
+                  <p className="eyebrow" style={{ marginBottom: 6 }}>CÂU HỎI CỦA BỆNH NHÂN</p>
+                  <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{reviewRequest.cau_hoi}</p>
+                  <p className="eyebrow" style={{ marginTop: 14, marginBottom: 6 }}>CÂU TRẢ LỜI CỦA BẠN</p>
+                  <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{reviewRequest.cau_tra_loi || "Bạn chưa trả lời câu hỏi này."}</p>
+                </div>
+              )}
               <p className="eyebrow" style={{ marginBottom: 10 }}>NHẬN XÉT ĐÃ LƯU</p>
               <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{reviewRequest.ghi_chu || "Dược sĩ chưa để lại ghi chú."}</p>
               {reviewRequest.thoi_gian_xac_nhan && (
@@ -181,6 +228,14 @@ function ReviewContent() {
           ) : checkId && (
             <section className="review-form panel" style={{ margin: 0 }}>
               <div className="section__header"><h2 className="section__title"><MaterialIcon name="edit_note" size={20} /> Ghi nhận xét chuyên môn</h2></div>
+              {reviewRequest?.cau_hoi && (
+                <div className="field">
+                  <label>Câu hỏi của bệnh nhân</label>
+                  <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{reviewRequest.cau_hoi}</p>
+                  <label htmlFor="cau_tra_loi" style={{ marginTop: 10, display: "block" }}>Câu trả lời của bạn</label>
+                  <textarea id="cau_tra_loi" rows={3} value={cauTraLoi} onChange={(e) => setCauTraLoi(e.target.value)} placeholder="Trả lời câu hỏi trên của bệnh nhân..." />
+                </div>
+              )}
               <div className="field">
                 <label htmlFor="ghi_chu">Ghi chú của dược sĩ</label>
                 <textarea id="ghi_chu" rows={4} value={ghiChu} onChange={(e) => setGhiChu(e.target.value)} placeholder="Ví dụ: Đã tư vấn bệnh nhân, trao đổi với bác sĩ điều trị..." />

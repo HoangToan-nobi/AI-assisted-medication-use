@@ -29,6 +29,7 @@ export default function PharmacistReviewPrompt({ checkId, token, patientId, onAs
   const [manualName, setManualName] = useState("");
   const [manualDob, setManualDob] = useState("");
   const [manualNote, setManualNote] = useState("");
+  const [question, setQuestion] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [assigned, setAssigned] = useState(false);
@@ -63,7 +64,7 @@ export default function PharmacistReviewPrompt({ checkId, token, patientId, onAs
   function handleSelectPharmacist(p: PharmacistSummary) {
     setSelected(p);
     setAttachProfile(true);
-    setManualName(""); setManualDob(""); setManualNote("");
+    setManualName(""); setManualDob(""); setManualNote(""); setQuestion("");
     setSubmitError(null);
     setStep("form");
   }
@@ -77,6 +78,7 @@ export default function PharmacistReviewPrompt({ checkId, token, patientId, onAs
         tenNguoiDuocKiemTra: attachProfile ? undefined : manualName.trim() || undefined,
         ngaySinhNhapTay: attachProfile ? undefined : manualDob || undefined,
         ghiChuNhapTay: attachProfile ? undefined : manualNote.trim() || undefined,
+        cauHoi: question.trim() || undefined,
       });
       setAssigned(true);
       onAssigned?.();
@@ -144,6 +146,10 @@ export default function PharmacistReviewPrompt({ checkId, token, patientId, onAs
             <div className="field"><label>Ghi chú (bệnh nền, dị ứng...)</label><textarea rows={2} value={manualNote} onChange={(e) => setManualNote(e.target.value)} placeholder="Không bắt buộc" /></div>
           </div>
         )}
+        <div className="field">
+          <label>Câu hỏi cho dược sĩ (không bắt buộc)</label>
+          <textarea rows={3} value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Ví dụ: Tôi có nên uống cách xa bữa ăn không?" />
+        </div>
         {submitError && <p className="error-text" role="alert">{submitError}</p>}
         <button type="button" className="pharmacist-prompt__cta" disabled={submitting} onClick={() => void handleSubmitRequest()}>
           {submitting ? "Đang gửi..." : "Gửi yêu cầu"}
@@ -159,16 +165,20 @@ export default function PharmacistReviewPrompt({ checkId, token, patientId, onAs
         <button type="button" className="pharmacist-prompt__cta" onClick={() => void handleShowPharmacists()}>Nhờ dược sĩ xác nhận</button>
       ) : (
         <div className="pharmacist-prompt__list">
-          {pharmacistsLoading ? <p className="pharmacist-prompt__loading">Đang tải danh sách dược sĩ...</p> : pharmacists.map((p) => (
-            <button type="button" className="pharmacist-prompt__item" key={p.id} onClick={() => handleSelectPharmacist(p)}>
-              <div className="pharmacist-prompt__item-body">
-                <div className="pharmacist-prompt__name">{p.ho_ten}</div>
-                {p.noi_cong_tac && <div className="pharmacist-prompt__place"><MaterialIcon name="location_on" size={14} />{p.noi_cong_tac}</div>}
-                <div className="pharmacist-prompt__bio">{p.mo_ta_ngan || "Chưa cập nhật thông tin"}</div>
-              </div>
-              <MaterialIcon name="chevron_right" size={18} />
-            </button>
-          ))}
+          {pharmacistsLoading ? <p className="pharmacist-prompt__loading">Đang tải danh sách dược sĩ...</p> : pharmacists.map((p) => {
+            // Chỉ 2 dòng: tên, rồi nơi làm việc + mô tả ngắn gộp chung 1 dòng (cắt
+            // bớt bằng ellipsis nếu quá dài) - tránh tràn ra ngoài khung danh sách.
+            const subtitle = [p.noi_cong_tac, p.mo_ta_ngan].filter(Boolean).join(" • ") || "Chưa cập nhật thông tin";
+            return (
+              <button type="button" className="pharmacist-prompt__item" key={p.id} onClick={() => handleSelectPharmacist(p)}>
+                <div className="pharmacist-prompt__item-body">
+                  <div className="pharmacist-prompt__name">{p.ho_ten}</div>
+                  <div className="pharmacist-prompt__bio">{subtitle}</div>
+                </div>
+                <MaterialIcon name="chevron_right" size={18} />
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

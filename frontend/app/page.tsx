@@ -506,7 +506,7 @@ export default function LandingPage() {
         }
         .mc-nav a:not(.mc-login) {
           color: #a8b5cc;
-          font-size: 12px;
+          font-size: 15px;
           text-decoration: none;
         }
         .mc-nav a:not(.mc-login):hover {
@@ -518,7 +518,7 @@ export default function LandingPage() {
           padding: 11px 20px;
           color: #eaf2ff;
           text-decoration: none;
-          font-size: 12px;
+          font-size: 15px;
           background: #ffffff0b;
           backdrop-filter: blur(14px);
         }

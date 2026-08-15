@@ -149,6 +149,46 @@ class Interaction(Base):
     thay_the_b = Column(Text)  # DDInter Alt_for_B
 
 
+class FoodInteraction(Base):
+    """Tương tác thuốc-thực phẩm (DDInter 2.0 DFI) - khoá theo 1 hoạt chất, KHÔNG
+    phải cặp 2 thuốc như Interaction ở trên."""
+
+    __tablename__ = "food_interactions"
+    __table_args__ = (
+        UniqueConstraint("medication_id", "thuc_pham", name="uq_food_interaction"),
+    )
+    id = Column(String, primary_key=True, default=_uuid)
+    medication_id = Column(String, ForeignKey("medications.id"), nullable=False)
+    thuc_pham = Column(String(255), nullable=False)  # DDInter food_name (tiếng Anh gốc)
+    # Bản dịch tiếng Việt của thuc_pham - chỉ 29 tên khác nhau trong toàn CSDL nên
+    # dịch 1 lần qua script (scripts/translate_food_disease_names.py), lưu lại thay
+    # vì dịch lại mỗi lần sinh giải thích. NULL nếu script chưa chạy qua dòng này.
+    thuc_pham_vi = Column(String(255), nullable=True)
+    muc_do = Column(String(20))  # nhe | trung_binh | nang | chua_phan_loai
+    mo_ta = Column(Text)  # DDInter interaction
+    xu_tri = Column(Text)  # DDInter management — CHỈ hiển thị cho vai trò dược sĩ
+    nguon_trich_dan = Column(Text)
+
+
+class DiseaseInteraction(Base):
+    """Tương tác thuốc-bệnh nền (DDInter 2.0 DDSI) - khoá theo 1 hoạt chất. Không có
+    cột xu_tri: nguồn DDInter cho DDSI không có trường management."""
+
+    __tablename__ = "disease_interactions"
+    __table_args__ = (
+        UniqueConstraint("medication_id", "ten_benh", name="uq_disease_interaction"),
+    )
+    id = Column(String, primary_key=True, default=_uuid)
+    medication_id = Column(String, ForeignKey("medications.id"), nullable=False)
+    ten_benh = Column(String(255), nullable=False)  # DDInter disease_name (tiếng Anh gốc)
+    # Bản dịch tiếng Việt của ten_benh - 450 tên khác nhau, cùng cơ chế dịch 1 lần
+    # như thuc_pham_vi ở FoodInteraction phía trên.
+    ten_benh_vi = Column(String(255), nullable=True)
+    muc_do = Column(String(20))
+    mo_ta = Column(Text)  # DDInter interaction
+    nguon_trich_dan = Column(Text)
+
+
 class InteractionCheck(Base):
     __tablename__ = "interaction_checks"
     id = Column(String, primary_key=True, default=_uuid)
@@ -175,6 +215,11 @@ class PharmacistReview(Base):
     ten_nguoi_duoc_kiem_tra = Column(String(255), nullable=True)
     ngay_sinh_nhap_tay = Column(Date, nullable=True)
     ghi_chu_nhap_tay = Column(Text, nullable=True)
+    # Câu hỏi bệnh nhân nhập kèm lúc gửi yêu cầu (không bắt buộc) và câu trả lời
+    # tương ứng dược sĩ nhập lúc xác nhận - tách riêng khỏi ghi_chu (nhận xét chung
+    # của dược sĩ, có thể không trả lời trực tiếp câu hỏi cụ thể nào).
+    cau_hoi = Column(Text, nullable=True)
+    cau_tra_loi = Column(Text, nullable=True)
     # Mốc dược sĩ bấm xác nhận - dùng để sắp xếp/tạo thông báo (InteractionCheck chỉ
     # có thời điểm TẠO lần kiểm tra, không phải thời điểm xác nhận).
     thoi_gian_xac_nhan = Column(DateTime, nullable=True)
