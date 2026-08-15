@@ -1,29 +1,40 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import MaterialIcon from "@/components/MaterialIcon";
 import BrandLogo from "@/components/BrandLogo";
 
-type SidebarProps = { onCheck?: () => void; checking?: boolean };
+type SidebarProps = { onCheck?: () => void; checking?: boolean; collapsed?: boolean; onToggleCollapsed?: () => void };
 
-export default function Sidebar({ onCheck, checking }: SidebarProps) {
+function SidebarContent({ onCheck, checking, collapsed = false, onToggleCollapsed }: SidebarProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const isActive = (path: string) => pathname === path;
-  const isMedicationActive = pathname === "/profile" || pathname.startsWith("/medications/");
+  const isPrescriptionsTab = searchParams.get("tab") === "prescriptions";
+  const isPersonalInfoActive = pathname === "/profile" && !isPrescriptionsTab;
+  const isPrescriptionsActive = (pathname === "/profile" && isPrescriptionsTab) || pathname.startsWith("/medications/");
 
   return (
-    <nav className="bottom-nav sidebar" aria-label="Điều hướng chính">
-      <div style={{ padding: "16px 16px 32px 0px" }}>
-        <BrandLogo size="sm" />
+    <nav className={`bottom-nav sidebar ${collapsed ? "sidebar--collapsed" : ""}`} aria-label="Điều hướng chính">
+      <div className="sidebar__brand-row">
+        <Link href="/dashboard" className="sidebar__brand-link" aria-label="Về trang chủ MediCheck">
+          <BrandLogo size="sm" className="sidebar__brand" />
+        </Link>
+        {onToggleCollapsed && <button type="button" className="sidebar__toggle" onClick={onToggleCollapsed} aria-label={collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"} title={collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}><MaterialIcon name={collapsed ? "keyboard_double_arrow_right" : "keyboard_double_arrow_left"} size={22} /></button>}
       </div>
       <Link href="/dashboard" className={`bottom-nav__item ${isActive("/dashboard") ? "bottom-nav__item--active" : ""}`}>
         <MaterialIcon name="home" size={22} filled={isActive("/dashboard")} />
         <span>Trang chủ</span>
       </Link>
-      <Link href="/profile" className={`bottom-nav__item ${isMedicationActive ? "bottom-nav__item--active" : ""}`}>
-        <MaterialIcon name="medication" size={22} filled={isMedicationActive} />
-        <span>Hồ sơ</span>
+      <Link href="/profile" className={`bottom-nav__item ${isPersonalInfoActive ? "bottom-nav__item--active" : ""}`}>
+        <MaterialIcon name="person" size={22} filled={isPersonalInfoActive} />
+        <span>Thông tin cá nhân</span>
+      </Link>
+      <Link href="/profile?tab=prescriptions" className={`bottom-nav__item ${isPrescriptionsActive ? "bottom-nav__item--active" : ""}`}>
+        <MaterialIcon name="medication" size={22} filled={isPrescriptionsActive} />
+        <span>Đơn thuốc của tôi</span>
       </Link>
       {onCheck ? (
         <button type="button" className="bottom-nav__item" onClick={onCheck} disabled={checking}>
@@ -41,5 +52,15 @@ export default function Sidebar({ onCheck, checking }: SidebarProps) {
         <span>Lịch sử</span>
       </Link>
     </nav>
+  );
+}
+
+// useSearchParams() cần 1 Suspense boundary bao ngoài (Next.js yêu cầu) - Sidebar
+// sống trong layout dùng chung nhiều trang, không tự bọc Suspense ở nơi gọi được.
+export default function Sidebar(props: SidebarProps) {
+  return (
+    <Suspense fallback={null}>
+      <SidebarContent {...props} />
+    </Suspense>
   );
 }

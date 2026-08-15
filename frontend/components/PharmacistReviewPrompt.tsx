@@ -15,13 +15,23 @@ type PharmacistReviewPromptProps = {
 };
 
 type KnownStatus = "chua_xac_nhan" | "cho_xac_nhan" | "da_xac_nhan";
+type Step = "cta" | "list" | "form";
 
 // Gợi ý gửi lần kiểm tra hiện tại cho dược sĩ xem lại - tách từ check-result/page.tsx
-// để dùng lại được ở cả trang chi tiết lịch sử lẫn popup tương tác nghiêm trọng.
+// để dùng lại được ở mọi nơi hiện kết quả (InteractionOverview render widget này
+// cho MỌI lần tra cứu, không riêng gì tương tác nghiêm trọng).
 export default function PharmacistReviewPrompt({ checkId, token, patientId, onAssigned }: PharmacistReviewPromptProps) {
-  const [showPharmacists, setShowPharmacists] = useState(false);
+  const [step, setStep] = useState<Step>("cta");
   const [pharmacists, setPharmacists] = useState<PharmacistSummary[]>([]);
-  const [assigningId, setAssigningId] = useState<string | null>(null);
+  const [pharmacistsLoading, setPharmacistsLoading] = useState(false);
+  const [selected, setSelected] = useState<PharmacistSummary | null>(null);
+  const [attachProfile, setAttachProfile] = useState(true);
+  const [manualName, setManualName] = useState("");
+  const [manualDob, setManualDob] = useState("");
+  const [manualNote, setManualNote] = useState("");
+  const [question, setQuestion] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [assigned, setAssigned] = useState(false);
   const [knownStatus, setKnownStatus] = useState<KnownStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(Boolean(token && patientId));
@@ -45,21 +55,37 @@ export default function PharmacistReviewPrompt({ checkId, token, patientId, onAs
   }, [checkId, token, patientId]);
 
   async function handleShowPharmacists() {
-    setShowPharmacists(true);
+    setStep("list");
+    setPharmacistsLoading(true);
     try { setPharmacists(await getPharmacists(token as string)); } catch { /* để trống, người dùng có thể thử lại */ }
+    finally { setPharmacistsLoading(false); }
   }
 
-  async function handleAssign(pharmacistId: string) {
-    setAssigningId(pharmacistId);
+  function handleSelectPharmacist(p: PharmacistSummary) {
+    setSelected(p);
+    setAttachProfile(true);
+    setManualName(""); setManualDob(""); setManualNote(""); setQuestion("");
+    setSubmitError(null);
+    setStep("form");
+  }
+
+  async function handleSubmitRequest() {
+    if (!selected) return;
+    setSubmitting(true); setSubmitError(null);
     try {
-      await requestReview(checkId, pharmacistId, token as string);
+      await requestReview(checkId, selected.id, token as string, {
+        guiKemHoSo: attachProfile,
+        tenNguoiDuocKiemTra: attachProfile ? undefined : manualName.trim() || undefined,
+        ngaySinhNhapTay: attachProfile ? undefined : manualDob || undefined,
+        ghiChuNhapTay: attachProfile ? undefined : manualNote.trim() || undefined,
+        cauHoi: question.trim() || undefined,
+      });
       setAssigned(true);
-      setShowPharmacists(false);
       onAssigned?.();
     } catch {
-      alert("Lỗi khi gửi yêu cầu");
+      setSubmitError("Lỗi khi gửi yêu cầu, vui lòng thử lại.");
     } finally {
-      setAssigningId(null);
+      setSubmitting(false);
     }
   }
 
@@ -96,24 +122,63 @@ export default function PharmacistReviewPrompt({ checkId, token, patientId, onAs
     );
   }
 
+  if (step === "form" && selected) {
+    return (
+      <div className="pharmacist-prompt">
+        <button type="button" className="pharmacist-prompt__back" onClick={() => setStep("list")}>
+          <MaterialIcon name="arrow_back" size={16} /> Chọn dược sĩ khác
+        </button>
+        <p className="pharmacist-prompt__title">Gửi yêu cầu tới <strong>{selected.ho_ten}</strong></p>
+        <div className="pharmacist-prompt__attach-toggle">
+          <label className={attachProfile ? "pharmacist-prompt__attach-option pharmacist-prompt__attach-option--active" : "pharmacist-prompt__attach-option"}>
+            <input type="radio" name="attach-mode" checked={attachProfile} onChange={() => setAttachProfile(true)} />
+            Gửi kèm hồ sơ cá nhân của tôi
+          </label>
+          <label className={!attachProfile ? "pharmacist-prompt__attach-option pharmacist-prompt__attach-option--active" : "pharmacist-prompt__attach-option"}>
+            <input type="radio" name="attach-mode" checked={!attachProfile} onChange={() => setAttachProfile(false)} />
+            Nhập thông tin khác (tra cứu hộ người khác)
+          </label>
+        </div>
+        {!attachProfile && (
+          <div className="pharmacist-prompt__manual-form">
+            <div className="field"><label>Họ tên người được kiểm tra</label><input value={manualName} onChange={(e) => setManualName(e.target.value)} placeholder="Ví dụ: Nguyễn Văn A" /></div>
+            <div className="field"><label>Ngày sinh</label><input type="date" value={manualDob} onChange={(e) => setManualDob(e.target.value)} /></div>
+            <div className="field"><label>Ghi chú (bệnh nền, dị ứng...)</label><textarea rows={2} value={manualNote} onChange={(e) => setManualNote(e.target.value)} placeholder="Không bắt buộc" /></div>
+          </div>
+        )}
+        <div className="field">
+          <label>Câu hỏi cho dược sĩ (không bắt buộc)</label>
+          <textarea rows={3} value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Ví dụ: Tôi có nên uống cách xa bữa ăn không?" />
+        </div>
+        {submitError && <p className="error-text" role="alert">{submitError}</p>}
+        <button type="button" className="pharmacist-prompt__cta" disabled={submitting} onClick={() => void handleSubmitRequest()}>
+          {submitting ? "Đang gửi..." : "Gửi yêu cầu"}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="pharmacist-prompt">
       <p className="pharmacist-prompt__title">Bạn có muốn nhờ dược sĩ xác nhận lại tương tác thuốc này không?</p>
-      {!showPharmacists ? (
+      {step === "cta" ? (
         <button type="button" className="pharmacist-prompt__cta" onClick={() => void handleShowPharmacists()}>Nhờ dược sĩ xác nhận</button>
       ) : (
         <div className="pharmacist-prompt__list">
-          {pharmacists.length === 0 ? <p className="pharmacist-prompt__loading">Đang tải danh sách dược sĩ...</p> : pharmacists.map((p) => (
-            <div className="pharmacist-prompt__item" key={p.id}>
-              <div>
-                <div className="pharmacist-prompt__name">{p.ho_ten}</div>
-                {p.noi_cong_tac && <div className="pharmacist-prompt__place"><MaterialIcon name="location_on" size={14} />{p.noi_cong_tac}</div>}
-              </div>
-              <button type="button" className="pharmacist-prompt__assign" disabled={assigningId === p.id} onClick={() => void handleAssign(p.id)}>
-                {assigningId === p.id ? "Đang gửi..." : "Gửi yêu cầu"}
+          {pharmacistsLoading ? <p className="pharmacist-prompt__loading">Đang tải danh sách dược sĩ...</p> : pharmacists.map((p) => {
+            // Chỉ 2 dòng: tên, rồi nơi làm việc + mô tả ngắn gộp chung 1 dòng (cắt
+            // bớt bằng ellipsis nếu quá dài) - tránh tràn ra ngoài khung danh sách.
+            const subtitle = [p.noi_cong_tac, p.mo_ta_ngan].filter(Boolean).join(" • ") || "Chưa cập nhật thông tin";
+            return (
+              <button type="button" className="pharmacist-prompt__item" key={p.id} onClick={() => handleSelectPharmacist(p)}>
+                <div className="pharmacist-prompt__item-body">
+                  <div className="pharmacist-prompt__name">{p.ho_ten}</div>
+                  <div className="pharmacist-prompt__bio">{subtitle}</div>
+                </div>
+                <MaterialIcon name="chevron_right" size={18} />
               </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

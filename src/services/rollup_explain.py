@@ -63,6 +63,24 @@ def build_product_edges(explanations: list[dict]) -> list[dict]:
     return list(edges.values())
 
 
+def filter_cross_prescription_edges(
+    product_edges: list[dict], product_origins: dict[str, set[int]]
+) -> list[dict]:
+    """Chỉ giữ lại cạnh cấp thuốc có ÍT NHẤT 1 cặp chỉ số đơn khác nhau chứa 2 đầu
+    cạnh - bỏ cạnh mà 2 thuốc chỉ CÙNG xuất hiện trong đúng 1 đơn (tương tác trong
+    cùng 1 đơn). Dùng cho luồng bệnh nhân khi so từ 2 đơn trở lên: chỉ tính tương
+    tác GIỮA các đơn khác nhau cho cấp thuốc + tóm tắt tổng quan."""
+    filtered = []
+    for edge in product_edges:
+        set_a = product_origins.get(edge["product_a"].lower())
+        set_b = product_origins.get(edge["product_b"].lower())
+        if not set_a or not set_b:
+            continue
+        if any(rx_a != rx_b for rx_a in set_a for rx_b in set_b):
+            filtered.append(edge)
+    return filtered
+
+
 def severity_counts(edges: list[dict]) -> dict[str, int]:
     """Đếm số cạnh theo từng mức độ - dùng cho thống kê tóm tắt (build_overview_explanation)."""
     counts = {"nang": 0, "trung_binh": 0, "nhe": 0, "chua_phan_loai": 0}
@@ -179,6 +197,14 @@ def _product_user_prompt(product_a: str, product_b: str, muc_do: str, contributi
 async def _explain_product_edge(edge: dict) -> dict:
     product_a, product_b = edge["product_a"], edge["product_b"]
     muc_do, pair_count = edge["muc_do"], edge["pair_count"]
+    # Cặp hoạt chất góp phần nặng nhất (contributing_pairs đã sort severity-desc) -
+    # dùng ĐÚNG bản dịch nguyên văn đã sinh sẵn ở cấp hoạt chất (explain_node), không
+    # dịch lại ở đây để khỏi tốn thêm 1 lượt gọi LLM cho cùng nội dung nguồn.
+    representative = edge["contributing_pairs"][0] if edge["contributing_pairs"] else {}
+    translated_fields = {
+        "mo_ta_dich": representative.get("mo_ta_dich"),
+        "xu_tri_dich": representative.get("xu_tri_dich"),
+    }
 
     if muc_do == "chua_phan_loai":
         message = _UNCLASSIFIED_PRODUCT_MESSAGE.format(a=product_a, b=product_b)
@@ -189,6 +215,7 @@ async def _explain_product_edge(edge: dict) -> dict:
             "giai_thich": message,
             "giai_thich_duoc_si": message,
             "nguon_trich_dan": _product_citation(pair_count),
+            **translated_fields,
         }
 
     llm = get_llm()
@@ -209,6 +236,7 @@ async def _explain_product_edge(edge: dict) -> dict:
         "giai_thich": filter_banned_language(patient_text),
         "giai_thich_duoc_si": filter_banned_language(pharmacist_text),
         "nguon_trich_dan": _product_citation(pair_count),
+        **translated_fields,
     }
 
 
@@ -302,13 +330,13 @@ async def build_prescription_explanations(prescription_edges: list[dict], labels
     )
 
 
-# ---- Tóm tắt tổng quan (chỉ luồng bệnh nhân) ----
+# ---- Tóm tắt tổng quan (luồng bệnh nhân + luồng dược sĩ, 2 giọng điệu riêng) ----
 
 # Chỉ đưa tối đa từng này cặp thuốc-thuốc (nặng nhất trước) vào prompt tóm tắt, để
 # tránh phình prompt khi lần phân tích có rất nhiều thuốc/cặp tương tác.
 _MAX_OVERVIEW_PAIRS = 8
 
-_OVERVIEW_SYSTEM_PROMPT = (
+_OVERVIEW_SYSTEM_PROMPT_PATIENT = (
     "Bạn là một dược sĩ đang tóm tắt TOÀN BỘ kết quả phân tích tương tác thuốc cho "
     "bệnh nhân, dựa trên thống kê và danh sách giải thích từng cặp thuốc-thuốc CÓ "
     "THẬT được liệt kê ở tin nhắn tiếp theo — đó là nguồn duy nhất bạn được dùng, "
@@ -330,14 +358,43 @@ _OVERVIEW_SYSTEM_PROMPT = (
     "diễn đạt tự nhiên, không phải khẩu hiệu dán cứng."
 )
 
-_NO_INTERACTION_OVERVIEW_MESSAGE = (
+_OVERVIEW_SYSTEM_PROMPT_PHARMACIST = (
+    "Bạn là dược sĩ lâm sàng đang tóm tắt TOÀN BỘ kết quả phân tích tương tác thuốc "
+    "để trình bày cho một dược sĩ khác đang tra cứu, dựa trên thống kê và danh sách "
+    "giải thích từng cặp thuốc-thuốc CÓ THẬT được liệt kê ở tin nhắn tiếp theo — đó "
+    "là nguồn duy nhất bạn được dùng, không thêm dữ kiện y khoa nào khác.\n\n"
+    "Viết 1 đoạn tổng quan bằng tiếng Việt (4-6 câu), văn phong khoa học, chuyên "
+    "nghiệp, học thuật và lịch sự, phù hợp trao đổi giữa các dược sĩ - hạn chế xưng "
+    "hô trực tiếp, có thể dùng thuật ngữ dược lý/dược động học khi dữ liệu có đề cập "
+    "(cơ chế, enzym, thụ thể, nồng độ huyết tương...):\n"
+    "- Câu đầu nêu ngay số liệu tổng quan: tổng số cặp tương tác thuốc-thuốc ghi "
+    "nhận được, chia theo mức độ (nghiêm trọng/trung bình/nhẹ/chưa phân loại) dựa "
+    "đúng số liệu được cung cấp.\n"
+    "- Các câu sau khái quát bản chất và cơ chế của những cặp đáng chú ý nhất (ưu "
+    "tiên các cặp mức nghiêm trọng nếu có), không cần liệt kê hết từng cặp một.\n\n"
+    "QUY TẮC BẮT BUỘC:\n"
+    "- TUYỆT ĐỐI KHÔNG khuyên ngừng, đổi, kê đơn, hoặc tự ý điều chỉnh liều/thời "
+    "điểm dùng bất kỳ thuốc nào — kể cả gợi ý mơ hồ.\n"
+    "- CHỈ dựa trên đúng thống kê và giải thích được cung cấp — không thêm dữ kiện "
+    "y khoa nào khác.\n"
+    "- Khép lại bằng việc nhắc xem chi tiết từng cặp thuốc để có đầy đủ căn cứ trước "
+    "khi ra quyết định lâm sàng, diễn đạt tự nhiên, không phải khẩu hiệu dán cứng."
+)
+
+_NO_INTERACTION_OVERVIEW_MESSAGE_PATIENT = (
     "Mình không tìm thấy tương tác nào giữa các thuốc bạn đã chọn trong CSDL "
     "DDInter 2.0 lần này. Nếu có thêm thuốc mới hoặc thay đổi liều, hãy kiểm tra "
     "lại hoặc hỏi dược sĩ/bác sĩ để chắc chắn nhé."
 )
 
+_NO_INTERACTION_OVERVIEW_MESSAGE_PHARMACIST = (
+    "Không ghi nhận tương tác nào giữa các thuốc đã chọn trong cơ sở dữ liệu "
+    "DDInter 2.0 ở lần phân tích này. Khi danh mục thuốc thay đổi, khuyến nghị thực "
+    "hiện tra cứu lại để đảm bảo dữ liệu được cập nhật đầy đủ."
+)
 
-def _overview_user_prompt(counts: dict[str, int], product_explanations: list[dict]) -> str:
+
+def _overview_user_prompt(counts: dict[str, int], product_explanations: list[dict], audience: str) -> str:
     total = sum(counts.values())
     lines = [
         f"Tổng số cặp thuốc-thuốc có tương tác: {total}",
@@ -349,31 +406,40 @@ def _overview_user_prompt(counts: dict[str, int], product_explanations: list[dic
         "Danh sách giải thích từng cặp thuốc-thuốc (đã sắp nặng nhất trước):",
     ]
     sorted_items = sorted(product_explanations, key=lambda e: _severity_rank(e.get("muc_do")), reverse=True)
+    text_field = "giai_thich_duoc_si" if audience == "pharmacist" else "giai_thich"
     for item in sorted_items[:_MAX_OVERVIEW_PAIRS]:
         lines.append(
             f"- {item.get('thuoc_a')} + {item.get('thuoc_b')} (mức {item.get('muc_do')}): "
-            f"{item.get('giai_thich', '')}"
+            f"{item.get(text_field) or item.get('giai_thich', '')}"
         )
     lines.append("")
     lines.append("Hãy viết đoạn tổng quan theo đúng hướng dẫn ở trên, bằng tiếng Việt.")
     return "\n".join(lines)
 
 
-async def build_overview_explanation(product_edges: list[dict], product_explanations: list[dict]) -> dict:
-    """Sinh 1 đoạn tóm tắt tổng quan toàn bộ lần phân tích (chỉ dùng cho luồng bệnh
-    nhân) - thống kê số cặp thuốc-thuốc theo mức độ + tổng hợp nội dung từ toàn bộ
-    product_explanations đã sinh ở build_product_explanations."""
+async def build_overview_explanation(
+    product_edges: list[dict], product_explanations: list[dict], audience: str = "patient"
+) -> dict:
+    """Sinh 1 đoạn tóm tắt tổng quan toàn bộ lần phân tích - thống kê số cặp
+    thuốc-thuốc theo mức độ + tổng hợp nội dung từ toàn bộ product_explanations đã
+    sinh ở build_product_explanations. audience="patient"|"pharmacist" chọn đúng
+    giọng điệu (thân thiện dễ hiểu / khoa học chuyên nghiệp) và bản giải thích cấp
+    thuốc tương ứng (giai_thich / giai_thich_duoc_si) để đưa vào prompt."""
     counts = severity_counts(product_edges)
     total = sum(counts.values())
+    is_pharmacist = audience == "pharmacist"
 
     if total == 0:
-        giai_thich = _NO_INTERACTION_OVERVIEW_MESSAGE
+        giai_thich = (
+            _NO_INTERACTION_OVERVIEW_MESSAGE_PHARMACIST if is_pharmacist else _NO_INTERACTION_OVERVIEW_MESSAGE_PATIENT
+        )
     else:
         llm = get_llm()
+        system_prompt = _OVERVIEW_SYSTEM_PROMPT_PHARMACIST if is_pharmacist else _OVERVIEW_SYSTEM_PROMPT_PATIENT
         response = await llm.ainvoke(
             [
-                {"role": "system", "content": _OVERVIEW_SYSTEM_PROMPT},
-                {"role": "user", "content": _overview_user_prompt(counts, product_explanations)},
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": _overview_user_prompt(counts, product_explanations, audience)},
             ]
         )
         giai_thich = filter_banned_language((response.content or "").strip())

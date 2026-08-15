@@ -31,6 +31,9 @@ class User(Base):
     mat_khau_hash = Column(String(255), nullable=False)
     vai_tro = Column(String(20), nullable=False)  # patient | pharmacist
     noi_cong_tac = Column(String(255), nullable=True)
+    # Mô tả ngắn của dược sĩ (bio) - hiện ở khung chọn dược sĩ khi bệnh nhân nhờ xác
+    # nhận, tự cập nhật qua tab "Hồ sơ cá nhân" bên luồng dược sĩ.
+    mo_ta_ngan = Column(Text, nullable=True)
     ngay_tao = Column(DateTime, default=datetime.utcnow)
 
 
@@ -102,10 +105,26 @@ class ProductIngredient(Base):
     medication_id = Column(String, ForeignKey("medications.id"), nullable=True)
 
 
+class PatientPrescription(Base):
+    """1 đơn thuốc đã lưu trong hồ sơ bệnh nhân (tab "Đơn thuốc của tôi") - gộp nhóm
+    các PatientMedication lại theo label do bệnh nhân tự đặt, tương tự khái niệm
+    "Đơn thuốc N" ở bàn cân tương tác nhưng có lưu persist lại DB."""
+
+    __tablename__ = "patient_prescriptions"
+    id = Column(String, primary_key=True, default=_uuid)
+    patient_id = Column(String, ForeignKey("users.id"))
+    label = Column(String(100), nullable=False)
+    ngay_tao = Column(DateTime, default=datetime.utcnow)
+
+
 class PatientMedication(Base):
     __tablename__ = "patient_medications"
     id = Column(String, primary_key=True, default=_uuid)
     patient_id = Column(String, ForeignKey("users.id"))
+    # Nullable ở DB (bảng cũ tạo trước khi có khái niệm đơn thuốc, xem
+    # src/db/session.py::_ensure_prescription_id_column) nhưng route
+    # add_patient_medication luôn gán 1 đơn cụ thể - không có bản ghi "mồ côi" mới.
+    prescription_id = Column(String, ForeignKey("patient_prescriptions.id"), nullable=True)
     medication_id = Column(String, ForeignKey("medications.id"), nullable=True)
     product_id = Column(String, ForeignKey("products.id"), nullable=True)
     ngay_bat_dau = Column(Date)
@@ -130,6 +149,46 @@ class Interaction(Base):
     thay_the_b = Column(Text)  # DDInter Alt_for_B
 
 
+class FoodInteraction(Base):
+    """Tương tác thuốc-thực phẩm (DDInter 2.0 DFI) - khoá theo 1 hoạt chất, KHÔNG
+    phải cặp 2 thuốc như Interaction ở trên."""
+
+    __tablename__ = "food_interactions"
+    __table_args__ = (
+        UniqueConstraint("medication_id", "thuc_pham", name="uq_food_interaction"),
+    )
+    id = Column(String, primary_key=True, default=_uuid)
+    medication_id = Column(String, ForeignKey("medications.id"), nullable=False)
+    thuc_pham = Column(String(255), nullable=False)  # DDInter food_name (tiếng Anh gốc)
+    # Bản dịch tiếng Việt của thuc_pham - chỉ 29 tên khác nhau trong toàn CSDL nên
+    # dịch 1 lần qua script (scripts/translate_food_disease_names.py), lưu lại thay
+    # vì dịch lại mỗi lần sinh giải thích. NULL nếu script chưa chạy qua dòng này.
+    thuc_pham_vi = Column(String(255), nullable=True)
+    muc_do = Column(String(20))  # nhe | trung_binh | nang | chua_phan_loai
+    mo_ta = Column(Text)  # DDInter interaction
+    xu_tri = Column(Text)  # DDInter management — CHỈ hiển thị cho vai trò dược sĩ
+    nguon_trich_dan = Column(Text)
+
+
+class DiseaseInteraction(Base):
+    """Tương tác thuốc-bệnh nền (DDInter 2.0 DDSI) - khoá theo 1 hoạt chất. Không có
+    cột xu_tri: nguồn DDInter cho DDSI không có trường management."""
+
+    __tablename__ = "disease_interactions"
+    __table_args__ = (
+        UniqueConstraint("medication_id", "ten_benh", name="uq_disease_interaction"),
+    )
+    id = Column(String, primary_key=True, default=_uuid)
+    medication_id = Column(String, ForeignKey("medications.id"), nullable=False)
+    ten_benh = Column(String(255), nullable=False)  # DDInter disease_name (tiếng Anh gốc)
+    # Bản dịch tiếng Việt của ten_benh - 450 tên khác nhau, cùng cơ chế dịch 1 lần
+    # như thuc_pham_vi ở FoodInteraction phía trên.
+    ten_benh_vi = Column(String(255), nullable=True)
+    muc_do = Column(String(20))
+    mo_ta = Column(Text)  # DDInter interaction
+    nguon_trich_dan = Column(Text)
+
+
 class InteractionCheck(Base):
     __tablename__ = "interaction_checks"
     id = Column(String, primary_key=True, default=_uuid)
@@ -149,3 +208,31 @@ class PharmacistReview(Base):
     pharmacist_id = Column(String, ForeignKey("users.id"))
     ghi_chu = Column(Text)
     trang_thai_xac_nhan = Column(String(20), default="chua_xac_nhan")
+    # true nếu bệnh nhân chọn gửi kèm hồ sơ cá nhân CỦA CHÍNH MÌNH (PatientProfile,
+    # đọc trực tiếp lúc dược sĩ xem, không snapshot) - loại trừ lẫn nhau với 3 field
+    # nhập tay bên dưới (trường hợp tra cứu hộ người khác không có hồ sơ trong hệ thống).
+    gui_kem_ho_so = Column(Boolean, default=False)
+    ten_nguoi_duoc_kiem_tra = Column(String(255), nullable=True)
+    ngay_sinh_nhap_tay = Column(Date, nullable=True)
+    ghi_chu_nhap_tay = Column(Text, nullable=True)
+    # Câu hỏi bệnh nhân nhập kèm lúc gửi yêu cầu (không bắt buộc) và câu trả lời
+    # tương ứng dược sĩ nhập lúc xác nhận - tách riêng khỏi ghi_chu (nhận xét chung
+    # của dược sĩ, có thể không trả lời trực tiếp câu hỏi cụ thể nào).
+    cau_hoi = Column(Text, nullable=True)
+    cau_tra_loi = Column(Text, nullable=True)
+    # Mốc dược sĩ bấm xác nhận - dùng để sắp xếp/tạo thông báo (InteractionCheck chỉ
+    # có thời điểm TẠO lần kiểm tra, không phải thời điểm xác nhận).
+    thoi_gian_xac_nhan = Column(DateTime, nullable=True)
+
+
+class Notification(Base):
+    """Thông báo 1 chiều cho bệnh nhân - hiện tại chỉ tạo khi dược sĩ xác nhận xong
+    1 yêu cầu xét duyệt (xem submit_pharmacist_review)."""
+
+    __tablename__ = "notifications"
+    id = Column(String, primary_key=True, default=_uuid)
+    patient_id = Column(String, ForeignKey("users.id"))
+    pharmacist_review_id = Column(String, ForeignKey("pharmacist_reviews.id"), nullable=True)
+    noi_dung = Column(Text, nullable=False)
+    da_doc = Column(Boolean, default=False)
+    thoi_gian_tao = Column(DateTime, default=datetime.utcnow)

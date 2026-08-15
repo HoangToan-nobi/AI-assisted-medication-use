@@ -1,4 +1,4 @@
-import MaterialIcon from "@/components/MaterialIcon";
+import Image from "next/image";
 import { brand } from "@/lib/design-system";
 
 type BrandLogoProps = {
@@ -8,15 +8,22 @@ type BrandLogoProps = {
 };
 
 export default function BrandLogo({ size = "md", showTagline = false, className = "" }: BrandLogoProps) {
+  const logoWidth = size === "lg" ? 220 : size === "sm" ? 200 : 180;
   return (
-    <div className={`brand-logo brand-logo--${size} ${className}`} style={{ display: "flex", flexDirection: "row", flexWrap: "nowrap", alignItems: "center", gap: "8px" }}>
-      <div className="brand-logo__mark" style={{ display: "flex", alignItems: "center", color: "#1a2b4c" }}>
-        <MaterialIcon name="clinical_notes" size={size === "lg" ? 32 : size === "sm" ? 22 : 28} filled />
-      </div>
-      <div className="brand-logo__text" style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
-        <span className="brand-logo__name" style={{ fontWeight: 800, color: "#1a2b4c", fontSize: size === "lg" ? "24px" : size === "sm" ? "18px" : "20px", whiteSpace: "nowrap" }}>{brand.productName}</span>
-        {showTagline && <span className="brand-logo__tagline" style={{ fontSize: "12px", color: "#666", whiteSpace: "nowrap" }}>{brand.tagline}</span>}
-      </div>
+    <div className={`brand-logo brand-logo--${size} ${className}`}>
+      <Image
+        className="brand-logo__image"
+        src={encodeURI("/Bộ nhận diện y tế/2-cropped.png")}
+        alt={brand.productName}
+        width={logoWidth}
+        height={Math.round(logoWidth * 0.278)}
+        priority={size !== "sm"}
+      />
+      {showTagline && (
+        <div className="brand-logo__text">
+          <span className="brand-logo__tagline">{brand.tagline}</span>
+        </div>
+      )}
     </div>
   );
 }

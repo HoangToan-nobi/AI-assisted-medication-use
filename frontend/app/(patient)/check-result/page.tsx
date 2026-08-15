@@ -4,11 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Disclaimer from "@/components/Disclaimer";
 import MaterialIcon from "@/components/MaterialIcon";
-<<<<<<< HEAD
-import PharmacistReviewPrompt from "@/components/PharmacistReviewPrompt";
 import InteractionOverview from "@/components/graph/InteractionOverview";
-=======
->>>>>>> origin/main
 import { ApiError, getPatientCheckDetail, type MedicationCheckResponse } from "@/lib/api";
 import { getSession } from "@/lib/auth";
 import { productNamesFromExplanations } from "@/lib/interactionGraph";
@@ -38,12 +34,25 @@ function CheckResultContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkId]);
 
-  // Lịch sử không lưu thông tin đơn thuốc gốc (đơn thuốc chỉ là khái niệm phía
-  // frontend) - dựng lại 1 "đơn thuốc" tổng hợp từ danh sách thuốc xuất hiện
-  // trong các cặp giải thích, để dùng chung đúng graph phân cấp với tab tra cứu.
+  // Ưu tiên đúng cấu trúc đơn thuốc gốc (result.prescriptions) để dựng lại đúng
+  // "bàn cân" nhiều đơn như lúc kiểm tra (đồ thị + chi tiết chỉ tính tương tác
+  // GIỮA các đơn khi có từ 2 đơn trở lên, khớp overview backend đã sinh cùng
+  // logic). Dữ liệu lịch sử cũ lưu trước khi field này tồn tại (rỗng/undefined)
+  // rơi về gộp thành 1 "đơn thuốc" tổng hợp như hành vi cũ - ưu tiên
+  // checked_products (đầy đủ mọi thuốc đã nhập, kể cả thuốc không có tương tác);
+  // chỉ suy ra từ các cặp giải thích khi cả 2 field trên đều chưa có.
   const prescriptions: Prescription[] = useMemo(() => {
     if (!result) return [];
-    const names = productNamesFromExplanations(result.explanations);
+    if (result.prescriptions?.length) {
+      return result.prescriptions.map((p, i) => ({
+        id: `history-check-${i}`,
+        label: p.label,
+        drugs: p.products.map((name) => ({ name, known: true })),
+      }));
+    }
+    const names = result.checked_products?.length
+      ? result.checked_products
+      : productNamesFromExplanations(result.explanations);
     return [{ id: "history-check", label: "Thuốc đã kiểm tra", drugs: names.map((name) => ({ name, known: true })) }];
   }, [result]);
 
@@ -53,18 +62,24 @@ function CheckResultContent() {
     {loading && <div className="loading-row"><span className="spinner" /> Đang tải kết quả...</div>}
     {error && <p className="error-text" role="alert">{error}</p>}
     {!loading && result && <>
-      <section className={`result-hero ${result.has_severe ? "result-hero--severe" : result.has_unclassified ? "result-hero--unknown" : "result-hero--safe"}`}>
-        <span className="result-hero__icon"><MaterialIcon name={result.has_severe ? "warning" : result.has_unclassified ? "help" : "verified"} size={30} filled /></span>
-        <div>
-          <p className="eyebrow">TÓM TẮT PHÂN TÍCH</p>
-          <h2>{result.has_severe ? "Phát hiện cảnh báo nghiêm trọng" : result.has_unclassified ? "Chưa cập nhật đầy đủ dữ liệu" : "Chưa phát hiện cảnh báo nghiêm trọng"}</h2>
-          <p>{result.has_severe ? "Vui lòng liên hệ dược sĩ hoặc bác sĩ để được tư vấn kịp thời." : result.has_unclassified ? "Một số tương tác chưa có đủ dữ liệu để kết luận an toàn." : "Hãy tiếp tục sử dụng thuốc theo đúng hướng dẫn chuyên môn."}</p>
-          {result.has_severe && <PharmacistReviewPrompt checkId={checkId ?? result.interaction_check_id} token={session?.accessToken} patientId={session?.userId} />}
-        </div>
-      </section>
+      {(result.ghi_chu_duoc_si || result.cau_tra_loi_duoc_si) && (
+        <section className="pharmacist-note-box">
+          <MaterialIcon name="local_pharmacy" size={22} />
+          <div>
+            <p className="eyebrow">GHI CHÚ TỪ DƯỢC SĨ{result.ten_duoc_si_xac_nhan ? ` — ${result.ten_duoc_si_xac_nhan}` : ""}</p>
+            {result.cau_hoi_benh_nhan && (
+              <>
+                <p><strong>Câu hỏi của bạn:</strong> {result.cau_hoi_benh_nhan}</p>
+                <p><strong>Trả lời:</strong> {result.cau_tra_loi_duoc_si || "Dược sĩ chưa trả lời câu hỏi này."}</p>
+              </>
+            )}
+            {result.ghi_chu_duoc_si && <p>{result.ghi_chu_duoc_si}</p>}
+          </div>
+        </section>
+      )}
 
       <div className="section__header result-list-heading"><h2 className="section__title"><MaterialIcon name="fact_check" size={20} /> Chi tiết tương tác</h2></div>
-      <InteractionOverview result={result} prescriptions={prescriptions} />
+      <InteractionOverview result={result} prescriptions={prescriptions} session={session} />
     </>}
     <Disclaimer />
     <button className="secondary btn-block" onClick={() => router.push("/history")}><MaterialIcon name="arrow_back" size={20} /> Về lịch sử kiểm tra</button>
