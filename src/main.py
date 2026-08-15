@@ -9,6 +9,13 @@ from src.api.routes import router
 from src.config import get_settings
 from src.db.session import init_db
 
+# log_level trong Settings trước đây khai báo nhưng chưa từng gọi basicConfig để áp
+# dụng thật - logger.info() ở bất kỳ đâu trong app đều bị nuốt im lặng (root logger
+# mặc định chỉ in từ WARNING trở lên khi chưa cấu hình). Gọi ở đây, TRƯỚC khi import
+# các module khác log gì, để bật đúng log_level cho toàn app (bao gồm log đo thời
+# gian ở agents/graph.py và api/routes.py).
+logging.basicConfig(level=get_settings().log_level, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
 logger = logging.getLogger(__name__)
 
 
