@@ -42,6 +42,11 @@ def init_db() -> None:
     _ensure_column("pharmacist_reviews", "cau_tra_loi", "TEXT")
     _ensure_column("food_interactions", "thuc_pham_vi", "VARCHAR(255)")
     _ensure_column("disease_interactions", "ten_benh_vi", "VARCHAR(255)")
+    _ensure_column("interactions", "mo_ta_dich", "TEXT")
+    _ensure_column("interactions", "xu_tri_dich", "TEXT")
+    _ensure_column("food_interactions", "mo_ta_dich", "TEXT")
+    _ensure_column("food_interactions", "xu_tri_dich", "TEXT")
+    _ensure_column("disease_interactions", "mo_ta_dich", "TEXT")
 
 
 def get_db() -> Session:

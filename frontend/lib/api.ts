@@ -79,10 +79,12 @@ export type InteractionOverviewExplanation = {
 export type PrescriptionSummary = { label: string; products: string[] };
 
 // Tương tác thuốc-thực phẩm/thuốc-bệnh nền (DDInter 2.0 DFI/DDSI) - thông tin CHUNG
-// theo từng hoạt chất đang kiểm tra, không lọc theo hồ sơ bệnh nền cá nhân.
-// mo_ta_dich/xu_tri_dich chỉ dược sĩ mới thấy (backend đã tự ẩn với bệnh nhân).
+// theo từng hoạt chất đang kiểm tra, không lọc theo hồ sơ bệnh nền cá nhân. Đã gộp
+// theo THUỐC (san_pham luôn có đúng 1 phần tử - có thể nhiều thẻ nếu 1 hoạt chất
+// thuộc nhiều thuốc đang kiểm tra) - không còn field hoat_chat riêng lẻ, giống cơ
+// chế gộp cấp thuốc bên tương tác thuốc-thuốc. mo_ta_dich/xu_tri_dich chỉ dược sĩ
+// mới thấy (backend đã tự ẩn với bệnh nhân).
 export type FoodInteractionExplanation = {
-  hoat_chat: string;
   san_pham: string[];
   thuc_pham: string;
   muc_do?: Severity;
@@ -94,7 +96,6 @@ export type FoodInteractionExplanation = {
 };
 
 export type DiseaseInteractionExplanation = {
-  hoat_chat: string;
   san_pham: string[];
   ten_benh: string;
   muc_do?: Severity;
