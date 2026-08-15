@@ -72,6 +72,39 @@ export type InteractionOverviewExplanation = {
   tong_so_cap: number;
 };
 
+// Đúng cấu trúc đơn thuốc gốc đã gửi lên lúc kiểm tra (label + danh sách thuốc
+// mỗi đơn) - lưu lại trong lịch sử để xem lại (bệnh nhân/dược sĩ review) vẫn dựng
+// được đúng "bàn cân" nhiều đơn như lúc kiểm tra, thay vì gộp hết thuốc vào 1 đơn
+// ảo duy nhất. Rỗng/undefined ở dữ liệu lịch sử cũ lưu trước khi field này tồn tại.
+export type PrescriptionSummary = { label: string; products: string[] };
+
+// Tương tác thuốc-thực phẩm/thuốc-bệnh nền (DDInter 2.0 DFI/DDSI) - thông tin CHUNG
+// theo từng hoạt chất đang kiểm tra, không lọc theo hồ sơ bệnh nền cá nhân.
+// mo_ta_dich/xu_tri_dich chỉ dược sĩ mới thấy (backend đã tự ẩn với bệnh nhân).
+export type FoodInteractionExplanation = {
+  hoat_chat: string;
+  san_pham: string[];
+  thuc_pham: string;
+  muc_do?: Severity;
+  giai_thich: string;
+  giai_thich_duoc_si?: string;
+  nguon_trich_dan: string;
+  mo_ta_dich?: string;
+  xu_tri_dich?: string;
+};
+
+export type DiseaseInteractionExplanation = {
+  hoat_chat: string;
+  san_pham: string[];
+  ten_benh: string;
+  muc_do?: Severity;
+  giai_thich: string;
+  giai_thich_duoc_si?: string;
+  nguon_trich_dan: string;
+  // Không có xu_tri_dich - nguồn DDInter cho tương tác bệnh nền không có trường xử trí.
+  mo_ta_dich?: string;
+};
+
 export type MedicationCheckResponse = {
   interaction_check_id: string;
   ranked_results: Record<string, unknown>[];
@@ -81,13 +114,28 @@ export type MedicationCheckResponse = {
   // Chỉ có ở luồng kiểm tra theo tên thuốc (checkProducts/...).
   unknown_products?: string[];
   no_interaction_data_products?: string[];
+  // Toàn bộ tên thuốc đã nhập ở lần kiểm tra này (kể cả thuốc không có tương tác
+  // với thuốc nào khác) - dùng để vẽ đủ node trên đồ thị, không bị thiếu thuốc
+  // "cô đơn" (không thuộc cặp giải thích nào). Undefined ở dữ liệu lịch sử cũ,
+  // trước khi field này tồn tại.
+  checked_products?: string[];
+  prescriptions?: PrescriptionSummary[];
   product_explanations?: ProductLevelExplanation[];
   prescription_explanations?: PrescriptionLevelExplanation[];
   overview?: InteractionOverviewExplanation;
+  food_interactions?: FoodInteractionExplanation[];
+  disease_interactions?: DiseaseInteractionExplanation[];
+  // Câu liệt kê cố định (không qua LLM) tên thực phẩm/bệnh nền cần lưu ý, ghép thêm
+  // vào bảng tóm tắt tổng quan sau đoạn overview.giai_thich do LLM sinh.
+  canh_bao_thuc_pham_benh_nen?: string;
   // Ghi chú dược sĩ để lại khi xác nhận lần kiểm tra này - chỉ có ở
   // getPatientCheckDetail khi đã có dược sĩ xác nhận, undefined mọi trường hợp khác.
   ghi_chu_duoc_si?: string;
   ten_duoc_si_xac_nhan?: string;
+  // Câu hỏi bệnh nhân đã gửi kèm yêu cầu xét duyệt (nếu có) + câu trả lời tương ứng
+  // của dược sĩ - cùng điều kiện hiển thị với ghi_chu_duoc_si ở trên.
+  cau_hoi_benh_nhan?: string;
+  cau_tra_loi_duoc_si?: string;
 };
 
 // Kết quả thô từ GET /pharmacist/reviews/{id} - chính là state agent đầy đủ
@@ -97,8 +145,14 @@ export type AgentCheckResult = {
   explanations?: InteractionExplanation[];
   has_severe?: boolean;
   has_unclassified?: boolean;
+  checked_products?: string[];
+  prescriptions?: PrescriptionSummary[];
   product_explanations?: ProductLevelExplanation[];
   prescription_explanations?: PrescriptionLevelExplanation[];
+  overview?: InteractionOverviewExplanation;
+  food_interactions?: FoodInteractionExplanation[];
+  disease_interactions?: DiseaseInteractionExplanation[];
+  canh_bao_thuc_pham_benh_nen?: string;
 };
 
 // Payload gửi lên các endpoint /products/check - 1 phần tử = 1 đơn thuốc.
@@ -158,6 +212,7 @@ export type PharmacistReviewResponse = {
   interaction_check_id: string;
   trang_thai_xac_nhan: string;
   ghi_chu: string;
+  cau_tra_loi?: string;
 };
 
 export class ApiError extends Error {
@@ -418,6 +473,8 @@ export type RequestReviewPayload = {
   tenNguoiDuocKiemTra?: string;
   ngaySinhNhapTay?: string;
   ghiChuNhapTay?: string;
+  // Câu hỏi muốn hỏi dược sĩ về lần kiểm tra này - không bắt buộc.
+  cauHoi?: string;
 };
 
 export async function requestReview(
@@ -434,6 +491,7 @@ export async function requestReview(
       ten_nguoi_duoc_kiem_tra: payload?.tenNguoiDuocKiemTra || null,
       ngay_sinh_nhap_tay: payload?.ngaySinhNhapTay || null,
       ghi_chu_nhap_tay: payload?.ghiChuNhapTay || null,
+      cau_hoi: payload?.cauHoi || null,
     }),
   });
 }
@@ -451,6 +509,8 @@ export interface ReviewRequestSummary {
   ghi_chu_nhap_tay: string | null;
   ghi_chu: string | null;
   thoi_gian_xac_nhan: string | null;
+  cau_hoi: string | null;
+  cau_tra_loi: string | null;
 }
 
 export async function listPharmacistRequests(
@@ -471,12 +531,13 @@ export async function getInteractionCheckDetail(
 export async function submitPharmacistReview(
   checkId: string,
   ghiChu: string,
-  token: string
+  token: string,
+  cauTraLoi?: string
 ): Promise<PharmacistReviewResponse> {
   return request<PharmacistReviewResponse>("/api/v1/pharmacist/reviews", {
     method: "POST",
     token,
-    body: JSON.stringify({ interaction_check_id: checkId, ghi_chu: ghiChu }),
+    body: JSON.stringify({ interaction_check_id: checkId, ghi_chu: ghiChu, cau_tra_loi: cauTraLoi || null }),
   });
 }
 

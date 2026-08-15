@@ -41,3 +41,34 @@ def parse_tones(raw: str) -> tuple[str, str]:
         if patient_part and pharmacist_part:
             return patient_part, pharmacist_part
     return text, text
+
+
+# Marker cho phần thứ 3 (bản dịch nguyên văn không qua diễn giải) - dùng ở những nơi
+# cần dịch thẳng mô tả/xử trí gốc từ CSDL DDInter (hoạt chất-hoạt chất, hoạt chất-thực
+# phẩm, hoạt chất-bệnh nền) song song với 2 giọng điệu ở trên, chỉ dược sĩ mới thấy.
+TRANSLATION_MARKER = "[BẢN_DỊCH]"
+
+
+def split_translation_block(raw: str, labels: list[tuple[str, str]]) -> tuple[str, dict[str, str | None]]:
+    """Tách phần dịch nguyên văn (bắt đầu bằng TRANSLATION_MARKER, LLM luôn đặt SAU
+    2 phần giọng điệu) ra khỏi phần còn lại TRƯỚC khi gọi parse_tones - nếu không tách
+    trước, parse_tones sẽ dính luôn đoạn dịch vào cuối bản dược sĩ vì nó chỉ biết dừng
+    ở hết chuỗi.
+
+    labels: danh sách (nhãn dòng viết thường có dấu ':', tên field kết quả), ví dụ
+    [("mô tả:", "mo_ta_dich"), ("xử trí:", "xu_tri_dich")] - đúng thứ tự đã yêu cầu
+    LLM trả về trong phần hướng dẫn định dạng. Trả về (phần còn lại để đưa cho
+    parse_tones, dict tên field -> giá trị hoặc None nếu thiếu/không có).
+    """
+    values: dict[str, str | None] = {key: None for _, key in labels}
+    if TRANSLATION_MARKER not in raw:
+        return raw, values
+    rest, block = raw.split(TRANSLATION_MARKER, 1)
+    for line in block.strip().splitlines():
+        line = line.strip()
+        lower = line.lower()
+        for label, key in labels:
+            if lower.startswith(label):
+                values[key] = line.split(":", 1)[1].strip() or None
+                break
+    return rest, values
