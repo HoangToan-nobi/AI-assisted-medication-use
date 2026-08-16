@@ -15,6 +15,7 @@ ETHANOL_ID = "DDInter690"  # alias "ruou"/"rượu"
 ACETAMINOPHEN_ID = "DDInter14"  # alias "paracetamol"/"panadol"/"tylenol"
 IBUPROFEN_ID = "DDInter900"
 FOLIC_ACID_ID = "DDInter771"
+AMOXICILLIN_ID = "DDInter83"
 
 
 def _has_real_data() -> bool:
@@ -95,6 +96,9 @@ async def test_lookup_node_finds_severe_interaction():
 
 
 # TC-N04: lookup_node không bịa tương tác khi 2 thuốc thật không có cặp trong CSDL.
+# Cap Ethanol+Acetaminophen dung truoc day da co du lieu that (muc "nang") sau khi
+# data/raw duoc nap them nhieu nhom ATC hon (B/D/P/V&R...) - doi sang cap
+# Amoxicillin+Acetaminophen, da xac minh hien khong co dong nao trong interactions.
 @_requires_real_data
 @pytest.mark.asyncio
 async def test_lookup_node_no_data_for_unknown_pair():
@@ -102,9 +106,9 @@ async def test_lookup_node_no_data_for_unknown_pair():
         {
             "normalized_medications": [
                 {
-                    "ten_goc": "ruou",
-                    "ten_chuan": "Ethanol",
-                    "medication_id": ETHANOL_ID,
+                    "ten_goc": "amoxicillin",
+                    "ten_chuan": "Amoxicillin",
+                    "medication_id": AMOXICILLIN_ID,
                     "khong_du_du_lieu": False,
                 },
                 {
@@ -198,7 +202,7 @@ async def test_rank_node_flags_unclassified():
 # TC-N06: explain_node luôn gán nguon_trich_dan không rỗng cho mỗi giải thích.
 @pytest.mark.asyncio
 async def test_explain_node_always_has_citation(monkeypatch, mock_llm):
-    monkeypatch.setattr("src.agents.nodes.explain_node.get_llm", lambda: mock_llm)
+    monkeypatch.setattr("src.agents.nodes.explain_node.ainvoke_llm", mock_llm.ainvoke)
 
     result = await explain_node(
         {
@@ -223,10 +227,10 @@ async def test_explain_node_always_has_citation(monkeypatch, mock_llm):
 # TC-N11: explain_node trả câu cố định cho mức "chua_phan_loai", KHÔNG gọi LLM.
 @pytest.mark.asyncio
 async def test_explain_node_unclassified_skips_llm(monkeypatch):
-    def _fail_if_called():
+    async def _fail_if_called(*args, **kwargs):
         raise AssertionError("explain_node khong duoc goi LLM cho muc chua_phan_loai")
 
-    monkeypatch.setattr("src.agents.nodes.explain_node.get_llm", _fail_if_called)
+    monkeypatch.setattr("src.agents.nodes.explain_node.ainvoke_llm", _fail_if_called)
 
     result = await explain_node(
         {
