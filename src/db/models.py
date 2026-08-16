@@ -144,6 +144,13 @@ class Interaction(Base):
     muc_do = Column(String(20))  # nhe | trung_binh | nang | chua_phan_loai
     mo_ta = Column(Text)
     xu_tri = Column(Text)  # DDInter Management — CHỈ hiển thị cho vai trò dược sĩ
+    # Bản dịch tiếng Việt nguyên văn của mo_ta/xu_tri - chỉ ~3000 tổ hợp (mo_ta, xu_tri)
+    # khác nhau trong toàn CSDL (nhiều cặp thuốc dùng chung 1 mẫu mô tả DDInter) nên
+    # dịch 1 lần qua scripts/translate_interaction_texts.py, lưu lại thay vì gọi LLM
+    # dịch lại mỗi lần sinh giải thích (xem explain_node.py). NULL nếu script chưa
+    # chạy qua dòng này.
+    mo_ta_dich = Column(Text, nullable=True)
+    xu_tri_dich = Column(Text, nullable=True)
     nguon_trich_dan = Column(Text)
     thay_the_a = Column(Text)  # DDInter Alt_for_A — tham khảo cho dược sĩ, KHÔNG dùng để agent tự đề xuất đổi thuốc
     thay_the_b = Column(Text)  # DDInter Alt_for_B
@@ -167,6 +174,11 @@ class FoodInteraction(Base):
     muc_do = Column(String(20))  # nhe | trung_binh | nang | chua_phan_loai
     mo_ta = Column(Text)  # DDInter interaction
     xu_tri = Column(Text)  # DDInter management — CHỈ hiển thị cho vai trò dược sĩ
+    # Bản dịch tiếng Việt nguyên văn của mo_ta/xu_tri - cùng cơ chế dịch 1 lần + cache
+    # như Interaction.mo_ta_dich (xem scripts/translate_food_disease_texts.py). NULL
+    # nếu script chưa chạy qua dòng này.
+    mo_ta_dich = Column(Text, nullable=True)
+    xu_tri_dich = Column(Text, nullable=True)
     nguon_trich_dan = Column(Text)
 
 
@@ -186,6 +198,9 @@ class DiseaseInteraction(Base):
     ten_benh_vi = Column(String(255), nullable=True)
     muc_do = Column(String(20))
     mo_ta = Column(Text)  # DDInter interaction
+    # Bản dịch tiếng Việt nguyên văn của mo_ta - không có xu_tri_dich vì DDSI không
+    # có trường management (xem docstring class). Cùng cơ chế cache như Interaction.mo_ta_dich.
+    mo_ta_dich = Column(Text, nullable=True)
     nguon_trich_dan = Column(Text)
 
 

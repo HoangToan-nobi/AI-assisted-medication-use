@@ -1,3 +1,6 @@
+import asyncio
+import logging
+import time
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -67,6 +70,18 @@ from src.services.rollup_explain import (
 )
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
+
+
+async def _timed(label: str, coro):
+    """Đo + log thời gian chạy 1 coroutine - dùng để so sánh nhánh nào (rollup cấp
+    thuốc, tổng quan, thực phẩm, bệnh nền...) đang chiếm nhiều thời gian nhất trong 1
+    lần kiểm tra tương tác. Không đổi giá trị trả về, chỉ thêm quan sát."""
+    start = time.perf_counter()
+    result = await coro
+    logger.info("[timing] %s: %.3fs", label, time.perf_counter() - start)
+    return result
 
 # Field chỉ dành cho vai trò dược sĩ (GD6 mục 7.2) - không trả cho bệnh nhân.
 _PHARMACIST_ONLY_FIELDS = {
@@ -398,12 +413,15 @@ async def _run_product_check(
     for_pharmacist=False (luồng bệnh nhân): KHÔNG sinh prescription_explanations
     (không còn UI nào dùng tới, tránh tốn LLM call vô ích).
     """
+    _t_start = time.perf_counter()
     flat_products, origins_by_input = _flatten_prescriptions(prescriptions)
+    _t_resolve = time.perf_counter()
     ingredient_names, ingredient_to_products, unknown, no_data, canonical_by_input = _resolve_products(
         flat_products, db
     )
+    logger.info("[timing] resolve_products: %.3fs", time.perf_counter() - _t_resolve)
 
-    result = dict(await agent.ainvoke({"raw_medications": ingredient_names}))
+    result = dict(await _timed("agent_total (normalize+lookup+rank+explain+guardrail)", agent.ainvoke({"raw_medications": ingredient_names})))
     if result.get("error"):
         raise HTTPException(status_code=422, detail=result["error"])
 
@@ -433,24 +451,16 @@ async def _run_product_check(
         if len(prescriptions) > 1
         else product_edges
     )
-    result["product_explanations"] = await build_product_explanations(overview_product_edges)
 
-    if for_pharmacist and len(prescriptions) > 1:
+    async def _prescription_chain() -> list[dict]:
+        if not (for_pharmacist and len(prescriptions) > 1):
+            return []
         labels = [p.label for p in prescriptions]
         prescription_edges = build_prescription_edges(product_edges, product_origins)
-        result["prescription_explanations"] = await build_prescription_explanations(
-            prescription_edges, labels
+        return await _timed(
+            "prescription_explanations (rollup cấp đơn)",
+            build_prescription_explanations(prescription_edges, labels),
         )
-    else:
-        result["prescription_explanations"] = []
-
-    result["overview"] = await build_overview_explanation(
-        overview_product_edges,
-        result["product_explanations"],
-        audience="pharmacist" if for_pharmacist else "patient",
-    )
-    result["checked_products"] = flat_products
-    result["prescriptions"] = [{"label": p.label, "products": p.products} for p in prescriptions]
 
     # Tương tác thuốc-thực phẩm/thuốc-bệnh nền: thông tin CHUNG theo từng hoạt chất
     # đang kiểm tra (không lọc theo hồ sơ bệnh nền cá nhân - benh_nen_ghi_chu là text
@@ -461,14 +471,42 @@ async def _run_product_check(
         for med in result.get("normalized_medications", [])
         if not med.get("khong_du_du_lieu")
     ]
+    _t_food_lookup = time.perf_counter()
     food_rows = lookup_food_interactions(valid_medication_ids, db)
     disease_rows = lookup_disease_interactions(valid_medication_ids, db)
-    result["food_interactions"] = await build_food_interaction_explanations(
-        food_rows, ingredient_to_products
+    logger.info("[timing] food_disease_lookup (SQL): %.3fs", time.perf_counter() - _t_food_lookup)
+
+    # 5 nhánh sinh giải thích HOÀN TOÀN không phụ thuộc lẫn nhau - kể cả overview giờ
+    # cũng đọc thẳng product_edges (dữ liệu gốc + bản dịch đã cache), không còn đợi
+    # product_explanations viết xong như trước (xem build_overview_explanation). Chạy
+    # song song bằng asyncio.gather thay vì await nối tiếp từng nhánh, cắt phần lớn
+    # thời gian chờ khi 1 lần kiểm tra cần nhiều "đợt" LLM (rollup cấp thuốc, tổng
+    # quan, thực phẩm, bệnh nền).
+    (
+        product_explanations,
+        overview,
+        prescription_explanations,
+        food_interactions,
+        disease_interactions,
+    ) = await asyncio.gather(
+        _timed("product_explanations (rollup cấp thuốc)", build_product_explanations(overview_product_edges)),
+        _timed(
+            "overview (tổng quan tóm tắt)",
+            build_overview_explanation(overview_product_edges, audience="pharmacist" if for_pharmacist else "patient"),
+        ),
+        _prescription_chain(),
+        _timed("food_interactions (thuốc-thực phẩm)", build_food_interaction_explanations(food_rows, ingredient_to_products)),
+        _timed("disease_interactions (thuốc-bệnh nền)", build_disease_interaction_explanations(disease_rows, ingredient_to_products)),
     )
-    result["disease_interactions"] = await build_disease_interaction_explanations(
-        disease_rows, ingredient_to_products
-    )
+    logger.info("[timing] === product_check total: %.3fs ===", time.perf_counter() - _t_start)
+
+    result["product_explanations"] = product_explanations
+    result["prescription_explanations"] = prescription_explanations
+    result["overview"] = overview
+    result["checked_products"] = flat_products
+    result["prescriptions"] = [{"label": p.label, "products": p.products} for p in prescriptions]
+    result["food_interactions"] = food_interactions
+    result["disease_interactions"] = disease_interactions
     result["canh_bao_thuc_pham_benh_nen"] = build_food_disease_warning_line(
         result["food_interactions"], result["disease_interactions"]
     )

@@ -8,7 +8,7 @@ biết tên hoạt chất."""
 import asyncio
 
 from src.agents.nodes.guardrail_node import filter_banned_language
-from src.services.llm import get_llm
+from src.services.llm import ainvoke_llm
 from src.services.tone_prompt import FORMAT_INSTRUCTIONS, SAFETY_RULES, parse_tones
 
 _SEVERITY_RANK = {"nang": 3, "trung_binh": 2, "nhe": 1, "chua_phan_loai": 0}
@@ -18,8 +18,89 @@ def _severity_rank(muc_do: str | None) -> int:
     return _SEVERITY_RANK.get(muc_do, -1)
 
 
+def _truncate(text: str | None, max_chars: int) -> str:
+    if not text:
+        return ""
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars] + "... (đã rút gọn)"
+
+
 def _edge_key(a: str, b: str) -> str:
     return "::".join(sorted([a.lower(), b.lower()]))
+
+
+# ---- Gộp + dịch bám sát nghĩa (dùng chung cho cấp thuốc/thực phẩm/bệnh nền khi 1
+# cạnh có NHIỀU cặp hoạt chất góp phần) ----
+
+# Chỉ đưa tối đa từng này cặp vào 1 lượt dịch gộp - tránh phình prompt.
+_MAX_LITERAL_MERGE_ITEMS = 5
+
+_LITERAL_MERGE_SYSTEM_PROMPT_WITH_XU_TRI = (
+    "Bạn là dược sĩ kiêm biên dịch y khoa. Dưới đây là Mô tả CSDL và Xử trí CSDL "
+    "(tiếng Anh) của nhiều cặp tương tác khác nhau, cùng góp phần vào 1 cảnh báo tổng "
+    "hợp. Hãy TỔNG HỢP các ý và DỊCH sang tiếng Việt, bám sát ĐÚNG ngữ nghĩa gốc — "
+    "KHÔNG diễn giải lại theo văn phong tự nhiên/trò chuyện như một đoạn giải thích, "
+    "KHÔNG thêm/bớt thông tin y khoa nào ngoài nội dung đã cho, chỉ gộp các ý trùng "
+    "lặp và dịch trung thực, sát nghĩa nhất có thể. Trả lời ĐÚNG theo định dạng, "
+    "không thêm chữ nào khác:\n"
+    "Mô tả: <tổng hợp + dịch bám sát nghĩa Mô tả CSDL>\n"
+    "Xử trí: <tổng hợp + dịch bám sát nghĩa Xử trí CSDL, để trống sau dấu hai chấm nếu không có>"
+)
+
+_LITERAL_MERGE_SYSTEM_PROMPT_MO_TA_ONLY = (
+    "Bạn là dược sĩ kiêm biên dịch y khoa. Dưới đây là Mô tả CSDL (tiếng Anh) của "
+    "nhiều cặp tương tác khác nhau, cùng góp phần vào 1 cảnh báo tổng hợp. Hãy TỔNG "
+    "HỢP các ý và DỊCH sang tiếng Việt, bám sát ĐÚNG ngữ nghĩa gốc — KHÔNG diễn giải "
+    "lại theo văn phong tự nhiên/trò chuyện như một đoạn giải thích, KHÔNG thêm/bớt "
+    "thông tin y khoa nào ngoài nội dung đã cho, chỉ gộp các ý trùng lặp và dịch "
+    "trung thực, sát nghĩa nhất có thể. Trả lời ĐÚNG theo định dạng, không thêm chữ "
+    "nào khác:\n"
+    "Mô tả: <tổng hợp + dịch bám sát nghĩa Mô tả CSDL>"
+)
+
+
+def _literal_merge_parse(raw: str) -> tuple[str | None, str | None]:
+    mo_ta_dich, xu_tri_dich = None, None
+    for line in (raw or "").strip().splitlines():
+        line = line.strip()
+        lower = line.lower()
+        if lower.startswith("mô tả:") or lower.startswith("mo ta:"):
+            mo_ta_dich = line.split(":", 1)[1].strip() or None
+        elif lower.startswith("xử trí:") or lower.startswith("xu tri:"):
+            xu_tri_dich = line.split(":", 1)[1].strip() or None
+    return mo_ta_dich, xu_tri_dich
+
+
+async def literal_merge_translate(
+    items: list[dict], include_xu_tri: bool, max_items: int = _MAX_LITERAL_MERGE_ITEMS
+) -> tuple[str | None, str | None]:
+    """Gộp Mô tả/Xử trí CSDL (tiếng Anh, từ nhiều cặp góp phần đã sort severity-desc)
+    thành 1 bản dịch DUY NHẤT, bám sát nghĩa gốc - KHÔNG đổi giọng điệu/cách viết tự
+    nhiên như phần giai_thich (văn xuôi, đa dạng cách nói giữa các lần). Dùng chung
+    cho cả 3 cấp (thuốc-thuốc/thực phẩm/bệnh nền) khi 1 cạnh có nhiều cặp góp phần
+    cần gộp thành 1 thẻ - thay cho cách cũ chỉ lấy nguyên bản dịch của 1 cặp đại diện."""
+    usable = [item for item in items[:max_items] if item.get("mo_ta")]
+    if not usable:
+        return None, None
+
+    lines = []
+    for i, item in enumerate(usable, start=1):
+        block = f"Cặp {i}:\nMô tả CSDL: {_truncate(item.get('mo_ta'), 800)}"
+        if include_xu_tri:
+            block += f"\nXử trí CSDL: {_truncate(item.get('xu_tri'), 800) or '(không có)'}"
+        lines.append(block)
+
+    system_prompt = (
+        _LITERAL_MERGE_SYSTEM_PROMPT_WITH_XU_TRI if include_xu_tri else _LITERAL_MERGE_SYSTEM_PROMPT_MO_TA_ONLY
+    )
+    response = await ainvoke_llm(
+        [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": "\n\n".join(lines)},
+        ]
+    )
+    return _literal_merge_parse(response.content or "")
 
 
 def build_product_edges(explanations: list[dict]) -> list[dict]:
@@ -171,10 +252,7 @@ _UNCLASSIFIED_PRODUCT_MESSAGE = (
 
 
 def _product_citation(pair_count: int) -> str:
-    return (
-        f"Tổng hợp từ {pair_count} cặp hoạt chất tương tác trong CSDL DDInter 2.0 "
-        "— xem chi tiết ở cấp hoạt chất."
-    )
+    return f"Tổng hợp từ {pair_count} cặp hoạt chất tương tác trong CSDL DDInter 2.0."
 
 
 def _product_user_prompt(product_a: str, product_b: str, muc_do: str, contributing_pairs: list[dict]) -> str:
@@ -197,14 +275,6 @@ def _product_user_prompt(product_a: str, product_b: str, muc_do: str, contributi
 async def _explain_product_edge(edge: dict) -> dict:
     product_a, product_b = edge["product_a"], edge["product_b"]
     muc_do, pair_count = edge["muc_do"], edge["pair_count"]
-    # Cặp hoạt chất góp phần nặng nhất (contributing_pairs đã sort severity-desc) -
-    # dùng ĐÚNG bản dịch nguyên văn đã sinh sẵn ở cấp hoạt chất (explain_node), không
-    # dịch lại ở đây để khỏi tốn thêm 1 lượt gọi LLM cho cùng nội dung nguồn.
-    representative = edge["contributing_pairs"][0] if edge["contributing_pairs"] else {}
-    translated_fields = {
-        "mo_ta_dich": representative.get("mo_ta_dich"),
-        "xu_tri_dich": representative.get("xu_tri_dich"),
-    }
 
     if muc_do == "chua_phan_loai":
         message = _UNCLASSIFIED_PRODUCT_MESSAGE.format(a=product_a, b=product_b)
@@ -215,20 +285,26 @@ async def _explain_product_edge(edge: dict) -> dict:
             "giai_thich": message,
             "giai_thich_duoc_si": message,
             "nguon_trich_dan": _product_citation(pair_count),
-            **translated_fields,
+            "mo_ta_dich": None,
+            "xu_tri_dich": None,
         }
 
-    llm = get_llm()
-    response = await llm.ainvoke(
-        [
-            {"role": "system", "content": _PRODUCT_SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": _product_user_prompt(product_a, product_b, muc_do, edge["contributing_pairs"]),
-            },
-        ]
+    # 2 lượt gọi LLM ĐỘC LẬP chạy song song: 1 viết giải thích (giọng điệu tự nhiên,
+    # đa dạng cách nói), 1 gộp + dịch bám sát nghĩa gốc (không đổi giọng điệu) - xem
+    # literal_merge_translate.
+    narrative_response, (mo_ta_dich, xu_tri_dich) = await asyncio.gather(
+        ainvoke_llm(
+            [
+                {"role": "system", "content": _PRODUCT_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": _product_user_prompt(product_a, product_b, muc_do, edge["contributing_pairs"]),
+                },
+            ]
+        ),
+        literal_merge_translate(edge["contributing_pairs"], include_xu_tri=True),
     )
-    patient_text, pharmacist_text = parse_tones(response.content)
+    patient_text, pharmacist_text = parse_tones(narrative_response.content)
     return {
         "thuoc_a": product_a,
         "thuoc_b": product_b,
@@ -236,7 +312,8 @@ async def _explain_product_edge(edge: dict) -> dict:
         "giai_thich": filter_banned_language(patient_text),
         "giai_thich_duoc_si": filter_banned_language(pharmacist_text),
         "nguon_trich_dan": _product_citation(pair_count),
-        **translated_fields,
+        "mo_ta_dich": mo_ta_dich,
+        "xu_tri_dich": xu_tri_dich,
     }
 
 
@@ -302,8 +379,7 @@ async def _explain_prescription_edge(edge: dict, labels: list[str]) -> dict:
             "nguon_trich_dan": _prescription_citation(pair_count),
         }
 
-    llm = get_llm()
-    response = await llm.ainvoke(
+    response = await ainvoke_llm(
         [
             {"role": "system", "content": _PRESCRIPTION_SYSTEM_PROMPT},
             {"role": "user", "content": _prescription_user_prompt(label_a, label_b, muc_do, pair_count)},
@@ -394,7 +470,25 @@ _NO_INTERACTION_OVERVIEW_MESSAGE_PHARMACIST = (
 )
 
 
-def _overview_user_prompt(counts: dict[str, int], product_explanations: list[dict], audience: str) -> str:
+_MAX_OVERVIEW_EDGE_SUMMARY_CHARS = 500
+
+
+def _overview_edge_summary(edge: dict) -> str:
+    """Tóm tắt ngắn 1 dòng cho 1 cạnh cấp thuốc, đọc THẲNG dữ liệu gốc (mô tả CSDL
+    của cặp hoạt chất góp phần nặng nhất - contributing_pairs đã sort severity-desc)
+    - KHÔNG đọc lại đoạn văn product_explanations đã viết, để overview không phải đợi
+    build_product_explanations chạy xong (xem build_overview_explanation).
+
+    Đang dùng thẳng mo_ta gốc tiếng Anh (KHÔNG ưu tiên mo_ta_dich đã cache) theo yêu
+    cầu test - bỏ qua phụ thuộc vào batch dịch cache còn đang dở dang."""
+    if edge.get("muc_do") == "chua_phan_loai":
+        return "DDInter chưa phân loại mức độ nghiêm trọng cho tương tác này."
+    representative = edge["contributing_pairs"][0] if edge["contributing_pairs"] else {}
+    text = representative.get("mo_ta") or ""
+    return _truncate(text, _MAX_OVERVIEW_EDGE_SUMMARY_CHARS)
+
+
+def _overview_user_prompt(counts: dict[str, int], product_edges: list[dict]) -> str:
     total = sum(counts.values())
     lines = [
         f"Tổng số cặp thuốc-thuốc có tương tác: {total}",
@@ -403,28 +497,27 @@ def _overview_user_prompt(counts: dict[str, int], product_explanations: list[dic
         f"- Mức nhẹ: {counts['nhe']}",
         f"- Chưa phân loại: {counts['chua_phan_loai']}",
         "",
-        "Danh sách giải thích từng cặp thuốc-thuốc (đã sắp nặng nhất trước):",
+        "Danh sách dữ liệu gốc (CSDL DDInter 2.0) từng cặp thuốc-thuốc, đã sắp nặng nhất trước:",
     ]
-    sorted_items = sorted(product_explanations, key=lambda e: _severity_rank(e.get("muc_do")), reverse=True)
-    text_field = "giai_thich_duoc_si" if audience == "pharmacist" else "giai_thich"
-    for item in sorted_items[:_MAX_OVERVIEW_PAIRS]:
+    sorted_edges = sorted(product_edges, key=lambda e: _severity_rank(e.get("muc_do")), reverse=True)
+    for edge in sorted_edges[:_MAX_OVERVIEW_PAIRS]:
         lines.append(
-            f"- {item.get('thuoc_a')} + {item.get('thuoc_b')} (mức {item.get('muc_do')}): "
-            f"{item.get(text_field) or item.get('giai_thich', '')}"
+            f"- {edge.get('product_a')} + {edge.get('product_b')} (mức {edge.get('muc_do')}): "
+            f"{_overview_edge_summary(edge)}"
         )
     lines.append("")
     lines.append("Hãy viết đoạn tổng quan theo đúng hướng dẫn ở trên, bằng tiếng Việt.")
     return "\n".join(lines)
 
 
-async def build_overview_explanation(
-    product_edges: list[dict], product_explanations: list[dict], audience: str = "patient"
-) -> dict:
+async def build_overview_explanation(product_edges: list[dict], audience: str = "patient") -> dict:
     """Sinh 1 đoạn tóm tắt tổng quan toàn bộ lần phân tích - thống kê số cặp
-    thuốc-thuốc theo mức độ + tổng hợp nội dung từ toàn bộ product_explanations đã
-    sinh ở build_product_explanations. audience="patient"|"pharmacist" chọn đúng
-    giọng điệu (thân thiện dễ hiểu / khoa học chuyên nghiệp) và bản giải thích cấp
-    thuốc tương ứng (giai_thich / giai_thich_duoc_si) để đưa vào prompt."""
+    thuốc-thuốc theo mức độ + tổng hợp TRỰC TIẾP từ dữ liệu gốc trong product_edges
+    (contributing_pairs, đã có bản dịch cache sẵn) - KHÔNG còn đọc product_explanations
+    (đoạn văn rollup cấp thuốc do LLM khác viết) làm nguyên liệu như trước, để overview
+    không phải đợi build_product_explanations chạy xong mà chạy SONG SONG được với nó
+    (xem routes.py::_run_product_check). audience="patient"|"pharmacist" chỉ còn ảnh
+    hưởng tới giọng điệu system prompt, không ảnh hưởng dữ liệu nguồn đưa vào."""
     counts = severity_counts(product_edges)
     total = sum(counts.values())
     is_pharmacist = audience == "pharmacist"
@@ -434,12 +527,11 @@ async def build_overview_explanation(
             _NO_INTERACTION_OVERVIEW_MESSAGE_PHARMACIST if is_pharmacist else _NO_INTERACTION_OVERVIEW_MESSAGE_PATIENT
         )
     else:
-        llm = get_llm()
         system_prompt = _OVERVIEW_SYSTEM_PROMPT_PHARMACIST if is_pharmacist else _OVERVIEW_SYSTEM_PROMPT_PATIENT
-        response = await llm.ainvoke(
+        response = await ainvoke_llm(
             [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": _overview_user_prompt(counts, product_explanations, audience)},
+                {"role": "user", "content": _overview_user_prompt(counts, product_edges)},
             ]
         )
         giai_thich = filter_banned_language((response.content or "").strip())

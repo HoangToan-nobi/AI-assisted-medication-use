@@ -83,7 +83,7 @@ async def test_medications_check_requires_auth(client):
 async def test_check_medications_severe_pair_hides_pharmacist_fields(client, monkeypatch, mock_llm):
     # Mức "nang" (khác chua_phan_loai) đi qua nhánh gọi LLM thật trong explain_node -
     # mock lại để test không phụ thuộc DEEPSEEK_API_KEY thật.
-    monkeypatch.setattr("src.agents.nodes.explain_node.get_llm", lambda: mock_llm)
+    monkeypatch.setattr("src.agents.nodes.explain_node.ainvoke_llm", mock_llm.ainvoke)
 
     patient = await _register(client, "Benh nhan A", "patient")
     headers = _auth_headers(patient["access_token"])
@@ -243,7 +243,7 @@ async def test_search_medications_matches_alias(client):
 
 @pytest.mark.asyncio
 async def test_pharmacist_receives_review_request_and_can_review(monkeypatch, mock_llm):
-    monkeypatch.setattr("src.agents.nodes.explain_node.get_llm", lambda: mock_llm)
+    monkeypatch.setattr("src.agents.nodes.explain_node.ainvoke_llm", mock_llm.ainvoke)
 
     from httpx import ASGITransport, AsyncClient
 
