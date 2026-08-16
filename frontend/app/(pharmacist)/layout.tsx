@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { getInitials } from "@/lib/format";
-import { clearSession, getSession, type Session } from "@/lib/auth";
+import { clearSession, getSession, onSessionUpdated, type Session } from "@/lib/auth";
 import BrandLogo from "@/components/BrandLogo";
 import MaterialIcon from "@/components/MaterialIcon";
 
@@ -24,6 +24,8 @@ export default function PharmacistLayout({ children }: { children: React.ReactNo
     setSession(s);
     setChecked(true);
   }, [router]);
+
+  useEffect(() => onSessionUpdated(() => setSession(getSession())), []);
 
   function handleLogout() {
     clearSession();

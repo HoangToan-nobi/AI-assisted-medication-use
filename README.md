@@ -8,7 +8,13 @@ Bệnh nhân dùng nhiều thuốc/thực phẩm chức năng cùng lúc dễ g�
 
 ## Screenshot
 
-> _TODO: chụp ảnh màn hình dashboard bệnh nhân, màn hình kiểm tra tương tác, và màn hình dược sĩ; chèn vào đây trước khi nộp bài._
+| Landing page | Dashboard bệnh nhân |
+|---|---|
+| ![Landing page](docs/screenshots/landing-page.png) | ![Dashboard bệnh nhân](docs/screenshots/patient-dashboard.png) |
+
+| Kết quả kiểm tra tương tác | Dashboard dược sĩ |
+|---|---|
+| ![Kết quả kiểm tra tương tác](docs/screenshots/interaction-result.png) | ![Dashboard dược sĩ](docs/screenshots/pharmacist-dashboard.png) |
 
 ## Tech Stack
 
@@ -169,9 +175,10 @@ Danh sách endpoint đầy đủ + request/response schema: [http://localhost:80
 
 | Thành viên | Vai trò | MSSV |
 |---|---|---|
-| _TODO_ | _TODO_ | _TODO_ |
-| _TODO_ | _TODO_ | _TODO_ |
-| _TODO_ | _TODO_ | _TODO_ |
+| Nguyễn Thị Tuyết Mai | Data, designer, frontend | 2A202601693
+| Lê Thị Linh | Data, designer, frontend | 2A202601441
+| Hoàng Sỹ Toàn (Leader) | Data, PM, OCR | 2A202601273
+| Đàm Lê Minh Quân | Data, Backend, AI agent | 2A202601451
 
 ## Live URL
 
