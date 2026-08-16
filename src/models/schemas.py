@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ChatRequest(BaseModel):
@@ -165,6 +165,7 @@ class InteractionCheckSummary(BaseModel):
     co_canh_bao_nang: bool
     co_chua_phan_loai: bool
     trang_thai_xac_nhan: str
+    thuoc_da_kiem_tra: list[str] = Field(default_factory=list)
 
 
 # ---- Dược sĩ ----
@@ -274,8 +275,19 @@ class UpdatePatientProfileRequest(BaseModel):
     ho_ten: str | None = Field(default=None, max_length=255)
     ngay_sinh: date | None = None
     gioi_tinh: str | None = Field(default=None, max_length=20)
-    can_nang: float | None = None
-    chieu_cao: float | None = None
+    can_nang: float | None = Field(default=None, ge=1, le=300, allow_inf_nan=False)
+    chieu_cao: float | None = Field(default=None, ge=30, le=250, allow_inf_nan=False)
     benh_nen_ghi_chu: str | None = Field(default=None, max_length=2000)
     di_ung_thuoc: str | None = Field(default=None, max_length=2000)
     tinh_trang_khac: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("ngay_sinh")
+    @classmethod
+    def validate_age(cls, value: date | None) -> date | None:
+        if value is None:
+            return value
+        today = date.today()
+        age = today.year - value.year - ((today.month, today.day) < (value.month, value.day))
+        if age < 0 or age > 120:
+            raise ValueError("Tuổi phải nằm trong khoảng 0–120")
+        return value

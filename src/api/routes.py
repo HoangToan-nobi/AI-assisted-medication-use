@@ -966,6 +966,28 @@ def _review_note(db: Session, check_id: str) -> tuple[str | None, str | None, st
     )
 
 
+def _checked_drug_names(result: dict | None) -> list[str]:
+    """Return the drug names stored with a check, including older check formats."""
+    payload = result or {}
+    names = payload.get("checked_products", [])
+    if not names:
+        names = [
+            product
+            for prescription in payload.get("prescriptions", [])
+            if isinstance(prescription, dict)
+            for product in prescription.get("products", [])
+        ]
+    if not names:
+        names = [
+            medication.get("ten_chuan") or medication.get("ten_goc")
+            for medication in payload.get("normalized_medications", [])
+            if isinstance(medication, dict)
+        ]
+    return list(dict.fromkeys(
+        name.strip() for name in names if isinstance(name, str) and name.strip()
+    ))
+
+
 @router.get("/patients/{patient_id}/checks", response_model=list[InteractionCheckSummary])
 async def list_patient_checks(
     patient_id: str,
@@ -989,6 +1011,7 @@ async def list_patient_checks(
             co_canh_bao_nang=check.co_canh_bao_nang,
             co_chua_phan_loai=check.co_chua_phan_loai,
             trang_thai_xac_nhan=_review_status(db, check.id),
+            thuoc_da_kiem_tra=_checked_drug_names(check.ket_qua_json),
         )
         for check in checks
     ]

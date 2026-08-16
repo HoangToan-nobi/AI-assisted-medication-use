@@ -8,9 +8,12 @@ import MaterialIcon from "@/components/MaterialIcon";
 import NotificationBell from "@/components/NotificationBell";
 import { clearSession, getSession, onSessionUpdated, type Session } from "@/lib/auth";
 import Link from "next/link";
+import { useMediAlert } from "@/components/MediAlertProvider";
+import ThemeModeToggle from "@/components/ThemeModeToggle";
 
 export default function PatientLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const { toast } = useMediAlert();
   const pathname = usePathname();
   const [session, setSession] = useState<Session | null>(null);
   const [checked, setChecked] = useState(false);
@@ -37,6 +40,7 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
 
   function logout() {
     clearSession();
+    toast({ title: "Đã đăng xuất", message: "Hẹn gặp lại bạn tại MediCheck.", tone: "info" });
     router.replace("/");
   }
 
@@ -44,6 +48,7 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
     <div className={`app-shell app-shell--with-nav ${sidebarCollapsed ? "app-shell--sidebar-collapsed" : ""}`}>
       <header className="patient-header">
         <div className="patient-header__actions" style={{ marginLeft: "auto" }}>
+          <ThemeModeToggle />
           <NotificationBell patientId={session.userId} token={session.accessToken} />
           <Link className="patient-header__name" href="/profile" title="Hồ sơ của tôi">{session.hoTen}</Link>
           <button className="icon-btn" onClick={logout} aria-label="Đăng xuất" title="Đăng xuất">
