@@ -184,7 +184,7 @@ Danh sách endpoint đầy đủ + request/response schema: [http://localhost:80
 
 Xem video giới thiệu và quy trình hoạt động các luồng tra cứu (3 phút) trên YouTube:
 
-[![MediCheck MVP Demo](https://images.weserv.nl/?url=https://i.ytimg.com/vi/mrw6JcRn0yU/hqdefault.jpg&w=720&h=405&fit=cover)](https://www.youtube.com/watch?v=mrw6JcRn0yU)
+[![MediCheck MVP Demo](https://img.youtube.com/vi/mrw6JcRn0yU/maxresdefault.jpg)](https://www.youtube.com/watch?v=mrw6JcRn0yU)
 
 > ⏱️ **Nội dung video:**
 > - `00:00` - Giới thiệu tổng quan
