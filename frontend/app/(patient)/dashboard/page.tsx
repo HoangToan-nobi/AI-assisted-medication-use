@@ -20,9 +20,11 @@ import {
 import { getSession } from "@/lib/auth";
 import { formatVietnameseDateTime } from "@/lib/datetime";
 import MediFox from "@/components/MediFox";
+import { useMediAlert } from "@/components/MediAlertProvider";
 
 export default function PatientDashboardPage() {
   const router = useRouter();
+  const { confirm } = useMediAlert();
   const session = getSession();
   const [prescriptions, setPrescriptions] = useState<PatientPrescription[]>([]);
   const [history, setHistory] = useState<InteractionCheckSummary[]>([]);
@@ -71,7 +73,7 @@ export default function PatientDashboardPage() {
   }
 
   async function handleDelete(prescriptionId: string, medicationId: string) {
-    if (!session || !window.confirm("Xóa thuốc này khỏi hồ sơ?")) return;
+    if (!session || !(await confirm({ title: "Xóa thuốc khỏi hồ sơ?", message: "Thuốc này sẽ bị xóa khỏi đơn đang lưu.", confirmLabel: "Xóa thuốc", tone: "danger" }))) return;
     setDeletingId(medicationId); setError(null);
     try {
       await removePatientMedication(session.userId, medicationId, session.accessToken);
@@ -88,7 +90,7 @@ export default function PatientDashboardPage() {
     <main className="dashboard-page">
       <section className="dashboard-hero dashboard-hero--patient">
         <div>
-          <h1 className="dashboard-title" style={{ margin: 0, fontSize: "28px", color: "#1a2b4c" }}>Xin chào, {firstName}</h1>
+          <h1 className="dashboard-title" style={{ margin: 0, fontSize: "28px" }}>Xin chào, {firstName}</h1>
           <p className="dashboard-subtitle">Hãy dành vài phút kiểm tra đơn thuốc để dùng thuốc an toàn và yên tâm hơn mỗi ngày.</p>
         </div>
         <MediFox variant="welcome" className="dashboard-hero__mascot" alt="Cáo Medi đồng hành cùng bạn" />
@@ -107,16 +109,19 @@ export default function PatientDashboardPage() {
         <section className="dashboard-notifications">
           {notifications.filter((n) => !n.da_doc).slice(0, 3).map((n) => (
             <button type="button" className="dashboard-notification" key={n.id} onClick={() => void handleOpenNotification(n)}>
-              <MaterialIcon name="notifications" size={20} />
-              <span>{n.noi_dung}</span>
-              <MaterialIcon name="chevron_right" size={18} />
+              <span className="dashboard-notification__icon"><MaterialIcon name="notifications_active" size={22} filled /></span>
+              <span className="dashboard-notification__content">
+                <span className="dashboard-notification__meta"><b>Cập nhật từ dược sĩ</b><small>{formatVietnameseDateTime(n.thoi_gian_tao)}</small></span>
+                <strong>{n.noi_dung}</strong>
+              </span>
+              <span className="dashboard-notification__arrow"><MaterialIcon name="arrow_forward" size={19} /></span>
             </button>
           ))}
         </section>
       )}
 
       <section className="dashboard-section">
-        <div className="dashboard-section__header"><h2>Đơn thuốc của tôi</h2><Link href="/profile?tab=prescriptions">Xem tất cả <MaterialIcon name="arrow_forward" size={17} /></Link></div>
+        <div className="dashboard-section__header"><h2 className="section-heading-icon"><MaterialIcon name="medication" size={21} />Đơn thuốc của tôi</h2><Link href="/profile?tab=prescriptions">Xem tất cả <MaterialIcon name="arrow_forward" size={17} /></Link></div>
         {!loading && totalMedications === 0 && <div className="empty-state"><MediFox variant="empty" className="empty-state__mascot" /><strong>Chưa có thuốc trong hồ sơ</strong><span>Thêm thuốc để bắt đầu kiểm tra tương tác.</span></div>}
         {totalMedications > 0 && (
           <div className="prescription-board prescription-board--slider">
@@ -145,7 +150,7 @@ export default function PatientDashboardPage() {
       <section className="dashboard-summary-row"><div><span className="dashboard-summary-number">{totalMedications}</span><span> thuốc đang theo dõi</span></div><div><span className="dashboard-summary-number">{unresolvedSevere}</span><span> cảnh báo chưa xử lý</span></div></section>
       <Disclaimer />
 
-      {history.length > 0 && <section className="dashboard-history"><div className="dashboard-section__header"><h2>Lịch sử kiểm tra gần đây</h2><Link href="/history">Xem tất cả <MaterialIcon name="arrow_forward" size={17} /></Link></div>{history.slice(0, 3).map((h) => <button className="history-card" key={h.id} onClick={() => router.push(`/check-result?checkId=${h.id}`)}><span>{formatVietnameseDateTime(h.thoi_gian_kiem_tra)}</span><strong>{h.co_canh_bao_nang ? "Có cảnh báo cần chú ý" : "Chưa phát hiện cảnh báo nghiêm trọng"}</strong><MaterialIcon name="chevron_right" size={20} /></button>)}</section>}
+      {history.length > 0 && <section className="dashboard-history"><div className="dashboard-section__header"><h2 className="section-heading-icon"><MaterialIcon name="history" size={21} />Lịch sử kiểm tra gần đây</h2><Link href="/history">Xem tất cả <MaterialIcon name="arrow_forward" size={17} /></Link></div>{history.slice(0, 3).map((h) => <button className="history-card" key={h.id} onClick={() => router.push(`/check-result?checkId=${h.id}`)}><span>{formatVietnameseDateTime(h.thoi_gian_kiem_tra)}</span><strong>{h.co_canh_bao_nang ? "Có cảnh báo cần chú ý" : "Chưa phát hiện cảnh báo nghiêm trọng"}</strong><MaterialIcon name="chevron_right" size={20} /></button>)}</section>}
 
       {!loading && totalMedications >= 2 && (
         <button className="interaction-run" type="button" onClick={() => void handleCheck()} disabled={checking} style={{ marginTop: "16px" }}>

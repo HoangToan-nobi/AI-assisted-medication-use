@@ -8,6 +8,7 @@ import MaterialIcon from "@/components/MaterialIcon";
 import { ApiError, login, register } from "@/lib/api";
 import { saveSession } from "@/lib/auth";
 import MediFox from "@/components/MediFox";
+import { useMediAlert } from "@/components/MediAlertProvider";
 
 type Mode = "login" | "register";
 type Role = "patient" | "pharmacist";
@@ -16,6 +17,7 @@ const asset = (name: string) => encodeURI("/Bộ nhận diện y tế/" + name);
 
 export default function AuthPage() {
   const router = useRouter();
+  const { toast } = useMediAlert();
   const [mode, setMode] = useState<Mode>("login");
   const [role, setRole] = useState<Role>("patient");
   const [hoTen, setHoTen] = useState("");
@@ -30,14 +32,18 @@ export default function AuthPage() {
     setError(null);
   }
 
-  async function finish(auth: Awaited<ReturnType<typeof login>>) {
+  async function finish(auth: Awaited<ReturnType<typeof login>>, wasRegistration = false) {
     saveSession({
       accessToken: auth.access_token,
       userId: auth.user_id,
       hoTen: auth.ho_ten,
       vaiTro: auth.vai_tro,
     });
-    router.push(
+    toast({
+      title: wasRegistration ? "Đăng ký thành công" : "Đăng nhập thành công",
+      message: wasRegistration ? `Chào mừng ${auth.ho_ten} đến với MediCheck.` : `Chào mừng ${auth.ho_ten} quay lại MediCheck.`,
+    });
+    router.replace(
       auth.vai_tro === "patient" ? "/dashboard" : "/pharmacist-dashboard",
     );
   }
@@ -67,7 +73,7 @@ export default function AuthPage() {
         mode === "login"
           ? await login(email, matKhau)
           : await register(hoTen, email, matKhau, role);
-      await finish(auth);
+      await finish(auth, mode === "register");
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -173,8 +179,8 @@ export default function AuthPage() {
           margin: 0;
           font-size: clamp(42px, 5.3vw, 74px);
           font-weight: 600;
-          letter-spacing: -0.06em;
-          line-height: 0.96;
+          letter-spacing: 0;
+          line-height: 1.08;
         }
         .mc-auth__intro h1 em {
           color: #5572bf;
@@ -237,7 +243,8 @@ export default function AuthPage() {
         .mc-auth__title {
           margin: 27px 0 7px;
           font-size: 29px;
-          letter-spacing: -0.04em;
+          letter-spacing: 0;
+          line-height: 1.2;
         }
         .mc-auth__subtitle {
           margin: 0 0 23px;

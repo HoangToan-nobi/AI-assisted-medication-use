@@ -1,5 +1,6 @@
 import "./globals.css";
 import FrontendBootGate from "@/components/FrontendBootGate";
+import MediAlertProvider from "@/components/MediAlertProvider";
 
 export const metadata = {
   title: "MediCheck",
@@ -37,8 +38,10 @@ export default function RootLayout({
         />
       </head>
       <body>
-        {children}
-        <FrontendBootGate />
+        <MediAlertProvider>
+          {children}
+          <FrontendBootGate />
+        </MediAlertProvider>
       </body>
     </html>
   );

@@ -7,6 +7,7 @@ import { ApiError, listPatientChecks, deletePatientCheck, deleteAllPatientChecks
 import { getSession } from "@/lib/auth";
 import { formatVietnameseDateTime } from "@/lib/datetime";
 import MediFox from "@/components/MediFox";
+import { useMediAlert } from "@/components/MediAlertProvider";
 
 type StatusFilter = "all" | "da_xac_nhan" | "cho_xac_nhan" | "chua_xac_nhan";
 
@@ -24,6 +25,7 @@ const STATUS_ICON: Record<Exclude<StatusFilter, "all">, string> = {
 
 export default function HistoryPage() {
   const router = useRouter();
+  const { confirm, notify } = useMediAlert();
   const session = getSession();
   const [checks, setChecks] = useState<InteractionCheckSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -52,24 +54,24 @@ export default function HistoryPage() {
 
   const handleDeleteAll = async () => {
     if (!session) return;
-    if (!confirm("Bạn có chắc chắn muốn xóa tất cả lịch sử tra cứu?")) return;
+    if (!(await confirm({ title: "Xóa toàn bộ lịch sử?", message: "Bạn có chắc chắn muốn xóa tất cả lịch sử tra cứu?", confirmLabel: "Xóa tất cả", tone: "danger" }))) return;
     try {
       await deleteAllPatientChecks(session.userId, session.accessToken);
       fetchChecks();
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : "Lỗi khi xóa tất cả lịch sử");
+      await notify({ title: "Không thể xóa lịch sử", message: err instanceof ApiError ? err.message : "Lỗi khi xóa tất cả lịch sử", tone: "danger" });
     }
   };
 
   const handleDeleteCheck = async (e: React.MouseEvent, checkId: string) => {
     e.stopPropagation();
     if (!session) return;
-    if (!confirm("Bạn có chắc chắn muốn xóa lịch sử này?")) return;
+    if (!(await confirm({ title: "Xóa lịch sử tra cứu?", message: "Bạn có chắc chắn muốn xóa lịch sử này?", confirmLabel: "Xóa lịch sử", tone: "danger" }))) return;
     try {
       await deletePatientCheck(session.userId, checkId, session.accessToken);
       fetchChecks();
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : "Lỗi khi xóa lịch sử");
+      await notify({ title: "Không thể xóa lịch sử", message: err instanceof ApiError ? err.message : "Lỗi khi xóa lịch sử", tone: "danger" });
     }
   };
 
@@ -79,7 +81,7 @@ export default function HistoryPage() {
       <section className="page-intro" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <p className="eyebrow">THEO DÕI AN TOÀN</p>
-          <h1>Lịch sử kiểm tra</h1>
+          <h1 className="page-title-icon"><MaterialIcon name="history" size={25} />Lịch sử kiểm tra</h1>
           <p>Xem lại các lần kiểm tra tương tác thuốc trước đây của bạn.</p>
         </div>
         {checks.length > 0 && (
@@ -120,6 +122,7 @@ export default function HistoryPage() {
           const status = (check.trang_thai_xac_nhan as Exclude<StatusFilter, "all">) in STATUS_LABEL
             ? (check.trang_thai_xac_nhan as Exclude<StatusFilter, "all">)
             : "chua_xac_nhan";
+          const checkedDrugs = check.thuoc_da_kiem_tra.join(", ");
           return (
           <div
             className="history-tile"
@@ -136,7 +139,7 @@ export default function HistoryPage() {
                 </b>
                 <button
                   onClick={(e) => handleDeleteCheck(e, check.id)}
-                  style={{ background: "none", border: "none", color: "var(--danger)", cursor: "pointer", display: "flex" }}
+                  className="history-tile__delete"
                   title="Xóa"
                 >
                   <MaterialIcon name="delete" size={20} />
@@ -145,7 +148,10 @@ export default function HistoryPage() {
             </div>
             <strong>Thuốc đã kiểm tra</strong>
             <div className="history-tile__chips">
-              <span><MaterialIcon name="medication" size={15} />Kết quả tương tác</span>
+              <span title={checkedDrugs || "Không có thông tin thuốc trong lần kiểm tra này"}>
+                <MaterialIcon name="medication" size={15} />
+                <b>{checkedDrugs || "Không có thông tin thuốc"}</b>
+              </span>
             </div>
             <div className="history-tile__bottom">
               <span>{check.co_canh_bao_nang ? "Có cảnh báo cần chú ý" : "Chưa phát hiện cảnh báo nghiêm trọng"}</span>

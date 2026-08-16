@@ -147,9 +147,16 @@ export default function PrescriptionPanel({ label, drugs, search, onAdd, onRemov
       {suggestions.length > 0 ? (
         <ul className="interaction-suggestions interaction-suggestions--inline">
           {suggestions.slice(0, 5).map((item) => (
-            <li key={item.id} onClick={() => add(item.ten_thuoc)}>
-              <div><strong>{item.ten_thuoc}</strong><small>Thuốc trong cơ sở dữ liệu</small></div>
-              <MaterialIcon name="add_circle_outline" size={19} />
+            <li
+              key={item.id}
+              className={drugs.some((drug) => drug.name.toLowerCase() === item.ten_thuoc.toLowerCase()) ? "interaction-suggestion--selected" : undefined}
+              aria-disabled={drugs.some((drug) => drug.name.toLowerCase() === item.ten_thuoc.toLowerCase())}
+              onClick={() => {
+                if (!drugs.some((drug) => drug.name.toLowerCase() === item.ten_thuoc.toLowerCase())) add(item.ten_thuoc);
+              }}
+            >
+              <div><strong>{item.ten_thuoc}</strong><small>{drugs.some((drug) => drug.name.toLowerCase() === item.ten_thuoc.toLowerCase()) ? "Đã chọn trong đơn" : "Thuốc trong cơ sở dữ liệu"}</small></div>
+              <MaterialIcon name={drugs.some((drug) => drug.name.toLowerCase() === item.ten_thuoc.toLowerCase()) ? "check" : "add_circle_outline"} size={19} />
             </li>
           ))}
         </ul>

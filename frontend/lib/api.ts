@@ -206,6 +206,7 @@ export type InteractionCheckSummary = {
   co_canh_bao_nang: boolean;
   co_chua_phan_loai: boolean;
   trang_thai_xac_nhan: string;
+  thuoc_da_kiem_tra: string[];
 };
 
 export type PharmacistReviewResponse = {

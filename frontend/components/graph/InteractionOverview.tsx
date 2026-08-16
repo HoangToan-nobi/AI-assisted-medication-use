@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import MaterialIcon from "@/components/MaterialIcon";
 import PharmacistReviewPrompt from "@/components/PharmacistReviewPrompt";
 import type { MedicationCheckResponse, Severity } from "@/lib/api";
@@ -46,6 +47,9 @@ type InteractionOverviewProps = {
   // bệnh nhân (audience="patient" mặc định) nhưng khung mời "nhờ dược sĩ xác nhận"
   // vô nghĩa với chính dược sĩ.
   showReviewPrompt?: boolean;
+  // Landing page luôn cần hiển thị yêu cầu đăng nhập để gửi kết quả,
+  // kể cả guest check không có interaction_check_id.
+  requireLoginToReview?: boolean;
 };
 
 function pickText(item: { giai_thich: string; giai_thich_duoc_si?: string } | undefined, audience: "patient" | "pharmacist"): string {
@@ -63,12 +67,21 @@ function pickText(item: { giai_thich: string; giai_thich_duoc_si?: string } | un
 // tra cứu độc lập của dược sĩ (audience="pharmacist") và trang dược sĩ xem xét 1
 // yêu cầu xét duyệt cụ thể (showReviewPrompt={false}, audience mặc định "patient"
 // để giọng văn y hệt bệnh nhân).
-export default function InteractionOverview({ result, prescriptions, session, audience = "patient", showReviewPrompt = audience === "patient" }: InteractionOverviewProps) {
+export default function InteractionOverview({ result, prescriptions, session, audience = "patient", showReviewPrompt = audience === "patient", requireLoginToReview = false }: InteractionOverviewProps) {
   const boardMode = prescriptions.length > 1;
   // Chỉ có ý nghĩa khi boardMode: mặc định đồ thị gộp theo ĐƠN THUỐC (như cũ) -
   // bấm nút mới bung ra xem chi tiết cấp THUỐC giữa các đơn (mỗi đơn 1 màu, có chú
   // thích). Không reset về false khi đổi kết quả.
   const [showDrugLevel, setShowDrugLevel] = useState(false);
+  const [selectedSeverity, setSelectedSeverity] = useState<Severity | "all">("all");
+
+  useEffect(() => {
+    setSelectedSeverity("all");
+  }, [result]);
+
+  function matchesSelectedSeverity(severity: Severity | undefined) {
+    return selectedSeverity === "all" || (severity ?? "chua_phan_loai") === selectedSeverity;
+  }
 
   const origins = useMemo(() => drugOrigins(prescriptions), [prescriptions]);
   const dataExplanations = useMemo(() => withDataOnly(result.explanations), [result]);
@@ -137,8 +150,9 @@ export default function InteractionOverview({ result, prescriptions, session, au
   // Đồ thị từ 6 node trở lên: bớt rối bằng cách chỉ giữ cạnh ĐÃ phân loại mức độ
   // (bỏ cạnh "chưa phân loại"), rồi bỏ luôn các node không còn cạnh nào sau khi
   // lọc. Từ 5 node trở xuống vẫn hiển thị đầy đủ như trước (đồ thị đã đủ gọn).
+  const filteredGraphEdges = allEdges.filter((edge) => matchesSelectedSeverity(edge.muc_do));
   const shouldSimplifyGraph = allNodes.length >= 6;
-  const edges = shouldSimplifyGraph ? allEdges.filter((e) => e.muc_do !== "chua_phan_loai") : allEdges;
+  const edges = shouldSimplifyGraph ? filteredGraphEdges.filter((e) => e.muc_do !== "chua_phan_loai") : filteredGraphEdges;
   const nodes = shouldSimplifyGraph
     ? (() => {
         const connectedIds = new Set(edges.flatMap((e) => [e.sourceId, e.targetId]));
@@ -165,15 +179,17 @@ export default function InteractionOverview({ result, prescriptions, session, au
     };
   });
 
+  const visibleRawPairItems = rawPairItems.filter((item) => matchesSelectedSeverity(item.severity));
+
   // Sắp xếp thẻ chi tiết theo mức độ nghiêm trọng -> trung bình -> nhẹ. Các cặp
   // "chưa phân loại" không xếp xen kẽ theo severity mà GỘP CHUNG thành 1 thẻ duy
   // nhất ở cuối danh sách - tránh lặp lại nhiều thẻ gần như giống hệt nhau khi
   // chưa có đủ dữ liệu phân loại mức độ.
   const SEVERITY_ORDER: Record<Severity, number> = { nang: 3, trung_binh: 2, nhe: 1, chua_phan_loai: 0 };
-  const classifiedPairItems = rawPairItems
+  const classifiedPairItems = visibleRawPairItems
     .filter((item) => item.severity !== "chua_phan_loai")
     .sort((a, b) => SEVERITY_ORDER[b.severity ?? "chua_phan_loai"] - SEVERITY_ORDER[a.severity ?? "chua_phan_loai"]);
-  const unclassifiedPairItems = rawPairItems.filter((item) => item.severity === "chua_phan_loai");
+  const unclassifiedPairItems = visibleRawPairItems.filter((item) => item.severity === "chua_phan_loai");
   const mergedUnclassifiedItem: GraphPairItem | null = unclassifiedPairItems.length > 0 ? {
     id: "unclassified-merged",
     severity: "chua_phan_loai",
@@ -186,7 +202,12 @@ export default function InteractionOverview({ result, prescriptions, session, au
 
   // Tổng số mục ở nút bấm bung/ẩn - gộp cả 3 loại (thuốc-thuốc/thực phẩm/bệnh nền),
   // khớp đúng số tab sẽ hiện trong InteractionDetailTabs bên dưới.
-  const totalDetailCount = rawPairItems.length + (result.food_interactions?.length ?? 0) + (result.disease_interactions?.length ?? 0);
+  // Bộ lọc phía trên là bộ lọc ĐỒ THỊ thuốc-thuốc. Cảnh báo thuốc-thực phẩm và
+  // thuốc-bệnh nền vẫn luôn hiển thị trong tab chi tiết để người dùng không bỏ
+  // sót lưu ý lâm sàng chỉ vì đang xem riêng một mức độ trên graph.
+  const visibleFoodItems = result.food_interactions ?? [];
+  const visibleDiseaseItems = result.disease_interactions ?? [];
+  const totalDetailCount = visibleRawPairItems.length + visibleFoodItems.length + visibleDiseaseItems.length;
 
   return (
     <>
@@ -215,7 +236,7 @@ export default function InteractionOverview({ result, prescriptions, session, au
       )}
       <InteractionGraphView nodes={nodes} edges={edges} groups={graphGroups} ariaLabel={title} />
 
-      <SeverityCountStrip edges={productEdges} />
+      <SeverityCountStrip edges={productEdges} selectedSeverity={selectedSeverity} onSelect={setSelectedSeverity} />
 
       {result.overview && (
         <div className="interaction-overview__summary">
@@ -227,17 +248,27 @@ export default function InteractionOverview({ result, prescriptions, session, au
         </div>
       )}
 
-      {showReviewPrompt && result.interaction_check_id && (
+      {showReviewPrompt && (requireLoginToReview || result.interaction_check_id) && (
         <section className="pharmacist-review-section">
-          <PharmacistReviewPrompt checkId={result.interaction_check_id} token={session?.accessToken} patientId={session?.userId} />
+          {session && result.interaction_check_id ? (
+            <PharmacistReviewPrompt checkId={result.interaction_check_id} token={session.accessToken} patientId={session.userId} />
+          ) : (
+            <div className="pharmacist-login-required">
+              <div>
+                <strong>Đăng nhập để gửi yêu cầu cho dược sĩ</strong>
+                <p>Bạn cần đăng nhập để lưu kết quả và nhờ dược sĩ xem xét, dù kết quả có hoặc không có tương tác.</p>
+              </div>
+              <Link href="/auth" className="pharmacist-login-required__action">Đăng nhập</Link>
+            </div>
+          )}
         </section>
       )}
 
       {totalDetailCount > 0 && (
         <InteractionDetailTabs
           drugPairItems={pairItems}
-          foodItems={result.food_interactions ?? []}
-          diseaseItems={result.disease_interactions ?? []}
+          foodItems={visibleFoodItems}
+          diseaseItems={visibleDiseaseItems}
           audience={audience}
         />
       )}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import MaterialIcon from "@/components/MaterialIcon";
+import { useMediAlert } from "@/components/MediAlertProvider";
 import type { MedicationItem, PatientPrescription, ProductSearchResult } from "@/lib/api";
 
 type PatientPrescriptionPanelProps = {
@@ -29,6 +30,7 @@ export default function PatientPrescriptionPanel({
   onRemovePanel,
   inputId,
 }: PatientPrescriptionPanelProps) {
+  const { confirm } = useMediAlert();
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<ProductSearchResult[]>([]);
   const [adding, setAdding] = useState(false);
@@ -73,7 +75,7 @@ export default function PatientPrescriptionPanel({
   }
 
   async function removePanel() {
-    if (!window.confirm(`Xóa "${prescription.label}" cùng toàn bộ thuốc trong đơn này?`)) return;
+    if (!(await confirm({ title: "Xóa đơn thuốc?", message: `Xóa "${prescription.label}" cùng toàn bộ thuốc trong đơn này?`, confirmLabel: "Xóa đơn", tone: "danger" }))) return;
     setRemovingPanel(true); setError(null);
     try { await onRemovePanel(); }
     catch { setError("Không thể xóa đơn thuốc này"); setRemovingPanel(false); }
@@ -138,9 +140,16 @@ export default function PatientPrescriptionPanel({
       {suggestions.length > 0 && (
         <ul className="interaction-suggestions interaction-suggestions--inline">
           {suggestions.slice(0, 5).map((item) => (
-            <li key={item.id} onClick={() => void add(item.ten_thuoc)}>
-              <div><strong>{item.ten_thuoc}</strong><small>Thuốc trong cơ sở dữ liệu</small></div>
-              <MaterialIcon name="add_circle_outline" size={19} />
+            <li
+              key={item.id}
+              className={prescription.medications.some((medication) => medication.ten_thuoc.toLowerCase() === item.ten_thuoc.toLowerCase()) ? "interaction-suggestion--selected" : undefined}
+              aria-disabled={prescription.medications.some((medication) => medication.ten_thuoc.toLowerCase() === item.ten_thuoc.toLowerCase())}
+              onClick={() => {
+                if (!prescription.medications.some((medication) => medication.ten_thuoc.toLowerCase() === item.ten_thuoc.toLowerCase())) void add(item.ten_thuoc);
+              }}
+            >
+              <div><strong>{item.ten_thuoc}</strong><small>{prescription.medications.some((medication) => medication.ten_thuoc.toLowerCase() === item.ten_thuoc.toLowerCase()) ? "Đã chọn trong đơn" : "Thuốc trong cơ sở dữ liệu"}</small></div>
+              <MaterialIcon name={prescription.medications.some((medication) => medication.ten_thuoc.toLowerCase() === item.ten_thuoc.toLowerCase()) ? "check" : "add_circle_outline"} size={19} />
             </li>
           ))}
         </ul>
