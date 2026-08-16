@@ -52,11 +52,15 @@ git clone <repo-url>
 cd P-005
 ```
 
-### 2. Đặt file dữ liệu `app.db`
+### 2. Database — Postgres chung (Neon), không cần tải file `app.db` nữa
 
-File `data/app.db` (~280MB, đã seed sẵn 1503 thuốc + 15140 cặp tương tác DDInter 2.0) quá nặng nên không nằm trong git — nhận qua kênh riêng, copy vào đúng đường dẫn `data/app.db` (cùng cấp với `Dockerfile`).
+Database đã chuyển từ file SQLite local (`data/app.db`, ~375MB, quá nặng để đưa vào git) sang **Postgres host chung trên Neon** — cả team dùng chung 1 database qua mạng, không ai phải tải/gửi file nữa.
 
-Không có file này, backend vẫn khởi động được nhưng mọi tra cứu thuốc sẽ trả "không có dữ liệu".
+Xin connection string nhánh **`dev`** từ leader/thành viên đã setup Neon (dạng `postgresql://user:pass@...neon.tech/neondb?sslmode=require`), điền vào biến `DATABASE_URL` trong `.env` ở bước 3.
+
+- Nhánh `dev`: team dùng chung để code/test hàng ngày.
+- Nhánh `main`: dữ liệu sạch, chỉ dùng khi deploy production — connection string riêng, không chia sẻ rộng.
+- Vẫn hỗ trợ SQLite local (`DATABASE_URL=sqlite:///./data/app.db`) nếu muốn dev offline không cần mạng, nhưng sẽ không đồng bộ dữ liệu với team.
 
 ### 3. Tạo file cấu hình `.env`
 
@@ -97,7 +101,7 @@ Chỉ liệt kê tên biến — giá trị thật nằm trong `.env` (không co
 | `DEEPSEEK_API_KEY` | ✅ | API key DeepSeek (free tại [platform.deepseek.com](https://platform.deepseek.com)). Không có key này, các cặp thuốc mức nhẹ/trung bình/nặng sẽ không sinh được giải thích (agent cần gọi LLM thật). |
 | `DEEPSEEK_BASE_URL` | — | Mặc định `https://api.deepseek.com`, không cần đổi. |
 | `MODEL_NAME` | — | Mặc định `deepseek-chat`. |
-| `DATABASE_URL` | — | Mặc định `sqlite:///./data/app.db`, khớp với file ở bước 2. |
+| `DATABASE_URL` | ✅ | Connection string Neon (nhánh `dev`) — xin từ leader/team, xem bước 2. Mặc định trong `.env.example` là `sqlite:///./data/app.db` (chỉ dùng khi dev offline). |
 | `SECRET_KEY` | ✅ (khi deploy thật) | Secret ký JWT (`src/services/auth.py`). Có giá trị dev mặc định, **phải đổi trước khi deploy public**. |
 | `APP_ENV` | — | `development` / `production` / `test`. |
 | `APP_PORT`, `APP_HOST` | — | Mặc định `8000` / `0.0.0.0`. |
