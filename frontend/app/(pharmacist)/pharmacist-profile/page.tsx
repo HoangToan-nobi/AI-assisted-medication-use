@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import MaterialIcon from "@/components/MaterialIcon";
 import { ApiError, getPharmacistProfile, updatePharmacistProfile } from "@/lib/api";
-import { getSession } from "@/lib/auth";
+import { getSession, saveSession } from "@/lib/auth";
 
 export default function PharmacistProfilePage() {
   const session = getSession();
@@ -40,6 +40,9 @@ export default function PharmacistProfilePage() {
         mo_ta_ngan: moTaNgan || null,
       }, session.accessToken);
       setSaved(true);
+      if (hoTen && hoTen !== session.hoTen) {
+        saveSession({ ...session, hoTen });
+      }
     } catch (err) { setError(err instanceof ApiError ? err.message : "Không thể lưu thông tin cá nhân"); }
     finally { setSaving(false); }
   }

@@ -18,7 +18,7 @@ import {
   type MedicationItem,
   type PatientPrescription,
 } from "@/lib/api";
-import { getSession } from "@/lib/auth";
+import { getSession, saveSession } from "@/lib/auth";
 
 type ProfileTab = "personal" | "prescriptions";
 
@@ -85,7 +85,9 @@ function ProfilePageContent() {
         tinh_trang_khac: tinhTrangKhac || null
       }, session.accessToken);
       setProfileSaved(true);
-      // Optional: Refresh session ho_ten here if needed
+      if (hoTen && hoTen !== session.hoTen) {
+        saveSession({ ...session, hoTen });
+      }
     } catch (err) { setProfileError(err instanceof ApiError ? err.message : "Không thể lưu thông tin cá nhân"); }
     finally { setProfileSaving(false); }
   }

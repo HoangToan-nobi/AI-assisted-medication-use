@@ -6,7 +6,7 @@ import Sidebar from "@/components/Sidebar";
 import BrandLogo from "@/components/BrandLogo";
 import MaterialIcon from "@/components/MaterialIcon";
 import NotificationBell from "@/components/NotificationBell";
-import { clearSession, getSession, type Session } from "@/lib/auth";
+import { clearSession, getSession, onSessionUpdated, type Session } from "@/lib/auth";
 import Link from "next/link";
 
 export default function PatientLayout({ children }: { children: React.ReactNode }) {
@@ -25,6 +25,8 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
     setSession(current);
     setChecked(true);
   }, [router]);
+
+  useEffect(() => onSessionUpdated(() => setSession(getSession())), []);
 
   if (!checked) return null;
 
