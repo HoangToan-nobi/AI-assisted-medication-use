@@ -57,17 +57,17 @@ function pickText(item: { giai_thich: string; giai_thich_duoc_si?: string } | un
 // hoạt chất) như InteractionGraphExplorer (không còn nơi nào dùng, giữ lại nếu
 // cần khôi phục drill-down sau này) - chỉ còn 1 đồ thị (nút = đơn thuốc nếu so
 // nhiều đơn, ngược lại = thuốc) + 1 đoạn tóm tắt tổng quan do LLM sinh
-// (result.overview), và 1 nút bấm để bung/ẩn danh sách chi tiết TỪNG CẶP
-// THUỐC-THUỐC (không còn hoạt chất-hoạt chất hay đơn-đơn nữa). Cũng dùng lại cho
-// bàn cân tra cứu độc lập của dược sĩ (audience="pharmacist") và trang dược sĩ
-// xem xét 1 yêu cầu xét duyệt cụ thể (showReviewPrompt={false}, audience mặc
-// định "patient" để giọng văn y hệt bệnh nhân).
+// (result.overview), và danh sách chi tiết TỪNG CẶP THUỐC-THUỐC (không còn hoạt
+// chất-hoạt chất hay đơn-đơn nữa) hiện LUÔN sẵn, mặc định ở tab "Thuốc - Thuốc"
+// (không còn nút bung/ẩn - xem InteractionDetailTabs). Cũng dùng lại cho bàn cân
+// tra cứu độc lập của dược sĩ (audience="pharmacist") và trang dược sĩ xem xét 1
+// yêu cầu xét duyệt cụ thể (showReviewPrompt={false}, audience mặc định "patient"
+// để giọng văn y hệt bệnh nhân).
 export default function InteractionOverview({ result, prescriptions, session, audience = "patient", showReviewPrompt = audience === "patient" }: InteractionOverviewProps) {
   const boardMode = prescriptions.length > 1;
-  const [expanded, setExpanded] = useState(false);
   // Chỉ có ý nghĩa khi boardMode: mặc định đồ thị gộp theo ĐƠN THUỐC (như cũ) -
   // bấm nút mới bung ra xem chi tiết cấp THUỐC giữa các đơn (mỗi đơn 1 màu, có chú
-  // thích). Không reset về false khi đổi kết quả - hành vi giống hệt "expanded".
+  // thích). Không reset về false khi đổi kết quả.
   const [showDrugLevel, setShowDrugLevel] = useState(false);
 
   const origins = useMemo(() => drugOrigins(prescriptions), [prescriptions]);
@@ -234,12 +234,6 @@ export default function InteractionOverview({ result, prescriptions, session, au
       )}
 
       {totalDetailCount > 0 && (
-        <button type="button" className="interaction-pairs__toggle" onClick={() => setExpanded((v) => !v)}>
-          <MaterialIcon name={expanded ? "visibility_off" : "visibility"} size={17} />
-          {expanded ? "Ẩn chi tiết" : "Xem chi tiết"}
-        </button>
-      )}
-      {expanded && (
         <InteractionDetailTabs
           drugPairItems={pairItems}
           foodItems={result.food_interactions ?? []}

@@ -71,9 +71,9 @@ export default function InteractionDetailTabs({ drugPairItems, foodItems, diseas
       {currentTab === "food" && (
         <div className="interaction-pairs">
           {sortedFoodItems.map((item) => (
-            <div className="interaction-pair-card" key={`${item.hoat_chat}::${item.thuc_pham}`}>
+            <div className="interaction-pair-card" key={`${item.san_pham.join(",")}::${item.thuc_pham}`}>
               <AlertCard
-                thuocA={item.san_pham.length ? item.san_pham.join(", ") : item.hoat_chat}
+                thuocA={item.san_pham.join(", ")}
                 thuocB={item.thuc_pham}
                 severity={item.muc_do}
                 description={pickText(item, audience)}
@@ -89,9 +89,9 @@ export default function InteractionDetailTabs({ drugPairItems, foodItems, diseas
       {currentTab === "disease" && (
         <div className="interaction-pairs">
           {sortedDiseaseItems.map((item) => (
-            <div className="interaction-pair-card" key={`${item.hoat_chat}::${item.ten_benh}`}>
+            <div className="interaction-pair-card" key={`${item.san_pham.join(",")}::${item.ten_benh}`}>
               <AlertCard
-                thuocA={item.san_pham.length ? item.san_pham.join(", ") : item.hoat_chat}
+                thuocA={item.san_pham.join(", ")}
                 thuocB={item.ten_benh}
                 severity={item.muc_do}
                 description={pickText(item, audience)}

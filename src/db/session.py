@@ -19,7 +19,13 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def _ensure_column(table: str, column: str, ddl_type: str) -> None:
     """Không có framework migration (chỉ create_all, không ALTER bảng đã tồn tại) -
     thêm cột thủ công 1 lần, idempotent, cho các bảng được tạo trước khi cột này
-    xuất hiện trong model."""
+    xuất hiện trong model.
+
+    Chỉ cần cho SQLite (PRAGMA table_info là cú pháp riêng của SQLite) - Postgres
+    không bao giờ có bảng "cũ" thiếu cột này vì create_all() luôn tạo bảng mới đúng
+    theo model hiện tại (đã có sẵn các cột này khai báo trong models.py)."""
+    if engine.dialect.name != "sqlite":
+        return
     with engine.connect() as conn:
         cols = [row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))]
         if column not in cols:
@@ -42,6 +48,11 @@ def init_db() -> None:
     _ensure_column("pharmacist_reviews", "cau_tra_loi", "TEXT")
     _ensure_column("food_interactions", "thuc_pham_vi", "VARCHAR(255)")
     _ensure_column("disease_interactions", "ten_benh_vi", "VARCHAR(255)")
+    _ensure_column("interactions", "mo_ta_dich", "TEXT")
+    _ensure_column("interactions", "xu_tri_dich", "TEXT")
+    _ensure_column("food_interactions", "mo_ta_dich", "TEXT")
+    _ensure_column("food_interactions", "xu_tri_dich", "TEXT")
+    _ensure_column("disease_interactions", "mo_ta_dich", "TEXT")
 
 
 def get_db() -> Session:

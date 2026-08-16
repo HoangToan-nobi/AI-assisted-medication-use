@@ -59,6 +59,8 @@ def interaction_lookup(medication_ids: list[str]) -> str:
                         "muc_do": interaction.muc_do,
                         "nguon_trich_dan": interaction.nguon_trich_dan,
                         "xu_tri": interaction.xu_tri,
+                        "mo_ta_dich": interaction.mo_ta_dich,
+                        "xu_tri_dich": interaction.xu_tri_dich,
                         "thay_the_a": interaction.thay_the_a,
                         "thay_the_b": interaction.thay_the_b,
                         "khong_du_du_lieu": False,

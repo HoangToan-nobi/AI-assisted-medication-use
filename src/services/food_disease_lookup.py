@@ -30,6 +30,8 @@ def lookup_food_interactions(medication_ids: list[str], db: Session) -> list[dic
             "muc_do": food.muc_do,
             "mo_ta": food.mo_ta,
             "xu_tri": food.xu_tri,
+            "mo_ta_dich": food.mo_ta_dich,
+            "xu_tri_dich": food.xu_tri_dich,
             "nguon_trich_dan": food.nguon_trich_dan,
         }
         for food, ten_chuan_hoa in rows
@@ -52,6 +54,7 @@ def lookup_disease_interactions(medication_ids: list[str], db: Session) -> list[
             "ten_benh": disease.ten_benh_vi or disease.ten_benh,
             "muc_do": disease.muc_do,
             "mo_ta": disease.mo_ta,
+            "mo_ta_dich": disease.mo_ta_dich,
             "nguon_trich_dan": disease.nguon_trich_dan,
         }
         for disease, ten_chuan_hoa in rows
