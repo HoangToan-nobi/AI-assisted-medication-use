@@ -186,7 +186,7 @@ Danh sách endpoint đầy đủ + request/response schema: [http://localhost:80
 
 ## Live URL
 
-_TODO: điền URL sau khi deploy._ Hiện tại chạy local qua Docker theo hướng dẫn ở trên.
+https://medicheck-t005.vercel.app/
 
 ## License
 
