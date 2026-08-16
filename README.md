@@ -184,9 +184,9 @@ Danh sách endpoint đầy đủ + request/response schema: [http://localhost:80
 | Hoàng Sỹ Toàn (Leader) | Data, PM, OCR | 2A202601273
 | Đàm Lê Minh Quân | Data, Backend, AI agent | 2A202601451
 
-## Live URL
+<!-- ## Live URL
 
-https://medicheck-t005.vercel.app/
+https://medicheck-t005.vercel.app/ -->
 
 ## License
 
