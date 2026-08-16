@@ -184,7 +184,7 @@ Danh sách endpoint đầy đủ + request/response schema: [http://localhost:80
 
 Xem video giới thiệu và quy trình hoạt động các luồng tra cứu (3 phút) trên YouTube:
 
-[![MediCheck Demo Video](https://img.youtube.com/vi/YOUR_VIDEO_ID/maxresdefault.jpg)](https://www.youtube.com/watch?v=mrw6JcRn0yU)
+[![MediCheck MVP Demo](https://img.youtube.com/vi/mrw6JcRn0yU/hqdefault.jpg)](https://www.youtube.com/watch?v=mrw6JcRn0yU)
 
 > ⏱️ **Nội dung video:**
 > - `00:00` - Giới thiệu tổng quan
@@ -192,13 +192,6 @@ Xem video giới thiệu và quy trình hoạt động các luồng tra cứu (3
 > - `01:35` - Luồng Dược sĩ chính
 > - `02:30` - Tính năng bổ trợ
 
-## Live URL
-
-_TODO: điền URL sau khi deploy._ Hiện tại chạy local qua Docker theo hướng dẫn ở trên.
-
-## License
-
-MIT (mã nguồn) — dữ liệu DDInter 2.0 dùng cho mục đích học thuật/giáo dục.
 ## Live URL
 
 _TODO: điền URL sau khi deploy._ Hiện tại chạy local qua Docker theo hướng dẫn ở trên.
