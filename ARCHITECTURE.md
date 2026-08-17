@@ -114,9 +114,9 @@ Mỗi node ghi kết quả vào `MedCheckState`. Nếu state có `error`, graph 
 - `interaction_lookup_tool.py`: tìm cặp tương tác theo medication ID.
 - `severity_ranker_tool.py`: chuẩn hóa và tổng hợp mức độ cảnh báo.
 
-### 3.5 Database — SQLite và SQLAlchemy
+### 3.5 Database — Postgres (Neon) và SQLAlchemy
 
-Database development mặc định là `data/app.db`, được mount vào backend container. Các bảng chính:
+Database chính là Postgres host trên Neon, dùng chung cho cả team qua `DATABASE_URL` (nhánh `dev` cho code/test hàng ngày, nhánh `main` riêng cho production) — thay cho việc gửi tay file `data/app.db` (~375MB, quá nặng để đưa vào git). SQLite local (`data/app.db`) vẫn được hỗ trợ như lựa chọn dev offline (`scripts/migrate_sqlite_to_postgres.py` dùng để đồng bộ dữ liệu từ SQLite sang Postgres khi cần). Các bảng chính:
 
 - `users`: tài khoản, mật khẩu hash và vai trò.
 - `patient_profiles`: thông tin hồ sơ bệnh nhân.
@@ -240,7 +240,7 @@ flowchart LR
 
 ## 9. Giới hạn hiện tại
 
-- Hệ thống hiện chạy local bằng SQLite; PostgreSQL dành cho giai đoạn triển khai production.
+- Database chính đã chuyển sang Postgres (Neon, nhánh `dev`/`main`); SQLite chỉ còn là lựa chọn dev offline.
 - Chưa có giao diện admin để gán dược sĩ cho bệnh nhân; một số dữ liệu assignment cần thao tác thủ công.
 - Agent graph hiện là pipeline 5 node; guardrail kết thúc bằng success/error, chưa có vòng lặp rewrite tự động trong LangGraph.
 - ChromaDB có service module nhưng chưa được sử dụng trong luồng kiểm tra tương tác chính.
