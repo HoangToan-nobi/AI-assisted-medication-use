@@ -84,13 +84,13 @@ export default function PatientDashboardPage() {
 
   if (!session) return null;
   const unresolvedSevere = history.filter((h) => h.co_canh_bao_nang && h.trang_thai_xac_nhan !== "da_xac_nhan").length;
-  const firstName = session.hoTen.split(" ").pop() || session.hoTen;
+  const fullName = session.hoTen.trim() || "bạn";
 
   return (
     <main className="dashboard-page">
       <section className="dashboard-hero dashboard-hero--patient">
         <div>
-          <h1 className="dashboard-title" style={{ margin: 0, fontSize: "28px" }}>Xin chào, {firstName}</h1>
+          <h1 className="dashboard-title" style={{ margin: 0, fontSize: "28px" }}>Xin chào, {fullName}</h1>
           <p className="dashboard-subtitle">Hãy dành vài phút kiểm tra đơn thuốc để dùng thuốc an toàn và yên tâm hơn mỗi ngày.</p>
         </div>
         <MediFox variant="welcome" className="dashboard-hero__mascot" alt="Cáo Medi đồng hành cùng bạn" />

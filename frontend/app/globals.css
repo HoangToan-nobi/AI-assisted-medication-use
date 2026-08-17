@@ -197,6 +197,21 @@ ul {
   align-items: center;
   gap: 8px;
 }
+.patient-header__identity {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  color: var(--on-surface);
+  text-decoration: none !important;
+}
+.patient-header__identity:hover,
+.patient-header__identity:focus,
+.patient-header__identity:focus-visible,
+.patient-header__identity:hover .patient-header__name,
+.patient-header__identity:focus .patient-header__name,
+.patient-header__identity:focus-visible .patient-header__name {
+  text-decoration: none !important;
+}
 .patient-header__name {
   max-width: 150px;
   overflow: hidden;
@@ -204,6 +219,45 @@ ul {
   white-space: nowrap;
   font-size: 13px;
   color: var(--on-surface-variant);
+}
+.patient-header__tooltip {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 9px);
+  left: 50%;
+  min-width: max-content;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: #17243a;
+  box-shadow: 0 7px 18px rgba(19, 33, 55, 0.22);
+  color: #f7faff;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.25;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -4px);
+  transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease;
+  visibility: hidden;
+  white-space: nowrap;
+}
+.patient-header__tooltip::before {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  background: #17243a;
+  content: "";
+  transform: translate(-50%, 4px) rotate(45deg);
+}
+.patient-header__identity:hover .patient-header__tooltip,
+.patient-header__identity:focus .patient-header__tooltip,
+.patient-header__identity:focus-visible .patient-header__tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  visibility: visible;
 }
 
 .sr-only {
@@ -1542,6 +1596,21 @@ button.primary:hover,
 .patient-card__info p {
   color: var(--on-surface-variant);
   font-size: 13px;
+}
+.patient-header__avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #c6d5eb;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #e7eef9, #cddbef);
+  color: #31578f;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.72);
 }
 .patient-card__footer {
   display: flex;
@@ -3870,9 +3939,6 @@ html[data-theme="dark"] .bottom-nav.sidebar {
 }
 .citation-wrap--open .citation-popover {
   display: block !important;
-}
-.patient-header__name:hover {
-  text-decoration: underline;
 }
 .profile-page {
   min-height: 100vh;
@@ -6270,6 +6336,29 @@ html[data-theme="dark"] textarea {
   position: relative;
   z-index: 1;
 }
+.theme-toggle__day-scene {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  transition: opacity 0.4s ease, transform 0.48s ease;
+}
+.theme-toggle__cloud--blue {
+  fill: #c1d2e1;
+}
+.theme-toggle__cloud--blue-light {
+  fill: #d7e3ed;
+}
+.theme-toggle__cloud--white {
+  fill: #f8fbfd;
+}
+.theme-toggle--dark .theme-toggle__day-scene {
+  opacity: 0;
+  transform: translateY(10px);
+}
 .theme-toggle__clouds,
 .theme-toggle__stars {
   position: absolute;
@@ -6375,18 +6464,7 @@ html[data-theme="dark"] textarea {
     );
 }
 .theme-toggle--light::before {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  border-radius: inherit;
-  background:
-    radial-gradient(circle at 42% 112%, #d7e6f1 0 23%, transparent 24%),
-    radial-gradient(circle at 61% 111%, #f4f8fb 0 25%, transparent 26%),
-    radial-gradient(circle at 80% 108%, #e7f0f7 0 27%, transparent 28%),
-    radial-gradient(circle at 99% 103%, #f7fafc 0 25%, transparent 26%);
-  content: "";
-  pointer-events: none;
-  transition: opacity 0.35s ease, transform 0.45s ease;
+  display: none;
 }
 .theme-toggle--dark::before { opacity: 0; transform: translateY(16px); animation: theme-clouds-fall 0.5s ease-in both; }
 .theme-toggle--dark {
@@ -6457,22 +6535,55 @@ html[data-theme="dark"] textarea {
   width: 100px;
   height: 50px;
   padding: 0;
-  border-width: 2px;
+  border: 0 !important;
   box-shadow:
-    inset 0 0 8px rgba(33, 55, 80, 0.3),
-    0 3px 8px rgba(24, 48, 83, 0.22);
+    inset 0 1px 1px rgba(255, 255, 255, 0.34),
+    inset 0 -2px 5px rgba(36, 58, 82, 0.22),
+    0 2px 7px rgba(47, 65, 83, 0.2);
+}
+.patient-header .theme-toggle--light,
+.mc-header .theme-toggle--light {
+  background: #6689b3;
+}
+.patient-header .theme-toggle--light .theme-toggle__clouds,
+.mc-header .theme-toggle--light .theme-toggle__clouds {
+  display: none;
+}
+.mc-header .mc-login {
+  width: 104px;
+  height: 42px;
+}
+.mc-header .mc-login {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
 }
 .patient-header .theme-toggle__thumb,
 .mc-header .theme-toggle__thumb {
-  top: 3px;
+  top: 5px;
   left: 4px;
   width: 40px;
   height: 40px;
   transform: none;
 }
+.patient-header .theme-toggle--light .theme-toggle__thumb,
+.mc-header .theme-toggle--light .theme-toggle__thumb {
+  background: #e8cc4b;
+  box-shadow:
+    inset 0 2px 2px rgba(255, 249, 190, 0.5),
+    0 3px 5px rgba(55, 70, 86, 0.3);
+}
 .patient-header .theme-toggle--dark .theme-toggle__thumb,
 .mc-header .theme-toggle--dark .theme-toggle__thumb {
-  transform: translateX(50px);
+  transform: translateX(52px);
+}
+html[data-theme="dark"] .patient-header .theme-toggle,
+html[data-theme="dark"] .mc-header .theme-toggle {
+  border-color: #354156;
+  box-shadow:
+    inset 0 1px 2px rgba(213, 226, 248, 0.16),
+    inset 0 -3px 7px rgba(2, 8, 18, 0.52);
 }
 .patient-header .theme-toggle .material-symbols-outlined,
 .mc-header .theme-toggle .material-symbols-outlined {
@@ -6483,6 +6594,24 @@ html[data-theme="dark"] textarea {
   .mc-header .theme-toggle {
     right: auto;
     bottom: auto;
+  }
+  .mc-header .theme-toggle {
+    width: 84px;
+    height: 40px;
+    border-width: 3px;
+  }
+  .mc-header .mc-login {
+    width: 96px;
+    height: 38px;
+  }
+  .mc-header .theme-toggle__thumb {
+    top: 4px;
+    left: 4px;
+    width: 32px;
+    height: 32px;
+  }
+  .mc-header .theme-toggle--dark .theme-toggle__thumb {
+    transform: translateX(44px);
   }
 }
 
@@ -6499,6 +6628,12 @@ html[data-theme="dark"] .patient-header__name,
 html[data-theme="dark"] .bottom-nav__item,
 html[data-theme="dark"] .sidebar__section-label {
   color: #b9c9df;
+}
+html[data-theme="dark"] .patient-header__avatar {
+  border-color: #526987;
+  background: linear-gradient(145deg, #405674, #2f425e);
+  color: #f3f7ff;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.12);
 }
 html[data-theme="dark"] .bottom-nav__item--active,
 html[data-theme="dark"] .bottom-nav__item:hover {
@@ -6952,13 +7087,38 @@ html[data-theme="dark"] .pharmacist-prompt__bio {
 }
 html[data-theme="dark"] .pharmacist-prompt__item,
 html[data-theme="dark"] .pharmacist-prompt__attach-option {
-  background: #1d314e;
-  border-color: #3b587d;
+  background: #1d314e !important;
+  border-color: #3b587d !important;
   color: #dce9fb;
 }
-html[data-theme="dark"] .pharmacist-prompt__item:hover {
+html[data-theme="dark"] .pharmacist-prompt__item:hover,
+html[data-theme="dark"] .pharmacist-prompt__item:focus,
+html[data-theme="dark"] .pharmacist-prompt__item:focus-visible {
   background-color: #27456e !important;
   border-color: #5b85bd !important;
+  color: #edf4ff;
+  outline: none;
+}
+html[data-theme="dark"] .pharmacist-prompt__list {
+  scrollbar-width: thin;
+  scrollbar-color: #627899 transparent;
+}
+html[data-theme="dark"] .pharmacist-prompt__list::-webkit-scrollbar {
+  width: 8px;
+}
+html[data-theme="dark"] .pharmacist-prompt__list::-webkit-scrollbar-track {
+  background: transparent;
+}
+html[data-theme="dark"] .pharmacist-prompt__list::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: #627899;
+  background-clip: padding-box;
+}
+html[data-theme="dark"] .pharmacist-prompt__list::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
 }
 html[data-theme="dark"] .pharmacist-prompt__attach-option:hover,
 html[data-theme="dark"] .pharmacist-prompt__attach-option--active {
@@ -8132,9 +8292,20 @@ html[data-theme="dark"] .bottom-nav.sidebar .bottom-nav__item--active {
   .patient-header .theme-toggle {
     position: relative;
     inset: auto;
-    width: 70px;
-    height: 36px;
-    border-width: 1px;
+    width: 84px;
+    height: 40px;
+    border-width: 3px;
+  }
+
+  .patient-header .theme-toggle__thumb {
+    top: 4px;
+    left: 4px;
+    width: 32px;
+    height: 32px;
+  }
+
+  .patient-header .theme-toggle--dark .theme-toggle__thumb {
+    transform: translateX(44px);
   }
 
   .app-content > main,
@@ -8346,7 +8517,17 @@ html[data-theme="dark"] .bottom-nav.sidebar .bottom-nav__item--active {
   }
 
   .patient-header .theme-toggle {
-    width: 62px;
+    width: 76px;
+    height: 36px;
+  }
+
+  .patient-header .theme-toggle__thumb {
+    width: 28px;
+    height: 28px;
+  }
+
+  .patient-header .theme-toggle--dark .theme-toggle__thumb {
+    transform: translateX(40px);
   }
 }
 
@@ -8914,6 +9095,28 @@ html[data-theme="dark"] .mc-auth__card {
   border-color: #34465f;
   background: #172235;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+html[data-theme="dark"] .dashboard-history .history-card:hover,
+html[data-theme="dark"] .dashboard-history .history-card:focus,
+html[data-theme="dark"] .dashboard-history .history-card:focus-visible {
+  border-color: #526f9c;
+  background: #223553;
+  color: #edf4ff;
+  outline: none;
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.24);
+}
+
+html[data-theme="dark"] .dashboard-history .history-card:hover > span,
+html[data-theme="dark"] .dashboard-history .history-card:hover > strong,
+html[data-theme="dark"] .dashboard-history .history-card:focus > span,
+html[data-theme="dark"] .dashboard-history .history-card:focus > strong,
+html[data-theme="dark"] .dashboard-history .history-card:focus-visible > span,
+html[data-theme="dark"] .dashboard-history .history-card:focus-visible > strong,
+html[data-theme="dark"] .dashboard-history .history-card:hover > .material-symbols-outlined,
+html[data-theme="dark"] .dashboard-history .history-card:focus > .material-symbols-outlined,
+html[data-theme="dark"] .dashboard-history .history-card:focus-visible > .material-symbols-outlined {
+  color: #edf4ff;
 }
 
 html[data-theme="dark"] .dashboard-hero,
