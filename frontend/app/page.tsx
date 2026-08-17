@@ -14,6 +14,7 @@ import { getSession, type Session } from "@/lib/auth";
 import type { Prescription } from "@/lib/prescription";
 import InteractionResultView from "@/components/graph/InteractionResultView";
 import MediFox from "@/components/MediFox";
+import ThemeModeToggle from "@/components/ThemeModeToggle";
 
 const asset = (name: string) => encodeURI(`/Bộ nhận diện y tế/${name}`);
 
@@ -61,6 +62,7 @@ function Header() {
       <nav className="mc-nav" aria-label="Điều hướng chính">
         <a href="#features">Tính năng</a>
         <a href="#about">Về MediCheck</a>
+        <ThemeModeToggle />
         <Link href="/auth" className="mc-login">
           Đăng nhập
         </Link>
@@ -84,7 +86,8 @@ function HeroDrugSearch({
   const [selected, setSelected] = useState<string[]>([]);
   const selectedRef = useRef<string[]>([]);
   const [suggestions, setSuggestions] = useState<ProductSearchResult[]>([]);
-  const [loginToastVersion, setLoginToastVersion] = useState(0);
+  const [showLoginToast, setShowLoginToast] = useState(false);
+  const [toastLeaving, setToastLeaving] = useState(false);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -108,9 +111,23 @@ function HeroDrugSearch({
       .filter(Boolean);
   }
 
-  function showLoginToast() {
-    setLoginToastVersion((version) => version + 1);
+  function triggerLoginToast() {
+    setToastLeaving(false);
+    setShowLoginToast(true);
   }
+
+  useEffect(() => {
+    if (!showLoginToast) return;
+    const leaveTimer = window.setTimeout(() => setToastLeaving(true), 1600);
+    const removeTimer = window.setTimeout(() => {
+      setShowLoginToast(false);
+      setToastLeaving(false);
+    }, 2000);
+    return () => {
+      window.clearTimeout(leaveTimer);
+      window.clearTimeout(removeTimer);
+    };
+  }, [showLoginToast]);
 
   function addDrugs(names: string[]) {
     const next = [...selectedRef.current];
@@ -118,7 +135,7 @@ function HeroDrugSearch({
       if (next.some((item) => item.toLowerCase() === name.toLowerCase()))
         continue;
       if (next.length >= 3) {
-        showLoginToast();
+        triggerLoginToast();
         setMessage("");
         return;
       }
@@ -140,7 +157,7 @@ function HeroDrugSearch({
         next.push(name);
     }
     if (next.length >= 4) {
-      showLoginToast();
+      triggerLoginToast();
       setMessage("");
       return;
     }
@@ -214,12 +231,13 @@ function HeroDrugSearch({
         {suggestions.length > 0 && (
           <ul className="mc-search-suggestions">
             {suggestions.slice(0, 5).map((product) => (
-              <li key={product.id}>
+              <li key={product.id} className={selected.some((name) => name.toLowerCase() === product.ten_thuoc.toLowerCase()) ? "mc-search-suggestion--selected" : undefined}>
                 <button
                   type="button"
+                  disabled={selected.some((name) => name.toLowerCase() === product.ten_thuoc.toLowerCase())}
                   onClick={() => addDrugs([product.ten_thuoc])}
                 >
-                  {product.ten_thuoc}
+                  {product.ten_thuoc}{selected.some((name) => name.toLowerCase() === product.ten_thuoc.toLowerCase()) && <small>Đã chọn</small>}
                 </button>
               </li>
             ))}
@@ -251,10 +269,9 @@ function HeroDrugSearch({
           </span>
         </div>
       </form>
-      {loginToastVersion > 0 && (
+      {showLoginToast && (
         <aside
-          key={loginToastVersion}
-          className="mc-login-toast"
+          className={`mc-login-toast${toastLeaving ? " mc-login-toast--leaving" : ""}`}
           role="status"
           aria-live="polite"
         >
@@ -262,7 +279,10 @@ function HeroDrugSearch({
             className="mc-login-toast__close"
             type="button"
             aria-label="Đóng thông báo"
-            onClick={() => setLoginToastVersion(0)}
+            onClick={() => {
+              setShowLoginToast(false);
+              setToastLeaving(false);
+            }}
           >
             ×
           </button>
@@ -1333,7 +1353,7 @@ export default function LandingPage() {
           }
         }
         .mc-hero__capsule {
-          transform: translateX(18vw) rotate(-2deg) scale(1.78) !important;
+          transform: translateX(18vw) rotate(-2deg) scale(1.78);
           transform-origin: 62% 50%;
         }
         .mc-search-panel {
@@ -1379,9 +1399,136 @@ export default function LandingPage() {
           right: -18px;
           top: -25px;
         }
+        /* Transparent glass panels for the landing surfaces. */
+        .mc-header,
+        .mc-search-panel,
+        .mc-glass,
+        .mc-feature-card,
+        .mc-audience-card,
+        .mc-mission__card,
+        .mc-cta {
+          border: 1px solid rgba(255, 255, 255, 0.52);
+          background: rgba(255, 255, 255, 0.28);
+          box-shadow: inset 0 1px rgba(255, 255, 255, 0.62), 0 18px 44px rgba(44, 71, 112, 0.12);
+          backdrop-filter: blur(22px) saturate(135%);
+          -webkit-backdrop-filter: blur(22px) saturate(135%);
+        }
+        .mc-search-row {
+          border-color: rgba(183, 204, 237, 0.72);
+          background: rgba(255, 255, 255, 0.48);
+          backdrop-filter: blur(16px) saturate(130%);
+          -webkit-backdrop-filter: blur(16px) saturate(130%);
+        }
+        .mc-search-panel {
+          border-color: transparent;
+          background: transparent;
+          box-shadow: none;
+          backdrop-filter: none;
+          -webkit-backdrop-filter: none;
+        }
+        .mc-header { background: rgba(255, 255, 255, 0.2); }
+        .mc-nav {
+          gap: 4px;
+          padding: 5px;
+          border: 1px solid rgba(255, 255, 255, 0.38);
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.18);
+          box-shadow: inset 0 1px rgba(255, 255, 255, 0.5);
+          backdrop-filter: blur(14px) saturate(130%);
+          -webkit-backdrop-filter: blur(14px) saturate(130%);
+        }
+        .mc-nav a:not(.mc-login) {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          min-height: 38px;
+          padding: 8px 16px;
+          border-radius: 999px;
+          color: #536887;
+          font-size: 14px;
+          font-weight: 600;
+          letter-spacing: -0.01em;
+          transition: color 180ms ease, background 180ms ease, transform 180ms ease;
+        }
+        .mc-nav a:not(.mc-login)::after {
+          content: "";
+          position: absolute;
+          right: 16px;
+          bottom: 5px;
+          left: 16px;
+          height: 2px;
+          border-radius: 999px;
+          background: #5575c4;
+          opacity: 0;
+          transform: scaleX(0.45);
+          transition: opacity 180ms ease, transform 180ms ease;
+        }
+        .mc-nav a:not(.mc-login):hover,
+        .mc-nav a:not(.mc-login):focus-visible {
+          color: #294b8c;
+          background: rgba(255, 255, 255, 0.62);
+          outline: none;
+          transform: translateY(-1px);
+        }
+        .mc-nav a:not(.mc-login):hover::after,
+        .mc-nav a:not(.mc-login):focus-visible::after {
+          opacity: 1;
+          transform: scaleX(1);
+        }
+        html[data-theme="dark"] .mc-nav {
+          border-color: rgba(155, 184, 228, 0.28);
+          background: rgba(13, 28, 49, 0.34);
+        }
+        html[data-theme="dark"] .mc-nav a:not(.mc-login) {
+          color: #b9c9e2;
+        }
+        html[data-theme="dark"] .mc-nav a:not(.mc-login):hover,
+        html[data-theme="dark"] .mc-nav a:not(.mc-login):focus-visible {
+          color: #fff;
+          background: rgba(79, 111, 186, 0.3);
+        }
+        html[data-theme="dark"] .mc-header,
+        html[data-theme="dark"] .mc-search-panel,
+        html[data-theme="dark"] .mc-glass,
+        html[data-theme="dark"] .mc-feature-card,
+        html[data-theme="dark"] .mc-audience-card,
+        html[data-theme="dark"] .mc-mission__card,
+        html[data-theme="dark"] .mc-cta {
+          border-color: rgba(155, 184, 228, 0.28);
+          background: rgba(13, 28, 49, 0.38);
+          box-shadow: inset 0 1px rgba(255, 255, 255, 0.1), 0 18px 44px rgba(0, 0, 0, 0.2);
+        }
+        html[data-theme="dark"] .mc-search-row {
+          border-color: rgba(155, 184, 228, 0.32);
+          background: rgba(10, 24, 43, 0.46);
+        }
+        .mc-search-row input,
+        .mc-search-row input:focus {
+          border: 0 !important;
+          outline: 0 !important;
+          background: transparent !important;
+          box-shadow: none !important;
+        }
+        html[data-theme="dark"] .mc-search-row input,
+        html[data-theme="dark"] .mc-search-row input:focus {
+          border: 0 !important;
+          background: transparent !important;
+          color: #edf4ff;
+          box-shadow: none !important;
+        }
+        html[data-theme="dark"] .mc-search-row input::placeholder {
+          color: #9db0cf;
+          opacity: 1;
+        }
+        html[data-theme="dark"] .mc-search-panel {
+          border-color: transparent;
+          background: transparent;
+          box-shadow: none;
+        }
+
         @media (max-width: 760px) {
           .mc-hero__capsule {
-            transform: translateX(0) rotate(-4deg) scale(1.5) !important;
+            transform: translateX(0) rotate(-4deg) scale(1.5);
           }
           .mc-search-panel {
             bottom: 9% !important;
@@ -1530,6 +1677,69 @@ export default function LandingPage() {
         .mc-search-suggestions button:hover {
           background: #eef5ff;
         }
+        .mc-search-suggestions {
+          bottom: calc(100% + 12px);
+          max-height: 176px;
+          padding: 6px;
+          border: 1px solid rgba(173, 198, 235, 0.88);
+          border-radius: 18px;
+          background: rgba(255, 255, 255, 0.82);
+          box-shadow: 0 18px 38px rgba(36, 62, 107, 0.16), inset 0 1px rgba(255, 255, 255, 0.9);
+          backdrop-filter: blur(20px) saturate(135%);
+          -webkit-backdrop-filter: blur(20px) saturate(135%);
+          scrollbar-width: thin;
+          scrollbar-color: #9aabd0 transparent;
+        }
+        .mc-search-suggestions::-webkit-scrollbar { width: 7px; }
+        .mc-search-suggestions::-webkit-scrollbar-track { background: transparent; }
+        .mc-search-suggestions::-webkit-scrollbar-thumb {
+          border: 2px solid transparent;
+          border-radius: 999px;
+          background: #9aabd0;
+          background-clip: padding-box;
+        }
+        .mc-search-suggestions li + li { border-top-color: rgba(207, 220, 241, 0.65); }
+        .mc-search-suggestions button {
+          min-height: 42px;
+          border-radius: 12px;
+          color: #263e6d;
+        }
+        .mc-search-suggestions button:hover,
+        .mc-search-suggestions button:focus-visible {
+          background: rgba(220, 233, 255, 0.78);
+          color: #263e6d !important;
+          outline: none;
+        }
+        .mc-search-suggestion--selected button {
+          color: #8798b8 !important;
+          background: rgba(230, 237, 248, 0.62);
+          cursor: not-allowed;
+        }
+        .mc-search-suggestion--selected small {
+          float: right;
+          margin-left: 12px;
+          color: #7085aa;
+          font-size: 11px;
+          font-weight: 700;
+        }
+        html[data-theme="dark"] .mc-search-suggestions {
+          border-color: rgba(104, 139, 195, 0.58);
+          background: rgba(17, 34, 57, 0.9);
+          box-shadow: 0 18px 38px rgba(0, 0, 0, 0.28);
+          scrollbar-color: #5f7fae transparent;
+        }
+        html[data-theme="dark"] .mc-search-suggestions li + li { border-top-color: rgba(91, 119, 160, 0.36); }
+        html[data-theme="dark"] .mc-search-suggestions button { color: #e6efff; }
+        html[data-theme="dark"] .mc-search-suggestions button:hover,
+        html[data-theme="dark"] .mc-search-suggestions button:focus-visible {
+          background: rgba(68, 101, 157, 0.45);
+          color: #e6efff !important;
+        }
+        html[data-theme="dark"] .mc-search-suggestion--selected button {
+          color: #8298ba !important;
+          background: rgba(49, 72, 108, 0.6);
+        }
+        html[data-theme="dark"] .mc-search-suggestion--selected small { color: #9bb0d0; }
         .mc-search-help,
         .mc-search-message {
           margin: 8px 4px 0;
@@ -1691,15 +1901,21 @@ export default function LandingPage() {
           padding: 0;
           border: 0 !important;
           border-radius: 0 !important;
-          background: transparent;
+          background: transparent !important;
           color: #4167b2;
           font-size: 21px;
           font-weight: 500;
           line-height: 1;
           flex: 0 0 auto;
+          appearance: none;
+          outline: 0;
+          box-shadow: none;
         }
         .mc-drug-chip button:hover {
           color: #173f82;
+          background: transparent !important;
+          border: 0 !important;
+          box-shadow: none;
         }
         .mc-login-toast {
           position: fixed;
@@ -1768,6 +1984,58 @@ export default function LandingPage() {
           .mc-login-toast {
             top: 14px;
             right: 16px;
+          }
+        }
+        @keyframes mc-toast-out {
+          from {
+            transform: translateY(0);
+            opacity: 1;
+          }
+          to {
+            transform: translateY(36px);
+            opacity: 0;
+          }
+        }
+        .mc-login-toast--leaving {
+          animation: mc-toast-out 0.4s cubic-bezier(0.4, 0, 1, 1) both;
+          pointer-events: none;
+        }
+
+        /* Living capsule: subtle floating motion keeps the hero active without
+           competing with the search interaction. */
+        .mc-hero__capsule {
+          animation: mc-capsule-float 8s ease-in-out infinite;
+          will-change: transform;
+        }
+
+        @keyframes mc-capsule-float {
+          0%, 100% {
+            transform: translate3d(18vw, 0, 0) rotate(-2deg) scale(1.78);
+          }
+          50% {
+            transform: translate3d(18vw, -14px, 0) rotate(0deg) scale(1.82);
+          }
+        }
+
+        @media (max-width: 760px) {
+          .mc-hero__capsule {
+            animation-name: mc-capsule-float-mobile;
+            animation-duration: 7s;
+          }
+
+          @keyframes mc-capsule-float-mobile {
+            0%, 100% {
+              transform: translate3d(0, 0, 0) rotate(-4deg) scale(1.5);
+            }
+            50% {
+              transform: translate3d(0, -8px, 0) rotate(-2deg) scale(1.53);
+            }
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .mc-hero__capsule {
+            animation: none;
           }
         }
       `}</style>
@@ -1880,6 +2148,7 @@ export default function LandingPage() {
           background: #4167b2;
           color: #fff;
         }
+
         @media (max-width: 760px) {
           .mc-hero__capsule {
             object-position: 70% 12%;
@@ -1921,6 +2190,7 @@ export default function LandingPage() {
             result={landingCheck.result}
             prescriptions={landingCheck.prescriptions}
             session={landingCheck.session}
+            requireLoginToReview={!landingCheck.session}
           />
         </section>
       ) : (

@@ -7,13 +7,21 @@ import { getInitials } from "@/lib/format";
 import { clearSession, getSession, onSessionUpdated, type Session } from "@/lib/auth";
 import BrandLogo from "@/components/BrandLogo";
 import MaterialIcon from "@/components/MaterialIcon";
+import { useMediAlert } from "@/components/MediAlertProvider";
+import ThemeModeToggle from "@/components/ThemeModeToggle";
 
 export default function PharmacistLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const { toast } = useMediAlert();
   const pathname = usePathname();
   const [session, setSession] = useState<Session | null>(null);
   const [checked, setChecked] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileSidebarOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     const s = getSession();
@@ -29,6 +37,7 @@ export default function PharmacistLayout({ children }: { children: React.ReactNo
 
   function handleLogout() {
     clearSession();
+    toast({ title: "Đã đăng xuất", message: "Hẹn gặp lại bạn tại MediCheck.", tone: "info" });
     router.replace("/");
   }
 
@@ -38,6 +47,7 @@ export default function PharmacistLayout({ children }: { children: React.ReactNo
     <div className={`app-shell app-shell--with-nav ${sidebarCollapsed ? "app-shell--sidebar-collapsed" : ""}`}>
       <header className="patient-header">
         <div className="patient-header__actions" style={{ marginLeft: "auto" }}>
+          <ThemeModeToggle />
           <Link className="patient-header__name" href="/pharmacist-profile" title="Hồ sơ dược sĩ">{session.hoTen}</Link>
           <button className="icon-btn" onClick={handleLogout} aria-label="Đăng xuất" title="Đăng xuất">
             <MaterialIcon name="logout" size={20} />
@@ -45,7 +55,24 @@ export default function PharmacistLayout({ children }: { children: React.ReactNo
         </div>
       </header>
       <div className="app-content">{children}</div>
-      <nav className={`bottom-nav sidebar ${sidebarCollapsed ? "sidebar--collapsed" : ""}`} aria-label="Điều hướng chính">
+      <button
+        type="button"
+        className="sidebar-mobile-toggle"
+        onClick={() => setMobileSidebarOpen((open) => !open)}
+        aria-label={mobileSidebarOpen ? "Đóng menu" : "Mở menu"}
+        aria-expanded={mobileSidebarOpen}
+      >
+        <MaterialIcon name={mobileSidebarOpen ? "close" : "menu"} size={25} />
+      </button>
+      {mobileSidebarOpen && (
+        <button
+          type="button"
+          className="sidebar-mobile-backdrop"
+          aria-label="Đóng menu"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
+      <nav className={`bottom-nav sidebar ${sidebarCollapsed ? "sidebar--collapsed" : ""} ${mobileSidebarOpen ? "sidebar--mobile-open" : ""}`} aria-label="Điều hướng chính">
         <div className="sidebar__brand-row">
           <Link href="/pharmacist-dashboard" className="sidebar__brand-link" aria-label="Về trang chủ dược sĩ">
             <BrandLogo size="sm" className="sidebar__brand" />
@@ -57,7 +84,7 @@ export default function PharmacistLayout({ children }: { children: React.ReactNo
             aria-label={sidebarCollapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
             title={sidebarCollapsed ? "Mở rộng" : "Thu gọn"}
           >
-            <MaterialIcon name={sidebarCollapsed ? "keyboard_double_arrow_right" : "keyboard_double_arrow_left"} size={22} />
+            <MaterialIcon name={sidebarCollapsed ? "chevron_right" : "chevron_left"} size={30} />
           </button>
         </div>
         <Link href="/pharmacist-dashboard" className={`bottom-nav__item ${pathname === "/pharmacist-dashboard" ? "bottom-nav__item--active" : ""}`}>

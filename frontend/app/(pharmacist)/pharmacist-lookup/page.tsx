@@ -9,6 +9,15 @@ import { getSession } from "@/lib/auth";
 import { createPrescription, mergedDrugNames, nonEmptyPrescriptions, toPrescriptionCheckInput, type Prescription } from "@/lib/prescription";
 import MediFox from "@/components/MediFox";
 
+function renumberDefaultPrescriptions(items: Prescription[]) {
+  return items.map((prescription, index) => ({
+    ...prescription,
+    label: /^Đơn thuốc \d+$/.test(prescription.label)
+      ? `Đơn thuốc ${index + 1}`
+      : prescription.label,
+  }));
+}
+
 // Cùng bàn cân (PrescriptionPanel + prescription-board) và cùng khung kết quả
 // (InteractionOverview, audience="pharmacist") với luồng "Tương tác" của bệnh
 // nhân - chỉ khác: không có "Nhập từ hồ sơ" (PrescriptionPanel không nhận
@@ -47,11 +56,17 @@ export default function PharmacistLookupPage() {
   }
 
   function addPrescription() {
-    setPrescriptions((prev) => [...prev, createPrescription(prev.length + 1)]);
+    setPrescriptions((prev) => {
+      const normalized = renumberDefaultPrescriptions(prev);
+      return [...normalized, createPrescription(normalized.length + 1)];
+    });
   }
 
   function removePrescription(id: string) {
-    setPrescriptions((prev) => (prev.length <= 1 ? prev : prev.filter((p) => p.id !== id)));
+    setPrescriptions((prev) => {
+      if (prev.length <= 1) return prev;
+      return renumberDefaultPrescriptions(prev.filter((p) => p.id !== id));
+    });
     setResult(null);
   }
 
@@ -75,7 +90,7 @@ export default function PharmacistLookupPage() {
     <main>
       <section className="greeting">
         <p className="eyebrow">SỔ TAY DƯỢC SĨ</p>
-        <h1 className="greeting__title">Tra cứu tương tác thuốc</h1>
+        <h1 className="greeting__title page-title-icon"><MaterialIcon name="analytics" size={25} />Tra cứu tương tác thuốc</h1>
         <p className="greeting__subtitle">Công cụ tra cứu nội bộ — không lưu lịch sử, không gắn với bệnh nhân nào.</p>
       </section>
 

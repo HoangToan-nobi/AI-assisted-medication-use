@@ -115,7 +115,7 @@ export default function PharmacistDashboardPage() {
 
       <section className="dashboard-section">
         <div className="dashboard-section__header">
-          <h2>Cần xử lý gấp</h2>
+          <h2 className="section-heading-icon"><MaterialIcon name="priority_high" size={21} />Cần xử lý gấp</h2>
         </div>
         {!loading && urgent.length === 0 && (
           <div className="empty-state">
@@ -171,7 +171,7 @@ export default function PharmacistDashboardPage() {
         ) && (
           <section className="dashboard-section">
             <div className="dashboard-section__header">
-              <h2>Yêu cầu đã xử lý và chờ xem xét</h2>
+              <h2 className="section-heading-icon"><MaterialIcon name="task_alt" size={21} />Yêu cầu đã xử lý và chờ xem xét</h2>
             </div>
             <section className="patient-list">
               {requests
@@ -223,7 +223,7 @@ export default function PharmacistDashboardPage() {
 
       <section className="dashboard-section">
         <div className="dashboard-section__header">
-          <h2>Truy cập nhanh</h2>
+          <h2 className="section-heading-icon"><MaterialIcon name="bolt" size={21} />Truy cập nhanh</h2>
         </div>
         <div className="dashboard-med-grid">
           <button

@@ -54,7 +54,7 @@ export default function PharmacistProfilePage() {
       <div className="page-header page-header--in-content">
         <div>
           <p className="eyebrow">HỒ SƠ CỦA TÔI</p>
-          <h1 className="page-header__title">Hồ sơ cá nhân</h1>
+          <h1 className="page-header__title page-title-icon"><MaterialIcon name="account_circle" size={25} />Hồ sơ cá nhân</h1>
         </div>
       </div>
 

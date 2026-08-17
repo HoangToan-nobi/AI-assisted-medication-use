@@ -119,7 +119,7 @@ function ReviewContent() {
         </button>
         <div>
           <p className="eyebrow">XEM XÉT CHUYÊN MÔN</p>
-          <h1 className="page-header__title">{reviewRequest ? `Hồ sơ: ${reviewRequest.patient_name}` : "Chi tiết cảnh báo"}</h1>
+          <h1 className="page-header__title page-title-icon"><MaterialIcon name="assignment_ind" size={25} />{reviewRequest ? `Hồ sơ: ${reviewRequest.patient_name}` : "Chi tiết cảnh báo"}</h1>
         </div>
       </div>
 
@@ -130,7 +130,7 @@ function ReviewContent() {
         <div className="review-layout__main">
           {!loading && (
         <section className="panel profile-medications">
-          <div className="dashboard-section__header"><h2>Thông tin người được kiểm tra</h2></div>
+          <div className="dashboard-section__header"><h2 className="section-heading-icon"><MaterialIcon name="person_search" size={21} />Thông tin người được kiểm tra</h2></div>
           {reviewRequest?.gui_kem_ho_so ? (
             (profile?.ngay_sinh || profile?.benh_nen_ghi_chu) ? (
               <div className="field" style={{ marginBottom: 16 }}>
