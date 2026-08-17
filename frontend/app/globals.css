@@ -4114,6 +4114,91 @@ html[data-theme="dark"] .bottom-nav.sidebar {
   font-weight: 700;
   line-height: 1.4;
 }
+.condition-selector__hint,
+.condition-selector__empty {
+  margin: 0 0 10px;
+  color: #6b7d96;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.condition-selector__empty {
+  padding: 10px 12px;
+  border: 1px dashed #cbd9ef;
+  border-radius: 10px;
+  background: rgba(244, 248, 255, 0.72);
+}
+.condition-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.condition-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 8px 8px 8px 11px;
+  color: #23436f;
+  border: 1px solid #bfd2ee;
+  border-radius: 12px;
+  background: #edf4ff;
+}
+.condition-chip > span {
+  display: grid;
+  min-width: 0;
+}
+.condition-chip strong,
+.condition-chip small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.condition-chip strong {
+  font-size: 13px;
+}
+.condition-chip small {
+  margin-top: 2px;
+  color: #637895;
+  font-size: 11px;
+}
+.condition-chip button {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 26px;
+  min-height: 26px;
+  padding: 0;
+  color: #587095;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+}
+.condition-chip button:hover {
+  color: #a23f4c;
+  background: #ffe7ea;
+}
+.condition-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.condition-search-wrap > .material-symbols-outlined {
+  position: absolute;
+  left: 14px;
+  z-index: 1;
+  color: #71829c;
+  pointer-events: none;
+}
+.profile-details-card .condition-search-wrap input {
+  padding-right: 42px;
+  padding-left: 43px;
+}
+.condition-search-wrap > .spinner {
+  position: absolute;
+  right: 14px;
+}
 .profile-details-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5601,6 +5686,39 @@ textarea:focus {
   font-size: 14px;
   line-height: 1.5;
 }
+.disease-scope-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid #b9ddcc;
+  border-radius: 14px;
+  background: #f2fbf7;
+  color: #1f5c45;
+}
+.disease-scope-note--fallback {
+  border-color: #d6ddeb;
+  background: #f7f9fc;
+  color: #40546f;
+}
+.disease-scope-note strong {
+  display: block;
+  color: inherit;
+  font-size: 15px;
+}
+.disease-scope-note p {
+  margin: 4px 0 0;
+  color: var(--on-surface-variant);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.disease-scope-note a {
+  color: var(--primary);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 .medi-alert-backdrop {
   position: fixed;
   z-index: 5000;
@@ -6488,6 +6606,19 @@ html[data-theme="dark"] .interaction-guide p,
 html[data-theme="dark"] .interaction-mascot-note p {
   color: #b8c8df;
 }
+html[data-theme="dark"] .disease-scope-note {
+  border-color: #356b59;
+  background: #172f2a;
+  color: #a9e6cf;
+}
+html[data-theme="dark"] .disease-scope-note--fallback {
+  border-color: #3c5c86;
+  background: #1a2b45;
+  color: #c7d9f2;
+}
+html[data-theme="dark"] .disease-scope-note p {
+  color: #b8c8df;
+}
 
 html[data-theme="dark"] .mc-page {
   background: #0b1220;
@@ -6597,6 +6728,23 @@ html[data-theme="dark"] .profile-details-card__title,
 html[data-theme="dark"] .profile-details-card label,
 html[data-theme="dark"] .med-detail-card h2 {
   color: #edf4ff;
+}
+html[data-theme="dark"] .condition-selector__hint,
+html[data-theme="dark"] .condition-selector__empty,
+html[data-theme="dark"] .condition-chip small {
+  color: #aec2df;
+}
+html[data-theme="dark"] .condition-selector__empty,
+html[data-theme="dark"] .condition-chip {
+  color: #e8f1ff;
+  border-color: #385475;
+  background: #1a2a42;
+}
+html[data-theme="dark"] .condition-chip button {
+  color: #adc6e8;
+}
+html[data-theme="dark"] .condition-chip button:hover {
+  background: #28466f;
 }
 
 html[data-theme="dark"] .medi-alert {

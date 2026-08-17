@@ -111,6 +111,7 @@ export type MedicationCheckResponse = {
   ranked_results: Record<string, unknown>[];
   explanations: InteractionExplanation[];
   has_severe: boolean;
+  has_severe_disease_interaction?: boolean;
   has_unclassified: boolean;
   // Chỉ có ở luồng kiểm tra theo tên thuốc (checkProducts/...).
   unknown_products?: string[];
@@ -126,6 +127,8 @@ export type MedicationCheckResponse = {
   overview?: InteractionOverviewExplanation;
   food_interactions?: FoodInteractionExplanation[];
   disease_interactions?: DiseaseInteractionExplanation[];
+  disease_interaction_scope?: "personalized" | "general_fallback" | "general";
+  patient_conditions_snapshot?: DiseaseInfo[];
   // Câu liệt kê cố định (không qua LLM) tên thực phẩm/bệnh nền cần lưu ý, ghép thêm
   // vào bảng tóm tắt tổng quan sau đoạn overview.giai_thich do LLM sinh.
   canh_bao_thuc_pham_benh_nen?: string;
@@ -145,6 +148,7 @@ export type AgentCheckResult = {
   ranked_results?: Record<string, unknown>[];
   explanations?: InteractionExplanation[];
   has_severe?: boolean;
+  has_severe_disease_interaction?: boolean;
   has_unclassified?: boolean;
   checked_products?: string[];
   prescriptions?: PrescriptionSummary[];
@@ -153,6 +157,8 @@ export type AgentCheckResult = {
   overview?: InteractionOverviewExplanation;
   food_interactions?: FoodInteractionExplanation[];
   disease_interactions?: DiseaseInteractionExplanation[];
+  disease_interaction_scope?: "personalized" | "general_fallback" | "general";
+  patient_conditions_snapshot?: DiseaseInfo[];
   canh_bao_thuc_pham_benh_nen?: string;
 };
 
@@ -192,6 +198,12 @@ export type MedicationSearchResult = {
 export type ProductSearchResult = {
   id: string;
   ten_thuoc: string;
+};
+
+export type DiseaseInfo = {
+  id: number;
+  ten_benh: string;
+  ten_benh_vi: string | null;
 };
 
 export type PatientSummary = {
@@ -300,6 +312,36 @@ export async function searchProducts(q: string, token: string): Promise<ProductS
 
 export async function searchGuestProducts(q: string): Promise<ProductSearchResult[]> {
   return request<ProductSearchResult[]>(`/api/v1/guest/products/search?q=${encodeURIComponent(q)}`);
+}
+
+export async function searchDiseases(
+  q: string,
+  token: string,
+  limit = 20
+): Promise<DiseaseInfo[]> {
+  return request<DiseaseInfo[]>(
+    `/api/v1/diseases/search?q=${encodeURIComponent(q)}&limit=${limit}`,
+    { token }
+  );
+}
+
+export async function getPatientConditions(
+  patientId: string,
+  token: string
+): Promise<DiseaseInfo[]> {
+  return request<DiseaseInfo[]>(`/api/v1/patients/${patientId}/conditions`, { token });
+}
+
+export async function updatePatientConditions(
+  patientId: string,
+  diseaseIds: number[],
+  token: string
+): Promise<DiseaseInfo[]> {
+  return request<DiseaseInfo[]>(`/api/v1/patients/${patientId}/conditions`, {
+    method: "PUT",
+    token,
+    body: JSON.stringify({ disease_ids: diseaseIds }),
+  });
 }
 
 export async function listPatientMedications(

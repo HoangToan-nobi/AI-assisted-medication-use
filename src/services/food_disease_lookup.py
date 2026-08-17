@@ -38,15 +38,25 @@ def lookup_food_interactions(medication_ids: list[str], db: Session) -> list[dic
     ]
 
 
-def lookup_disease_interactions(medication_ids: list[str], db: Session) -> list[dict]:
-    if not medication_ids:
+def lookup_disease_interactions(
+    medication_ids: list[str], db: Session, disease_ids: list[int] | None = None
+) -> list[dict]:
+    """Tra tương tác thuốc-bệnh, tùy chọn giới hạn theo bệnh nền chuẩn hóa.
+
+    ``disease_ids=None`` giữ hành vi tổng quát cũ để làm fallback cho bệnh nhân
+    chưa khai báo bệnh nền và cho các luồng guest/dược sĩ. Danh sách rỗng có
+    nghĩa là chủ động lọc ra không kết quả.
+    """
+    if not medication_ids or disease_ids == []:
         return []
-    rows = (
+    query = (
         db.query(DiseaseInteraction, Medication.ten_chuan_hoa)
         .join(Medication, DiseaseInteraction.medication_id == Medication.id)
         .filter(DiseaseInteraction.medication_id.in_(medication_ids))
-        .all()
     )
+    if disease_ids is not None:
+        query = query.filter(DiseaseInteraction.disease_id.in_(disease_ids))
+    rows = query.all()
     return [
         {
             "hoat_chat": ten_chuan_hoa,

@@ -81,6 +81,20 @@ class ProductSearchResult(BaseModel):
     ten_thuoc: str
 
 
+# ---- Danh mục bệnh nền chuẩn hóa ----
+
+
+class DiseaseInfo(BaseModel):
+    id: int
+    ten_benh: str
+    ten_benh_vi: str | None = None
+
+
+class UpdatePatientConditionsRequest(BaseModel):
+    # Cho phép danh sách rỗng để bệnh nhân chủ động xóa toàn bộ bệnh nền đã chọn.
+    disease_ids: list[int] = Field(default_factory=list, max_length=100)
+
+
 class PrescriptionInput(BaseModel):
     """1 đơn thuốc gửi lên từ frontend - "đơn thuốc" chỉ là khái niệm ở phía người
     dùng nhập liệu, backend dùng label + danh sách thuốc này để tự tính cạnh cấp
@@ -114,6 +128,9 @@ class MedicationCheckResponse(BaseModel):
     ranked_results: list[dict]
     explanations: list[dict]
     has_severe: bool
+    # Tách riêng cảnh báo nặng thuốc-bệnh để không đổi nghĩa legacy của has_severe
+    # (vốn chỉ phản ánh tương tác thuốc-thuốc).
+    has_severe_disease_interaction: bool = False
     has_unclassified: bool
     # Chỉ có ở luồng kiểm tra theo tên thuốc (products/check) - tên thuốc không tìm thấy
     # trong CSDL, hoặc tìm thấy nhưng chưa có hoạt chất nào khớp DDInter để tra tương tác.
@@ -139,11 +156,16 @@ class MedicationCheckResponse(BaseModel):
     # Tóm tắt tổng quan toàn bộ lần phân tích - sinh cho cả luồng bệnh nhân và dược
     # sĩ, khác nhau ở giọng điệu (xem build_overview_explanation).
     overview: dict | None = None
-    # Tương tác thuốc-thực phẩm/thuốc-bệnh nền (DDInter 2.0 DFI/DDSI) - thông tin
-    # CHUNG theo từng hoạt chất đang kiểm tra, không lọc theo hồ sơ bệnh nền cá nhân
-    # (xem food_disease_explain.py). mo_ta_dich/xu_tri_dich chỉ dược sĩ mới thấy.
+    # Tương tác thuốc-thực phẩm/thuốc-bệnh nền (DDInter 2.0 DFI/DDSI). Luồng bệnh
+    # nhân lọc bệnh theo patient_conditions khi có; nếu chưa khai báo thì giữ tập
+    # cảnh báo chung để tương thích. mo_ta_dich/xu_tri_dich chỉ dược sĩ mới thấy.
     food_interactions: list[dict] = Field(default_factory=list)
     disease_interactions: list[dict] = Field(default_factory=list)
+    # personalized: đã lọc theo patient_conditions; general_fallback: bệnh nhân đăng nhập
+    # chưa khai báo condition nên giữ cảnh báo chung; general: guest/dược sĩ tra cứu độc lập.
+    disease_interaction_scope: Literal["personalized", "general_fallback", "general"] = "general"
+    # Snapshot condition tại thời điểm kiểm tra để lịch sử không đổi nghĩa khi hồ sơ được sửa sau đó.
+    patient_conditions_snapshot: list[DiseaseInfo] = Field(default_factory=list)
     # Câu liệt kê cố định (không qua LLM) tên thực phẩm/bệnh nền cần lưu ý, ghép thêm
     # vào bảng tóm tắt tổng quan sau đoạn overview.giai_thich do LLM sinh.
     canh_bao_thuc_pham_benh_nen: str | None = None
