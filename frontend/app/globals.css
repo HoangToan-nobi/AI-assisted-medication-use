@@ -6423,6 +6423,15 @@ html[data-theme="dark"] textarea {
     inset 0 -2px 5px rgba(36, 58, 82, 0.22),
     0 2px 7px rgba(47, 65, 83, 0.2);
 }
+.mc-header .theme-toggle {
+  width: 46px;
+  height: 22px;
+  min-height: 0;
+  transform: translateX(-12px);
+}
+.mc-header .theme-toggle:not(:disabled):active {
+  transform: translateX(-12px) translateY(1px);
+}
 .patient-header .theme-toggle--light,
 .mc-header .theme-toggle--light {
   background: #6689b3;
@@ -6449,6 +6458,12 @@ html[data-theme="dark"] textarea {
   height: 40px;
   transform: none;
 }
+.mc-header .theme-toggle__thumb {
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+}
 .patient-header .theme-toggle--light .theme-toggle__thumb,
 .mc-header .theme-toggle--light .theme-toggle__thumb {
   background: #e8cc4b;
@@ -6459,6 +6474,9 @@ html[data-theme="dark"] textarea {
 .patient-header .theme-toggle--dark .theme-toggle__thumb,
 .mc-header .theme-toggle--dark .theme-toggle__thumb {
   transform: translateX(52px);
+}
+.mc-header .theme-toggle--dark .theme-toggle__thumb {
+  transform: translateX(24px);
 }
 html[data-theme="dark"] .patient-header .theme-toggle,
 html[data-theme="dark"] .mc-header .theme-toggle {
@@ -6471,6 +6489,9 @@ html[data-theme="dark"] .mc-header .theme-toggle {
 .mc-header .theme-toggle .material-symbols-outlined {
   font-size: 17px;
 }
+.mc-header .theme-toggle .material-symbols-outlined {
+  font-size: 8px;
+}
 @media (max-width: 640px) {
   .patient-header .theme-toggle,
   .mc-header .theme-toggle {
@@ -6478,22 +6499,22 @@ html[data-theme="dark"] .mc-header .theme-toggle {
     bottom: auto;
   }
   .mc-header .theme-toggle {
-    width: 84px;
-    height: 40px;
-    border-width: 3px;
+    width: 40px;
+    height: 18px;
+    border-width: 1px;
   }
   .mc-header .mc-login {
     width: 96px;
     height: 38px;
   }
   .mc-header .theme-toggle__thumb {
-    top: 4px;
-    left: 4px;
-    width: 32px;
-    height: 32px;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
   }
   .mc-header .theme-toggle--dark .theme-toggle__thumb {
-    transform: translateX(44px);
+    transform: translateX(22px);
   }
 }
 

@@ -67,9 +67,9 @@ function Header() {
         />
       </Link>
       <nav className="mc-nav" aria-label="Điều hướng chính">
+        <ThemeModeToggle />
         <a href="#features">Tính năng</a>
         <a href="#about">Về MediCheck</a>
-        <ThemeModeToggle />
         <Link href="/auth" className="mc-login">
           Đăng nhập
         </Link>
@@ -1459,8 +1459,8 @@ export default function LandingPage() {
         }
         .mc-header { background: rgba(255, 255, 255, 0.2); }
         .mc-nav {
-          gap: 4px;
-          padding: 5px;
+          gap: 2px;
+          padding: 5px 5px 5px 17px;
           border: 1px solid rgba(255, 255, 255, 0.38);
           border-radius: 999px;
           background: rgba(255, 255, 255, 0.18);
@@ -1473,7 +1473,7 @@ export default function LandingPage() {
           display: inline-flex;
           align-items: center;
           min-height: 38px;
-          padding: 8px 16px;
+          padding: 8px 12px;
           border-radius: 999px;
           color: #536887;
           font-size: 14px;
