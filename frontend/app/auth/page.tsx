@@ -86,10 +86,12 @@ export default function AuthPage() {
   }
 
   return (
-    <main className="mc-auth">
+    <main className="mc-auth" data-mode={mode}>
       <style jsx global>{`
         .mc-auth {
+          height: 100dvh;
           min-height: 100vh;
+          overflow: hidden;
           background: #f7faff;
           color: #132a4d;
           font-family: Inter, Arial, sans-serif;
@@ -99,10 +101,11 @@ export default function AuthPage() {
         }
         .mc-auth__shell {
           width: min(1180px, calc(100% - 40px));
+          height: 100%;
           margin: auto;
         }
         .mc-auth__header {
-          height: 92px;
+          height: 76px;
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -132,8 +135,10 @@ export default function AuthPage() {
           grid-template-columns: 1fr minmax(400px, 500px);
           align-items: center;
           gap: 70px;
-          min-height: calc(100vh - 150px);
-          padding: 48px;
+          height: calc(100dvh - 88px);
+          min-height: 0;
+          max-height: calc(100dvh - 88px);
+          padding: clamp(24px, 3vh, 40px) 48px;
           border: 1px solid #d3e1f4;
           border-radius: 28px;
           background: linear-gradient(120deg, #fff, #edf4ff 58%, #fff);
@@ -209,7 +214,11 @@ export default function AuthPage() {
           color: #4167b2;
         }
         .mc-auth__card {
-          padding: 32px;
+          max-height: calc(100dvh - 136px);
+          padding: clamp(22px, 2.5vh, 30px);
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          scrollbar-gutter: stable;
           border: 1px solid #c8d9f0;
           border-radius: 24px;
           background: #ffffffdf;
@@ -241,13 +250,13 @@ export default function AuthPage() {
           box-shadow: 0 4px 12px #385b8b1c;
         }
         .mc-auth__title {
-          margin: 27px 0 7px;
+          margin: clamp(18px, 2.2vh, 25px) 0 7px;
           font-size: 29px;
           letter-spacing: 0;
           line-height: 1.2;
         }
         .mc-auth__subtitle {
-          margin: 0 0 23px;
+          margin: 0 0 clamp(15px, 2vh, 21px);
           color: #657790;
           font-size: 14px;
         }
@@ -255,7 +264,7 @@ export default function AuthPage() {
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 9px;
-          margin-bottom: 20px;
+          margin-bottom: 15px;
         }
         .mc-auth__demo button {
           border: 1px solid #c5d7f0;
@@ -270,7 +279,7 @@ export default function AuthPage() {
         }
         .mc-auth__form {
           display: grid;
-          gap: 16px;
+          gap: 13px;
         }
         .mc-auth__field {
           display: grid;
@@ -285,7 +294,7 @@ export default function AuthPage() {
           display: flex;
           align-items: center;
           gap: 10px;
-          min-height: 48px;
+          min-height: 44px;
           padding: 0 13px;
           border: 1px solid #c7d7ef;
           border-radius: 12px;
@@ -334,7 +343,7 @@ export default function AuthPage() {
           align-items: center;
           justify-content: center;
           gap: 10px;
-          min-height: 50px;
+          min-height: 46px;
           border: 0;
           border-radius: 999px;
           background: linear-gradient(100deg, #7d9ce4, #4167b2);
@@ -351,7 +360,7 @@ export default function AuthPage() {
           cursor: not-allowed;
         }
         .mc-auth__switch {
-          margin: 20px 0 0;
+          margin: 15px 0 0;
           color: #657790;
           text-align: center;
           font-size: 13px;
@@ -368,16 +377,67 @@ export default function AuthPage() {
           display: inline-flex;
           align-items: center;
           gap: 8px;
-          margin-top: 20px;
+          margin-top: 15px;
           color: #4167b2;
           text-decoration: none;
           font-size: 13px;
           font-weight: 700;
         }
+        @media (min-width: 851px) {
+          .mc-auth[data-mode="register"] .mc-auth__layout {
+            padding-block: 12px;
+          }
+          .mc-auth[data-mode="register"] .mc-auth__card {
+            max-height: calc(100dvh - 116px);
+            padding: 14px 24px;
+            scrollbar-width: none;
+            scrollbar-gutter: auto;
+          }
+          .mc-auth[data-mode="register"] .mc-auth__card::-webkit-scrollbar {
+            display: none;
+          }
+          .mc-auth[data-mode="register"] .mc-auth__tab {
+            padding: 9px;
+          }
+          .mc-auth[data-mode="register"] .mc-auth__title {
+            margin: 14px 0 4px;
+            font-size: 26px;
+          }
+          .mc-auth[data-mode="register"] .mc-auth__subtitle {
+            margin-bottom: 12px;
+            font-size: 13px;
+          }
+          .mc-auth[data-mode="register"] .mc-auth__form {
+            gap: 7px;
+          }
+          .mc-auth[data-mode="register"] .mc-auth__field {
+            gap: 4px;
+          }
+          .mc-auth[data-mode="register"] .mc-auth__input {
+            min-height: 40px;
+          }
+          .mc-auth[data-mode="register"] .mc-auth__submit {
+            min-height: 42px;
+          }
+          .mc-auth[data-mode="register"] .mc-auth__switch {
+            margin-top: 8px;
+          }
+        }
         @media (max-width: 850px) {
+          .mc-auth {
+            height: auto;
+            min-height: 100dvh;
+            overflow: auto;
+          }
+          .mc-auth__shell {
+            height: auto;
+          }
           .mc-auth__layout {
             grid-template-columns: 1fr;
             gap: 30px;
+            height: auto;
+            min-height: calc(100dvh - 100px);
+            max-height: none;
           }
           .mc-auth__intro h1 {
             font-size: 52px;
@@ -387,8 +447,11 @@ export default function AuthPage() {
           }
           .mc-auth__card {
             max-width: 520px;
+            max-height: none;
             width: 100%;
             margin: auto;
+            overflow: visible;
+            scrollbar-gutter: auto;
           }
         }
         @media (max-width: 560px) {

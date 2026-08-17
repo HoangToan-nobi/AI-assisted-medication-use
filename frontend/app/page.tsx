@@ -2,7 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type PointerEvent,
+} from "react";
 import {
   checkGuestProducts,
   checkProducts,
@@ -13,6 +19,7 @@ import {
 import { getSession, type Session } from "@/lib/auth";
 import type { Prescription } from "@/lib/prescription";
 import InteractionResultView from "@/components/graph/InteractionResultView";
+import InteractivePill from "@/components/InteractivePill";
 import MediFox from "@/components/MediFox";
 import ThemeModeToggle from "@/components/ThemeModeToggle";
 
@@ -306,19 +313,43 @@ function HeroSection({
 }: {
   onComplete: (check: LandingCheck) => void;
 }) {
+  const heroRef = useRef<HTMLElement>(null);
+
+  function setMotionVariable(name: string, value: string) {
+    heroRef.current?.style.setProperty(name, value);
+  }
+
+  function moveFox(event: PointerEvent<HTMLElement>) {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const x = (event.clientX - bounds.left) / bounds.width - 0.5;
+    const y = (event.clientY - bounds.top) / bounds.height - 0.5;
+
+    setMotionVariable("--fox-x", `${x * 18}px`);
+    setMotionVariable("--fox-y", `${y * 12}px`);
+  }
+
+  function resetHeroMotion() {
+    setMotionVariable("--fox-x", "0px");
+    setMotionVariable("--fox-y", "0px");
+  }
+
   return (
     <section
+      ref={heroRef}
       className="mc-shell mc-hero"
       aria-label="MediCheck - tra cứu thông minh, dùng thuốc an toàn"
+      onPointerMove={moveFox}
+      onPointerLeave={resetHeroMotion}
     >
       <div className="mc-hero__glow" />
-      <Image
+      <InteractivePill
         className="mc-hero__capsule"
         src={asset("15.png")}
         alt="Viên nang minh họa MediCheck"
-        fill
         priority
         sizes="(max-width: 800px) 50vw,800px"
+        maxTilt={18}
+        followDistance={10}
       />
       <div className="mc-hero__overlay" />
       <div className="mc-hero__caption">
@@ -1353,7 +1384,7 @@ export default function LandingPage() {
           }
         }
         .mc-hero__capsule {
-          transform: translateX(18vw) rotate(-2deg) scale(1.78);
+          transform: translateX(25vw) rotate(-2deg) scale(1.78);
           transform-origin: 62% 50%;
         }
         .mc-search-panel {
@@ -2001,19 +2032,54 @@ export default function LandingPage() {
           pointer-events: none;
         }
 
-        /* Living capsule: subtle floating motion keeps the hero active without
-           competing with the search interaction. */
+        /* InteractivePill owns the 3D tilt. This outer layer only preserves the
+           original placement and idle float, so surrounding layout never moves. */
+        .mc-hero {
+          --fox-x: 0px;
+          --fox-y: 0px;
+          perspective: 1200px;
+        }
         .mc-hero__capsule {
-          animation: mc-capsule-float 8s ease-in-out infinite;
+          animation: mc-capsule-float 7.5s ease-in-out infinite;
+          transform-origin: 62% 50%;
+          transform-style: preserve-3d;
           will-change: transform;
         }
 
         @keyframes mc-capsule-float {
           0%, 100% {
-            transform: translate3d(18vw, 0, 0) rotate(-2deg) scale(1.78);
+            transform: translate3d(25vw, 0, 0) rotate(-2deg) scale(1.78);
           }
           50% {
-            transform: translate3d(18vw, -14px, 0) rotate(0deg) scale(1.82);
+            transform: translate3d(25vw, -14px, 0) rotate(1deg) scale(1.82);
+          }
+        }
+
+        .mc-hero__fox {
+          animation: mc-fox-bob 4.6s ease-in-out infinite;
+          transform-origin: 50% 100%;
+          will-change: transform;
+        }
+
+        @keyframes mc-fox-bob {
+          0%, 100% {
+            transform: translate3d(var(--fox-x), var(--fox-y), 0) rotate(-1deg);
+          }
+          45% {
+            transform: translate3d(
+                var(--fox-x),
+                calc(var(--fox-y) - 9px),
+                0
+              )
+              rotate(1.5deg);
+          }
+          55% {
+            transform: translate3d(
+                var(--fox-x),
+                calc(var(--fox-y) - 9px),
+                0
+              )
+              rotate(-0.5deg);
           }
         }
 
@@ -2034,7 +2100,8 @@ export default function LandingPage() {
         }
 
         @media (prefers-reduced-motion: reduce) {
-          .mc-hero__capsule {
+          .mc-hero__capsule,
+          .mc-hero__fox {
             animation: none;
           }
         }
@@ -2064,7 +2131,8 @@ export default function LandingPage() {
         }
         .mc-hero__capsule {
           z-index: 0;
-          object-fit: contain;
+        }
+        .mc-hero__capsule .interactive-pill__image {
           object-position: 72% center;
         }
         .mc-hero__overlay {
@@ -2150,7 +2218,7 @@ export default function LandingPage() {
         }
 
         @media (max-width: 760px) {
-          .mc-hero__capsule {
+          .mc-hero__capsule .interactive-pill__image {
             object-position: 70% 12%;
           }
           .mc-hero__overlay {

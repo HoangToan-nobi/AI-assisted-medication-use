@@ -38,6 +38,9 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
   }
   if (!session) return null;
 
+  const fullName = session.hoTen.trim() || "Người dùng MediCheck";
+  const avatarLetter = fullName.split(/\s+/).pop()?.charAt(0).toUpperCase() || "M";
+
   function logout() {
     clearSession();
     toast({ title: "Đã đăng xuất", message: "Hẹn gặp lại bạn tại MediCheck.", tone: "info" });
@@ -50,7 +53,19 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
         <div className="patient-header__actions" style={{ marginLeft: "auto" }}>
           <ThemeModeToggle />
           <NotificationBell patientId={session.userId} token={session.accessToken} />
-          <Link className="patient-header__name" href="/profile" title="Hồ sơ của tôi">{session.hoTen}</Link>
+          <Link
+            className="patient-header__identity"
+            href="/profile"
+            aria-label={`Hồ sơ của ${fullName}`}
+            aria-describedby="patient-header-name-tooltip"
+          >
+            <span className="patient-header__avatar" aria-hidden="true">
+              {avatarLetter}
+            </span>
+            <span className="patient-header__tooltip" id="patient-header-name-tooltip" role="tooltip">
+              {fullName}
+            </span>
+          </Link>
           <button className="icon-btn" onClick={logout} aria-label="Đăng xuất" title="Đăng xuất">
             <MaterialIcon name="logout" size={20} />
           </button>

@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { getInitials } from "@/lib/format";
 import { clearSession, getSession, onSessionUpdated, type Session } from "@/lib/auth";
 import BrandLogo from "@/components/BrandLogo";
 import MaterialIcon from "@/components/MaterialIcon";
@@ -43,12 +42,27 @@ export default function PharmacistLayout({ children }: { children: React.ReactNo
 
   if (!checked || !session) return null;
 
+  const fullName = session.hoTen.trim() || "Dược sĩ MediCheck";
+  const avatarLetter = fullName.split(/\s+/).pop()?.charAt(0).toUpperCase() || "M";
+
   return (
     <div className={`app-shell app-shell--with-nav ${sidebarCollapsed ? "app-shell--sidebar-collapsed" : ""}`}>
       <header className="patient-header">
         <div className="patient-header__actions" style={{ marginLeft: "auto" }}>
           <ThemeModeToggle />
-          <Link className="patient-header__name" href="/pharmacist-profile" title="Hồ sơ dược sĩ">{session.hoTen}</Link>
+          <Link
+            className="patient-header__identity"
+            href="/pharmacist-profile"
+            aria-label={`Hồ sơ của ${fullName}`}
+            aria-describedby="pharmacist-header-name-tooltip"
+          >
+            <span className="patient-header__avatar" aria-hidden="true">
+              {avatarLetter}
+            </span>
+            <span className="patient-header__tooltip" id="pharmacist-header-name-tooltip" role="tooltip">
+              {fullName}
+            </span>
+          </Link>
           <button className="icon-btn" onClick={handleLogout} aria-label="Đăng xuất" title="Đăng xuất">
             <MaterialIcon name="logout" size={20} />
           </button>
