@@ -1,6 +1,6 @@
 """SQLAlchemy models — khớp Data Model đã thiết kế ở Giai đoạn 2 (mục 5)."""
 import uuid
-from datetime import date, datetime
+from datetime import datetime
 
 from sqlalchemy import (
     JSON,
@@ -10,6 +10,8 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -48,6 +50,27 @@ class PatientProfile(Base):
     benh_nen_ghi_chu = Column(Text)
     di_ung_thuoc = Column(Text)
     tinh_trang_khac = Column(Text)
+
+
+class Disease(Base):
+    """Danh mục bệnh nền chuẩn hóa dùng để gắn với hồ sơ bệnh nhân."""
+
+    __tablename__ = "diseases"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ten_benh = Column(String(255), unique=True, nullable=False)
+    ten_benh_vi = Column(String(255), nullable=True)
+
+
+class PatientCondition(Base):
+    """Quan hệ nhiều-nhiều giữa hồ sơ bệnh nhân và danh mục bệnh nền."""
+
+    __tablename__ = "patient_conditions"
+    __table_args__ = (
+        UniqueConstraint("patient_profile_id", "disease_id", name="uq_patient_disease"),
+    )
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    patient_profile_id = Column(String, ForeignKey("patient_profiles.id"), nullable=False)
+    disease_id = Column(Integer, ForeignKey("diseases.id"), nullable=False)
 
 
 
@@ -189,9 +212,14 @@ class DiseaseInteraction(Base):
     __tablename__ = "disease_interactions"
     __table_args__ = (
         UniqueConstraint("medication_id", "ten_benh", name="uq_disease_interaction"),
+        Index("idx_disease_interactions_disease_id", "disease_id"),
+        Index("idx_disease_interactions_medication_disease", "medication_id", "disease_id"),
     )
     id = Column(String, primary_key=True, default=_uuid)
     medication_id = Column(String, ForeignKey("medications.id"), nullable=False)
+    # Nullable trong schema hiện tại để migration/import dữ liệu cũ có thể chạy theo 2 bước:
+    # tạo disease -> backfill mapping -> kiểm tra hết NULL rồi mới cân nhắc siết NOT NULL.
+    disease_id = Column(Integer, ForeignKey("diseases.id"), nullable=True)
     ten_benh = Column(String(255), nullable=False)  # DDInter disease_name (tiếng Anh gốc)
     # Bản dịch tiếng Việt của ten_benh - 450 tên khác nhau, cùng cơ chế dịch 1 lần
     # như thuc_pham_vi ở FoodInteraction phía trên.

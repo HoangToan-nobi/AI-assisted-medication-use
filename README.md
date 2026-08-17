@@ -184,7 +184,19 @@ Danh sách endpoint đầy đủ + request/response schema: [http://localhost:80
 | Hoàng Sỹ Toàn (Leader) | Data, PM, OCR | 2A202601273
 | Đàm Lê Minh Quân | Data, Backend, AI agent | 2A202601451
 
-<!-- ## Live URL
+## Demo (MVP)
+
+Xem video giới thiệu và quy trình hoạt động các luồng tra cứu (3 phút) trên YouTube:
+
+[![MediCheck MVP Demo](https://img.youtube.com/vi/mrw6JcRn0yU/maxresdefault.jpg)](https://www.youtube.com/watch?v=mrw6JcRn0yU)
+
+> ⏱️ **Nội dung video:**
+> - `00:00` - Giới thiệu tổng quan
+> - `00:10` - Luồng Bệnh nhân chính
+> - `01:35` - Luồng Dược sĩ chính
+> - `02:30` - Tính năng bổ trợ
+
+## Live URL
 
 https://medicheck-t005.vercel.app/ -->
 

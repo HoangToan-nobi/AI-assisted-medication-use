@@ -22,11 +22,14 @@ export type InteractionOverviewResult = Pick<
   MedicationCheckResponse,
   | "explanations"
   | "has_severe"
+  | "has_severe_disease_interaction"
   | "has_unclassified"
   | "product_explanations"
   | "overview"
   | "food_interactions"
   | "disease_interactions"
+  | "disease_interaction_scope"
+  | "patient_conditions_snapshot"
   | "canh_bao_thuc_pham_benh_nen"
 > & {
   interaction_check_id?: string;
@@ -208,10 +211,14 @@ export default function InteractionOverview({ result, prescriptions, session, au
   const visibleFoodItems = result.food_interactions ?? [];
   const visibleDiseaseItems = result.disease_interactions ?? [];
   const totalDetailCount = visibleRawPairItems.length + visibleFoodItems.length + visibleDiseaseItems.length;
+  const hasAnySevere = result.has_severe || result.has_severe_disease_interaction;
+  const conditionNames = (result.patient_conditions_snapshot ?? []).map(
+    (condition) => condition.ten_benh_vi || condition.ten_benh
+  );
 
   return (
     <>
-      {audience === "pharmacist" && result.has_severe && (
+      {audience === "pharmacist" && hasAnySevere && (
         <aside className="interaction-mascot-note interaction-mascot-note--alert">
           <MediFox variant="alert" className="interaction-mascot-note__image" />
           <div>
@@ -220,11 +227,33 @@ export default function InteractionOverview({ result, prescriptions, session, au
           </div>
         </aside>
       )}
+      {audience === "patient" && result.disease_interaction_scope === "personalized" && (
+        <aside className="disease-scope-note disease-scope-note--personalized">
+          <MaterialIcon name="verified_user" size={22} />
+          <div>
+            <strong>Đã cá nhân hóa theo bệnh nền</strong>
+            <p>
+              Cảnh báo thuốc–bệnh được đối chiếu với: {conditionNames.length > 0 ? conditionNames.join(", ") : "bệnh nền đã lưu trong hồ sơ"}.
+            </p>
+          </div>
+        </aside>
+      )}
+      {audience === "patient" && result.disease_interaction_scope === "general_fallback" && (
+        <aside className="disease-scope-note disease-scope-note--fallback">
+          <MaterialIcon name="info" size={22} />
+          <div>
+            <strong>Đang hiển thị cảnh báo bệnh nền tổng quát</strong>
+            <p>
+              Bạn chưa chọn bệnh nền chuẩn hóa. <Link href="/profile">Cập nhật hồ sơ</Link> để nhận cảnh báo phù hợp hơn.
+            </p>
+          </div>
+        </aside>
+      )}
       <section className="interaction-result panel">
       <div className="interaction-result__header">
         <div><p className="eyebrow">ĐỒ THỊ TƯƠNG TÁC</p><h2>{title}</h2></div>
-        <span className={result.has_severe ? "result-pill result-pill--danger" : result.has_unclassified ? "result-pill result-pill--unknown" : "result-pill"}>
-          {result.has_severe ? "Cần lưu ý" : result.has_unclassified ? "Chưa cập nhật" : "An toàn"}
+        <span className={hasAnySevere ? "result-pill result-pill--danger" : result.has_unclassified ? "result-pill result-pill--unknown" : "result-pill"}>
+          {hasAnySevere ? "Cần lưu ý" : result.has_unclassified ? "Chưa cập nhật" : "An toàn"}
         </span>
       </div>
 
