@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.db.models import DiseaseInteraction, FoodInteraction, Medication
+from src.db.models import Disease, DiseaseInteraction, FoodInteraction, Medication
 from src.db.session import SessionLocal, init_db
 
 RAW_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
@@ -85,8 +85,12 @@ def import_food_interactions(db) -> tuple[int, int, int]:
 def import_disease_interactions(db) -> tuple[int, int, int]:
     rows = _load(DDSI_PATH)
     inserted = skipped_existing = skipped_no_medication = 0
-    seen: set[tuple[str, str]] = {
-        (m_id, disease) for (m_id, disease) in db.query(DiseaseInteraction.medication_id, DiseaseInteraction.ten_benh)
+    existing: dict[tuple[str, str], DiseaseInteraction] = {
+        (interaction.medication_id, interaction.ten_benh): interaction
+        for interaction in db.query(DiseaseInteraction).all()
+    }
+    diseases_by_name: dict[str, Disease] = {
+        disease.ten_benh.strip().lower(): disease for disease in db.query(Disease).all()
     }
 
     for row in rows:
@@ -95,21 +99,32 @@ def import_disease_interactions(db) -> tuple[int, int, int]:
             skipped_no_medication += 1
             continue
 
+        disease_name = row["disease_name"].strip()
+        disease_key = disease_name.lower()
+        disease = diseases_by_name.get(disease_key)
+        if disease is None:
+            disease = Disease(ten_benh=disease_name)
+            diseases_by_name[disease_key] = disease
+            db.add(disease)
+            db.flush()
+
         key = (medication_id, row["disease_name"])
-        if key in seen:
+        if key in existing:
+            if existing[key].disease_id is None:
+                existing[key].disease_id = disease.id
             skipped_existing += 1
             continue
-        seen.add(key)
 
-        db.add(
-            DiseaseInteraction(
-                medication_id=medication_id,
-                ten_benh=row["disease_name"],
-                muc_do=LEVEL_MAP.get(row["severity"], "chua_phan_loai"),
-                mo_ta=row.get("interaction"),
-                nguon_trich_dan=row.get("references"),
-            )
+        interaction = DiseaseInteraction(
+            medication_id=medication_id,
+            disease_id=disease.id,
+            ten_benh=row["disease_name"],
+            muc_do=LEVEL_MAP.get(row["severity"], "chua_phan_loai"),
+            mo_ta=row.get("interaction"),
+            nguon_trich_dan=row.get("references"),
         )
+        existing[key] = interaction
+        db.add(interaction)
         inserted += 1
         if inserted % 1000 == 0:
             db.commit()
