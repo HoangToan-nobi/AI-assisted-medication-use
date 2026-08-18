@@ -124,6 +124,26 @@ a:hover {
   text-decoration: underline;
 }
 
+/* Link dùng hình thức button không nhận underline từ rule a:hover phía trên. */
+button:hover,
+a.btn:hover,
+a.primary:hover,
+a.secondary:hover,
+a.btn-block:hover,
+a.check-cta:hover,
+a.dashboard-action:hover,
+a.mc-button:hover,
+a.mc-login:hover,
+a.guest-login-link:hover,
+a.pharmacist-login-required__action:hover,
+a.bottom-nav__item:hover,
+a.sidebar__brand-link:hover,
+a.patient-header__identity:hover,
+.emergency-card a:hover,
+.contact-row__actions a:hover {
+  text-decoration: none !important;
+}
+
 ul {
   list-style: none;
   padding: 0;
@@ -1601,16 +1621,16 @@ button.primary:hover,
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  width: 40px;
-  height: 40px;
-  border: 1px solid #c6d5eb;
-  border-radius: 50%;
-  background: linear-gradient(145deg, #e7eef9, #cddbef);
-  color: #31578f;
+  width: var(--touch-min);
+  height: var(--touch-min);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--surface-container-low);
+  color: var(--on-surface-variant);
   font-size: 18px;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1;
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.72);
+  box-shadow: none;
 }
 .patient-card__footer {
   display: flex;
@@ -2418,11 +2438,11 @@ button,
   .sidebar__toggle {
     position: absolute;
     top: 12px;
-    right: -18px;
+    right: -6px;
   }
 
   .sidebar--collapsed .sidebar__toggle {
-    right: -18px;
+    right: -6px;
   }
 
   .sidebar__brand-row {
@@ -2440,7 +2460,7 @@ button,
     height: 44px;
     padding: 0;
     border: 0;
-    border-radius: 8px;
+    border-radius: 0;
     background: transparent;
     color: #657586;
     cursor: pointer;
@@ -2448,7 +2468,7 @@ button,
   }
 
   .sidebar__toggle:hover {
-    background: #eef3f8;
+    background: transparent;
     color: #2c4d79;
   }
   .sidebar--collapsed .sidebar__brand {
@@ -5931,7 +5951,7 @@ textarea:focus {
 .medi-toast {
   position: fixed;
   z-index: 5100;
-  top: 22px;
+  top: 80px;
   right: 24px;
   display: flex;
   align-items: flex-start;
@@ -5994,8 +6014,14 @@ textarea:focus {
     opacity: 1;
   }
   to {
-    transform: translateY(-14px);
+    transform: translateY(14px);
     opacity: 0;
+  }
+}
+@media (max-width: 767px) {
+  .medi-toast {
+    top: 72px;
+    right: 16px;
   }
 }
 .pharmacist-login-required {
@@ -6568,8 +6594,8 @@ html[data-theme="dark"] textarea {
 }
 .patient-header .theme-toggle,
 .mc-header .theme-toggle {
-  width: 46px;
-  height: 22px;
+  width: 54px;
+  height: 26px;
   min-height: 0;
   transform: translateX(-12px);
 }
@@ -6607,8 +6633,8 @@ html[data-theme="dark"] textarea {
 .mc-header .theme-toggle__thumb {
   top: 3px;
   left: 3px;
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
 }
 .patient-header .theme-toggle--light .theme-toggle__thumb,
 .mc-header .theme-toggle--light .theme-toggle__thumb {
@@ -6623,7 +6649,7 @@ html[data-theme="dark"] textarea {
 }
 .patient-header .theme-toggle--dark .theme-toggle__thumb,
 .mc-header .theme-toggle--dark .theme-toggle__thumb {
-  transform: translateX(24px);
+  transform: translateX(28px);
 }
 html[data-theme="dark"] .patient-header .theme-toggle,
 html[data-theme="dark"] .mc-header .theme-toggle {
@@ -6638,7 +6664,7 @@ html[data-theme="dark"] .mc-header .theme-toggle {
 }
 .patient-header .theme-toggle .material-symbols-outlined,
 .mc-header .theme-toggle .material-symbols-outlined {
-  font-size: 8px;
+  font-size: 9px;
 }
 @media (max-width: 640px) {
   .patient-header .theme-toggle,
@@ -6684,10 +6710,9 @@ html[data-theme="dark"] .sidebar__section-label {
   color: #b9c9df;
 }
 html[data-theme="dark"] .patient-header__avatar {
-  border-color: #526987;
-  background: linear-gradient(145deg, #405674, #2f425e);
-  color: #f3f7ff;
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.12);
+  background: #1d2c43;
+  color: #c9dcfa;
+  box-shadow: none;
 }
 html[data-theme="dark"] .bottom-nav__item--active,
 html[data-theme="dark"] .bottom-nav__item:hover {
@@ -6705,7 +6730,7 @@ html[data-theme="dark"] .sidebar__toggle {
   color: #aebfd5;
 }
 html[data-theme="dark"] .sidebar__toggle:hover {
-  background: #223752;
+  background: transparent;
   color: #e4efff;
 }
 html[data-theme="dark"] .patient-header .brand-logo__mark {
@@ -8201,19 +8226,19 @@ html[data-theme="dark"] .mc-auth__input:focus-within {
   .sidebar__brand-link:hover { transform: translateY(-2px); }
 
   .sidebar__toggle {
-    right: -28px;
+    right: -16px;
     width: 38px;
     height: 38px;
-    border: 1px solid rgba(176, 198, 232, 0.8);
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.86);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     color: #55709f;
-    box-shadow: 0 8px 18px rgba(42, 72, 119, 0.14);
-    transition: transform 180ms ease, background 180ms ease, color 180ms ease;
+    box-shadow: none;
+    transition: transform 180ms ease, color 180ms ease;
   }
 
   .sidebar__toggle:hover {
-    background: #fff;
+    background: transparent;
     color: #315da1;
     transform: translateX(2px);
   }
@@ -8282,13 +8307,13 @@ html[data-theme="dark"] .bottom-nav.sidebar {
 }
 
 html[data-theme="dark"] .sidebar__toggle {
-  border-color: #405b80;
-  background: rgba(28, 47, 73, 0.9);
+  border-color: transparent;
+  background: transparent;
   color: #aec5eb;
 }
 
 html[data-theme="dark"] .sidebar__toggle:hover {
-  background: #29466e;
+  background: transparent;
   color: #fff;
 }
 

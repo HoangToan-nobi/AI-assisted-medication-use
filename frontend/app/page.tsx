@@ -7,7 +7,6 @@ import {
   useRef,
   useState,
   type FormEvent,
-  type PointerEvent,
 } from "react";
 import {
   checkGuestProducts,
@@ -19,7 +18,6 @@ import {
 import { getSession, type Session } from "@/lib/auth";
 import type { Prescription } from "@/lib/prescription";
 import InteractionResultView from "@/components/graph/InteractionResultView";
-import InteractivePill from "@/components/InteractivePill";
 import MediFox from "@/components/MediFox";
 import ThemeModeToggle from "@/components/ThemeModeToggle";
 
@@ -84,6 +82,8 @@ type LandingCheck = {
   session: Session | null;
 };
 
+const LANDING_SEARCH_PLACEHOLDER = "Nhập tên thuốc, có thể thêm tối đa 3 thuốc";
+
 function HeroDrugSearch({
   onComplete,
 }: {
@@ -96,6 +96,41 @@ function HeroDrugSearch({
   const [showLoginToast, setShowLoginToast] = useState(false);
   const [toastLeaving, setToastLeaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [animatedPlaceholder, setAnimatedPlaceholder] = useState("");
+
+  useEffect(() => {
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (reducedMotion.matches) {
+      setAnimatedPlaceholder(LANDING_SEARCH_PLACEHOLDER);
+      return;
+    }
+
+    let visibleCharacters = 0;
+    let deleting = false;
+    let timer: number;
+
+    function typeNextFrame() {
+      setAnimatedPlaceholder(
+        LANDING_SEARCH_PLACEHOLDER.slice(0, visibleCharacters),
+      );
+
+      let delay = deleting ? 32 : 62;
+      if (!deleting && visibleCharacters === LANDING_SEARCH_PLACEHOLDER.length) {
+        deleting = true;
+        delay = 1500;
+      } else if (deleting && visibleCharacters === 0) {
+        deleting = false;
+        delay = 450;
+      } else {
+        visibleCharacters += deleting ? -1 : 1;
+      }
+
+      timer = window.setTimeout(typeNextFrame, delay);
+    }
+
+    typeNextFrame();
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const keyword = query.trim();
@@ -229,7 +264,7 @@ function HeroDrugSearch({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             aria-label="Nhập tên thuốc"
-            placeholder="Nhập tên thuốc, có thể thêm tối đa 3 thuốc"
+            placeholder={animatedPlaceholder}
           />
           <button type="submit">
             Tra cứu ngay <span aria-hidden="true">→</span>
@@ -313,43 +348,19 @@ function HeroSection({
 }: {
   onComplete: (check: LandingCheck) => void;
 }) {
-  const heroRef = useRef<HTMLElement>(null);
-
-  function setMotionVariable(name: string, value: string) {
-    heroRef.current?.style.setProperty(name, value);
-  }
-
-  function moveFox(event: PointerEvent<HTMLElement>) {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const x = (event.clientX - bounds.left) / bounds.width - 0.5;
-    const y = (event.clientY - bounds.top) / bounds.height - 0.5;
-
-    setMotionVariable("--fox-x", `${x * 18}px`);
-    setMotionVariable("--fox-y", `${y * 12}px`);
-  }
-
-  function resetHeroMotion() {
-    setMotionVariable("--fox-x", "0px");
-    setMotionVariable("--fox-y", "0px");
-  }
-
   return (
     <section
-      ref={heroRef}
       className="mc-shell mc-hero"
       aria-label="MediCheck - tra cứu thông minh, dùng thuốc an toàn"
-      onPointerMove={moveFox}
-      onPointerLeave={resetHeroMotion}
     >
       <div className="mc-hero__glow" />
-      <InteractivePill
+      <Image
         className="mc-hero__capsule"
         src={asset("15.png")}
         alt="Viên nang minh họa MediCheck"
+        fill
         priority
         sizes="(max-width: 800px) 50vw,800px"
-        maxTilt={18}
-        followDistance={10}
       />
       <div className="mc-hero__overlay" />
       <div className="mc-hero__caption">
@@ -446,7 +457,7 @@ function MissionSection() {
 
 function AudienceSection() {
   return (
-    <section className="mc-shell mc-audience">
+    <section id="audience" className="mc-shell mc-audience">
       <div className="mc-audience__intro">
         <span className="mc-kicker">03 / FOR </span>
         <h2>
@@ -492,6 +503,49 @@ function CTASection() {
         Đăng ký ngay <span aria-hidden="true">↗</span>
       </Link>
     </section>
+  );
+}
+
+function LandingFooter() {
+  return (
+    <footer className="mc-footer">
+      <div className="mc-shell mc-footer__inner">
+        <div className="mc-footer__top">
+          <div className="mc-footer__brand">
+            <Link href="/" className="mc-footer__logo" aria-label="MediCheck - Trang chủ">
+              <Image src={asset("2-cropped.png")} alt="MediCheck" fill sizes="190px" />
+            </Link>
+            <p>
+              Tra cứu tương tác thuốc rõ ràng, có nguồn dữ liệu và luôn đặt an
+              toàn của người dùng lên trước.
+            </p>
+          </div>
+
+          <nav className="mc-footer__nav" aria-label="Điều hướng cuối trang">
+            <div>
+              <strong>Khám phá</strong>
+              <a href="#features">Tính năng</a>
+              <a href="#about">Về MediCheck</a>
+              <a href="#audience">Dành cho ai</a>
+            </div>
+            <div>
+              <strong>Sử dụng</strong>
+              <Link href="/interaction">Kiểm tra tương tác</Link>
+              <Link href="/auth">Đăng nhập</Link>
+              <Link href="/auth">Tạo tài khoản</Link>
+            </div>
+          </nav>
+        </div>
+
+        <div className="mc-footer__bottom">
+          <span>© 2026 MediCheck. Dữ liệu tham chiếu DDInter 2.0.</span>
+          <span>
+            Thông tin chỉ mang tính tham khảo, không thay thế tư vấn của bác sĩ
+            hoặc dược sĩ.
+          </span>
+        </div>
+      </div>
+    </footer>
   );
 }
 
@@ -842,6 +896,104 @@ export default function LandingPage() {
           background: #fff;
           color: #162d57;
         }
+        .mc-footer {
+          margin-top: 38px;
+          border-top: 1px solid #c7d8ef;
+          background:
+            radial-gradient(circle at 12% 0%, #aacbff4d, transparent 300px),
+            linear-gradient(180deg, #f3f8ff, #eaf2fd);
+        }
+        .mc-footer__inner {
+          padding: 52px 0 28px;
+        }
+        .mc-footer__top {
+          display: grid;
+          grid-template-columns: minmax(260px, 1.35fr) minmax(360px, 1fr);
+          gap: 72px;
+          align-items: start;
+        }
+        .mc-footer__logo {
+          position: relative;
+          display: block;
+          width: 190px;
+          height: 58px;
+        }
+        .mc-footer__logo img {
+          object-fit: contain;
+          object-position: left center;
+        }
+        .mc-footer__brand p {
+          max-width: 460px;
+          margin: 18px 0 0;
+          color: #5d6f88;
+          font-size: 14px;
+          line-height: 1.7;
+        }
+        .mc-footer__nav {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(140px, 1fr));
+          gap: 36px;
+        }
+        .mc-footer__nav > div {
+          display: grid;
+          align-content: start;
+          gap: 12px;
+        }
+        .mc-footer__nav strong {
+          margin-bottom: 4px;
+          color: #132a4d;
+          font-size: 12px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+        }
+        .mc-footer__nav a {
+          width: fit-content;
+          color: #5d6f88;
+          font-size: 14px;
+          text-decoration: none;
+          transition: color 0.18s ease, transform 0.18s ease;
+        }
+        .mc-footer__nav a:hover,
+        .mc-footer__nav a:focus-visible {
+          color: #315da1;
+          transform: translateX(3px);
+        }
+        .mc-footer__bottom {
+          display: flex;
+          justify-content: space-between;
+          gap: 30px;
+          margin-top: 42px;
+          padding-top: 22px;
+          border-top: 1px solid #c7d8ef;
+          color: #667892;
+          font-size: 12px;
+          line-height: 1.55;
+        }
+        .mc-footer__bottom span:last-child {
+          max-width: 520px;
+          text-align: right;
+        }
+        html[data-theme="dark"] .mc-footer {
+          border-top-color: #334b6a;
+          background:
+            radial-gradient(circle at 12% 0%, #4167b21f, transparent 300px),
+            linear-gradient(180deg, #0b1629, #070d18);
+        }
+        html[data-theme="dark"] .mc-footer__brand p,
+        html[data-theme="dark"] .mc-footer__nav a {
+          color: #a8b5cc;
+        }
+        html[data-theme="dark"] .mc-footer__nav strong {
+          color: #f5f8ff;
+        }
+        html[data-theme="dark"] .mc-footer__nav a:hover,
+        html[data-theme="dark"] .mc-footer__nav a:focus-visible {
+          color: #82adff;
+        }
+        html[data-theme="dark"] .mc-footer__bottom {
+          border-top-color: #263a57;
+          color: #899ab4;
+        }
         @media (max-width: 760px) {
           .mc-shell {
             width: min(100% - 24px, 1240px);
@@ -916,6 +1068,32 @@ export default function LandingPage() {
           }
           .mc-cta .mc-button {
             margin-top: 26px;
+          }
+          .mc-footer {
+            margin-top: 24px;
+          }
+          .mc-footer__inner {
+            padding: 38px 0 24px;
+          }
+          .mc-footer__top {
+            grid-template-columns: 1fr;
+            gap: 34px;
+          }
+          .mc-footer__logo {
+            width: 164px;
+            height: 50px;
+          }
+          .mc-footer__nav {
+            gap: 24px;
+          }
+          .mc-footer__bottom {
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 34px;
+          }
+          .mc-footer__bottom span:last-child {
+            text-align: left;
           }
         }
         .mc-logo {
@@ -1384,7 +1562,7 @@ export default function LandingPage() {
           }
         }
         .mc-hero__capsule {
-          transform: translateX(25vw) rotate(-2deg) scale(1.78);
+          transform: translateX(18vw) rotate(-2deg) scale(1.78);
           transform-origin: 62% 50%;
         }
         .mc-search-panel {
@@ -1951,7 +2129,7 @@ export default function LandingPage() {
         .mc-login-toast {
           position: fixed;
           z-index: 2000;
-          top: 24px;
+          top: 100px;
           right: 24px;
           width: min(390px, calc(100vw - 32px));
           padding: 25px 28px;
@@ -2013,7 +2191,7 @@ export default function LandingPage() {
             font-size: 18px;
           }
           .mc-login-toast {
-            top: 14px;
+            top: 84px;
             right: 16px;
           }
         }
@@ -2032,54 +2210,19 @@ export default function LandingPage() {
           pointer-events: none;
         }
 
-        /* InteractivePill owns the 3D tilt. This outer layer only preserves the
-           original placement and idle float, so surrounding layout never moves. */
-        .mc-hero {
-          --fox-x: 0px;
-          --fox-y: 0px;
-          perspective: 1200px;
-        }
+        /* Living capsule: subtle floating motion keeps the hero active without
+           competing with the search interaction. */
         .mc-hero__capsule {
-          animation: mc-capsule-float 7.5s ease-in-out infinite;
-          transform-origin: 62% 50%;
-          transform-style: preserve-3d;
+          animation: mc-capsule-float 8s ease-in-out infinite;
           will-change: transform;
         }
 
         @keyframes mc-capsule-float {
           0%, 100% {
-            transform: translate3d(25vw, 0, 0) rotate(-2deg) scale(1.78);
+            transform: translate3d(18vw, 0, 0) rotate(-2deg) scale(1.78);
           }
           50% {
-            transform: translate3d(25vw, -14px, 0) rotate(1deg) scale(1.82);
-          }
-        }
-
-        .mc-hero__fox {
-          animation: mc-fox-bob 4.6s ease-in-out infinite;
-          transform-origin: 50% 100%;
-          will-change: transform;
-        }
-
-        @keyframes mc-fox-bob {
-          0%, 100% {
-            transform: translate3d(var(--fox-x), var(--fox-y), 0) rotate(-1deg);
-          }
-          45% {
-            transform: translate3d(
-                var(--fox-x),
-                calc(var(--fox-y) - 9px),
-                0
-              )
-              rotate(1.5deg);
-          }
-          55% {
-            transform: translate3d(
-                var(--fox-x),
-                calc(var(--fox-y) - 9px),
-                0
-              )
-              rotate(-0.5deg);
+            transform: translate3d(18vw, -14px, 0) rotate(0deg) scale(1.82);
           }
         }
 
@@ -2100,8 +2243,7 @@ export default function LandingPage() {
         }
 
         @media (prefers-reduced-motion: reduce) {
-          .mc-hero__capsule,
-          .mc-hero__fox {
+          .mc-hero__capsule {
             animation: none;
           }
         }
@@ -2131,8 +2273,7 @@ export default function LandingPage() {
         }
         .mc-hero__capsule {
           z-index: 0;
-        }
-        .mc-hero__capsule .interactive-pill__image {
+          object-fit: contain;
           object-position: 72% center;
         }
         .mc-hero__overlay {
@@ -2218,7 +2359,7 @@ export default function LandingPage() {
         }
 
         @media (max-width: 760px) {
-          .mc-hero__capsule .interactive-pill__image {
+          .mc-hero__capsule {
             object-position: 70% 12%;
           }
           .mc-hero__overlay {
@@ -2269,6 +2410,7 @@ export default function LandingPage() {
           <CTASection />
         </>
       )}
+      <LandingFooter />
     </main>
   );
 }
