@@ -6423,12 +6423,14 @@ html[data-theme="dark"] textarea {
     inset 0 -2px 5px rgba(36, 58, 82, 0.22),
     0 2px 7px rgba(47, 65, 83, 0.2);
 }
+.patient-header .theme-toggle,
 .mc-header .theme-toggle {
   width: 46px;
   height: 22px;
   min-height: 0;
   transform: translateX(-12px);
 }
+.patient-header .theme-toggle:not(:disabled):active,
 .mc-header .theme-toggle:not(:disabled):active {
   transform: translateX(-12px) translateY(1px);
 }
@@ -6458,6 +6460,7 @@ html[data-theme="dark"] textarea {
   height: 40px;
   transform: none;
 }
+.patient-header .theme-toggle__thumb,
 .mc-header .theme-toggle__thumb {
   top: 3px;
   left: 3px;
@@ -6475,6 +6478,7 @@ html[data-theme="dark"] textarea {
 .mc-header .theme-toggle--dark .theme-toggle__thumb {
   transform: translateX(52px);
 }
+.patient-header .theme-toggle--dark .theme-toggle__thumb,
 .mc-header .theme-toggle--dark .theme-toggle__thumb {
   transform: translateX(24px);
 }
@@ -6489,6 +6493,7 @@ html[data-theme="dark"] .mc-header .theme-toggle {
 .mc-header .theme-toggle .material-symbols-outlined {
   font-size: 17px;
 }
+.patient-header .theme-toggle .material-symbols-outlined,
 .mc-header .theme-toggle .material-symbols-outlined {
   font-size: 8px;
 }
@@ -6498,6 +6503,7 @@ html[data-theme="dark"] .mc-header .theme-toggle {
     right: auto;
     bottom: auto;
   }
+  .patient-header .theme-toggle,
   .mc-header .theme-toggle {
     width: 40px;
     height: 18px;
@@ -6507,12 +6513,14 @@ html[data-theme="dark"] .mc-header .theme-toggle {
     width: 96px;
     height: 38px;
   }
+  .patient-header .theme-toggle__thumb,
   .mc-header .theme-toggle__thumb {
     top: 2px;
     left: 2px;
     width: 14px;
     height: 14px;
   }
+  .patient-header .theme-toggle--dark .theme-toggle__thumb,
   .mc-header .theme-toggle--dark .theme-toggle__thumb {
     transform: translateX(22px);
   }
