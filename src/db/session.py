@@ -42,6 +42,35 @@ def _ensure_column(table: str, column: str, ddl_type: str) -> None:
             conn.commit()
 
 
+def _ensure_column_any_dialect(table: str, column: str, sqlite_ddl_type: str, pg_ddl_type: str) -> None:
+    """Giống _ensure_column nhưng chạy trên CẢ Postgres lẫn SQLite - _ensure_column
+    bỏ qua Postgres với giả định create_all() sẽ tự thêm cột mới cho bảng cũ, nhưng
+    thực ra create_all() KHÔNG BAO GIỜ ALTER bảng đã tồn tại sẵn ở bất kỳ dialect
+    nào (giả định đó sai với 1 DB Postgres đã có data từ trước, như Neon hiện tại).
+    Postgres hỗ trợ sẵn ADD COLUMN IF NOT EXISTS nên không cần tự kiểm tra tồn tại
+    trước như nhánh SQLite."""
+    with engine.connect() as conn:
+        if engine.dialect.name == "sqlite":
+            cols = [row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))]
+            if column not in cols:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {sqlite_ddl_type}"))
+                conn.commit()
+        else:
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {pg_ddl_type}"))
+            conn.commit()
+
+
+def _ensure_index(table: str, column: str, index_name: str) -> None:
+    """Giống _ensure_column nhưng cho index - create_all() KHÔNG retroactively thêm
+    index vào bảng đã tồn tại sẵn (khác cột, đây đúng cho cả SQLite lẫn Postgres),
+    nên phải tự chạy CREATE INDEX IF NOT EXISTS 1 lần cho bảng cũ. Thiếu các index
+    này từng khiến các query lọc theo patient_id/user_id chậy hẳn trên Neon (seq
+    scan) sau khi chuyển từ SQLite (dataset nhỏ, không thấy rõ) sang Postgres."""
+    with engine.connect() as conn:
+        conn.execute(text(f"CREATE INDEX IF NOT EXISTS {index_name} ON {table} ({column})"))
+        conn.commit()
+
+
 def init_db() -> None:
     """Tạo bảng nếu chưa tồn tại — gọi 1 lần khi setup (Sprint 0)."""
     Base.metadata.create_all(bind=engine)
@@ -62,6 +91,16 @@ def init_db() -> None:
     _ensure_column("food_interactions", "mo_ta_dich", "TEXT")
     _ensure_column("food_interactions", "xu_tri_dich", "TEXT")
     _ensure_column("disease_interactions", "mo_ta_dich", "TEXT")
+
+    _ensure_column_any_dialect("interaction_checks", "thuoc_da_kiem_tra", "TEXT", "JSON")
+
+    _ensure_index("patient_profiles", "user_id", "idx_patient_profiles_user_id")
+    _ensure_index("patient_prescriptions", "patient_id", "idx_patient_prescriptions_patient_id")
+    _ensure_index("patient_medications", "patient_id", "idx_patient_medications_patient_id")
+    _ensure_index("interaction_checks", "patient_id", "idx_interaction_checks_patient_id")
+    _ensure_index("pharmacist_reviews", "interaction_check_id", "idx_pharmacist_reviews_check_id")
+    _ensure_index("pharmacist_reviews", "pharmacist_id", "idx_pharmacist_reviews_pharmacist_id")
+    _ensure_index("notifications", "patient_id", "idx_notifications_patient_id")
 
 
 def get_db() -> Session:

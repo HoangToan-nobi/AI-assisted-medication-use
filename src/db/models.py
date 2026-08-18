@@ -42,7 +42,7 @@ class User(Base):
 class PatientProfile(Base):
     __tablename__ = "patient_profiles"
     id = Column(String, primary_key=True, default=_uuid)
-    user_id = Column(String, ForeignKey("users.id"))
+    user_id = Column(String, ForeignKey("users.id"), index=True)
     ngay_sinh = Column(Date)
     gioi_tinh = Column(String(20))
     can_nang = Column(Float)
@@ -135,7 +135,7 @@ class PatientPrescription(Base):
 
     __tablename__ = "patient_prescriptions"
     id = Column(String, primary_key=True, default=_uuid)
-    patient_id = Column(String, ForeignKey("users.id"))
+    patient_id = Column(String, ForeignKey("users.id"), index=True)
     label = Column(String(100), nullable=False)
     ngay_tao = Column(DateTime, default=datetime.utcnow)
 
@@ -143,7 +143,7 @@ class PatientPrescription(Base):
 class PatientMedication(Base):
     __tablename__ = "patient_medications"
     id = Column(String, primary_key=True, default=_uuid)
-    patient_id = Column(String, ForeignKey("users.id"))
+    patient_id = Column(String, ForeignKey("users.id"), index=True)
     # Nullable ở DB (bảng cũ tạo trước khi có khái niệm đơn thuốc, xem
     # src/db/session.py::_ensure_prescription_id_column) nhưng route
     # add_patient_medication luôn gán 1 đơn cụ thể - không có bản ghi "mồ côi" mới.
@@ -235,20 +235,27 @@ class DiseaseInteraction(Base):
 class InteractionCheck(Base):
     __tablename__ = "interaction_checks"
     id = Column(String, primary_key=True, default=_uuid)
-    patient_id = Column(String, ForeignKey("users.id"))
+    patient_id = Column(String, ForeignKey("users.id"), index=True)
     ket_qua_json = Column(JSON)
     # Cờ trích từ ket_qua_json (has_severe/has_unclassified) — cột riêng để
     # truy vấn/lọc hàng đợi ưu tiên dược sĩ mà không cần parse JSON mỗi lần.
     co_canh_bao_nang = Column(Boolean, default=False)
     co_chua_phan_loai = Column(Boolean, default=False)
+    # Cache tên thuốc trích sẵn từ ket_qua_json lúc TẠO check (xem
+    # _checked_drug_names) - để list_patient_checks (trang "Lịch sử") không phải
+    # SELECT cột ket_qua_json chỉ để lấy vài tên thuốc hiển thị. ket_qua_json thực
+    # đo trung bình ~260KB/dòng (chứa explanations, overview, disease_interactions...)
+    # - tải cả cột đó cho MỖI dòng trong danh sách là nguyên nhân chính khiến trang
+    # Lịch sử/Trang chủ chậm trên Neon, nặng hơn cả N+1 query đã sửa trước đó.
+    thuoc_da_kiem_tra = Column(JSON, nullable=True)
     thoi_gian_kiem_tra = Column(DateTime, default=datetime.utcnow)
 
 
 class PharmacistReview(Base):
     __tablename__ = "pharmacist_reviews"
     id = Column(String, primary_key=True, default=_uuid)
-    interaction_check_id = Column(String, ForeignKey("interaction_checks.id"))
-    pharmacist_id = Column(String, ForeignKey("users.id"))
+    interaction_check_id = Column(String, ForeignKey("interaction_checks.id"), index=True)
+    pharmacist_id = Column(String, ForeignKey("users.id"), index=True)
     ghi_chu = Column(Text)
     trang_thai_xac_nhan = Column(String(20), default="chua_xac_nhan")
     # true nếu bệnh nhân chọn gửi kèm hồ sơ cá nhân CỦA CHÍNH MÌNH (PatientProfile,
@@ -274,7 +281,7 @@ class Notification(Base):
 
     __tablename__ = "notifications"
     id = Column(String, primary_key=True, default=_uuid)
-    patient_id = Column(String, ForeignKey("users.id"))
+    patient_id = Column(String, ForeignKey("users.id"), index=True)
     pharmacist_review_id = Column(String, ForeignKey("pharmacist_reviews.id"), nullable=True)
     noi_dung = Column(Text, nullable=False)
     da_doc = Column(Boolean, default=False)

@@ -547,6 +547,7 @@ async def check_products(
             result.get("has_severe") or result.get("has_severe_disease_interaction")
         ),
         co_chua_phan_loai=bool(result.get("has_unclassified")),
+        thuoc_da_kiem_tra=_checked_drug_names(result),
     )
     db.add(check)
     db.commit()
@@ -1062,6 +1063,7 @@ async def check_medications(
         ket_qua_json=result,
         co_canh_bao_nang=bool(result.get("has_severe")),
         co_chua_phan_loai=bool(result.get("has_unclassified")),
+        thuoc_da_kiem_tra=_checked_drug_names(result),
     )
     db.add(check)
     db.commit()
@@ -1155,20 +1157,48 @@ async def list_patient_checks(
     được phân công đều xem được danh sách tóm tắt này."""
     _ensure_can_view_patient(current_user, patient_id, db)
 
+    # CHỈ select các cột nhẹ cần cho danh sách tóm tắt - KHÔNG động tới ket_qua_json
+    # (thực đo trung bình ~260KB/dòng, có thể tới hàng chục MB cho cả danh sách).
+    # thuoc_da_kiem_tra được lưu sẵn lúc TẠO check (xem check_products/check_medications)
+    # thay vì trích lại từ ket_qua_json ở đây mỗi lần load trang Lịch sử/Trang chủ.
     checks = (
-        db.query(InteractionCheck)
+        db.query(
+            InteractionCheck.id,
+            InteractionCheck.thoi_gian_kiem_tra,
+            InteractionCheck.co_canh_bao_nang,
+            InteractionCheck.co_chua_phan_loai,
+            InteractionCheck.thuoc_da_kiem_tra,
+        )
         .filter_by(patient_id=patient_id)
         .order_by(InteractionCheck.thoi_gian_kiem_tra.desc())
         .all()
     )
+
+    # Trước đây gọi _review_status() (1 SELECT riêng) cho MỖI check trong vòng lặp
+    # bên dưới - N+1 query. Gộp lại thành 1 SELECT duy nhất lấy hết review liên
+    # quan tới các check này, dựng map tra cứu O(1) thay vì round-trip DB riêng.
+    check_ids = [c.id for c in checks]
+    review_status_by_check: dict[str, str] = {}
+    if check_ids:
+        for review in (
+            db.query(PharmacistReview)
+            .filter(PharmacistReview.interaction_check_id.in_(check_ids))
+            .all()
+        ):
+            review_status_by_check.setdefault(
+                review.interaction_check_id, review.trang_thai_xac_nhan
+            )
+
     return [
         InteractionCheckSummary(
             id=check.id,
             thoi_gian_kiem_tra=check.thoi_gian_kiem_tra,
             co_canh_bao_nang=check.co_canh_bao_nang,
             co_chua_phan_loai=check.co_chua_phan_loai,
-            trang_thai_xac_nhan=_review_status(db, check.id),
-            thuoc_da_kiem_tra=_checked_drug_names(check.ket_qua_json),
+            trang_thai_xac_nhan=review_status_by_check.get(check.id, "chua_xac_nhan"),
+            # Rơi về [] cho các check tạo trước khi có cột này (chưa backfill) -
+            # xem scripts/backfill_checked_drug_names.py.
+            thuoc_da_kiem_tra=check.thuoc_da_kiem_tra or [],
         )
         for check in checks
     ]
