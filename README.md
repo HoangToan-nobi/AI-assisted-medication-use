@@ -52,9 +52,9 @@ git clone <repo-url>
 cd P-005
 ```
 
-### 2. Database — Postgres chung (Neon), không cần tải file `app.db` nữa
+### 2. Database
 
-Database đã chuyển từ file SQLite local (`data/app.db`, ~375MB, quá nặng để đưa vào git) sang **Postgres host chung trên Neon**
+Database đã chuyển từ file SQLite local sang **Postgres host chung trên Neon**
 
 Xin connection string nhánh **`dev`** từ leader/thành viên đã setup Neon (dạng `postgresql://user:pass@...neon.tech/neondb?sslmode=require`), điền vào biến `DATABASE_URL` trong `.env` ở bước 3.
 
@@ -198,7 +198,7 @@ Xem video giới thiệu và quy trình hoạt động các luồng tra cứu (3
 
 ## Live URL
 
-[https://medicheck-t005.vercel.app/](https://medicheck-t005.vercel.app/))
+[https://medicheck-t005.vercel.app/](https://medicheck-t005.vercel.app/)
 
 ## License
 
