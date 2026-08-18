@@ -12,7 +12,16 @@ _connect_args = (
     {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
 )
 
-engine = create_engine(settings.database_url, connect_args=_connect_args)
+# pool_pre_ping: kiểm tra connection còn sống trước khi dùng - bắt buộc với Neon vì
+# nó tự ngắt connection khi idle (auto-suspend), nếu không sẽ lấy phải connection
+# chết từ pool và phải đợi timeout mới phát hiện ra.
+# pool_recycle: chủ động bỏ connection cũ trước khi hạ tầng Neon tự cắt ngầm.
+engine = create_engine(
+    settings.database_url,
+    connect_args=_connect_args,
+    pool_pre_ping=True,
+    pool_recycle=300,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

@@ -735,16 +735,18 @@ async def list_patient_prescriptions(
 ) -> list[PatientPrescriptionSummary]:
     _ensure_can_view_patient(current_user, patient_id, db)
 
-    # Tự tạo đơn mặc định + "nhận nuôi" thuốc mồ côi (nếu có) ở lần load đầu tiên -
-    # xem _get_or_create_default_prescription.
-    _get_or_create_default_prescription(patient_id, db)
-
     prescriptions = (
         db.query(PatientPrescription)
         .filter(PatientPrescription.patient_id == patient_id)
         .order_by(PatientPrescription.ngay_tao)
         .all()
     )
+    if not prescriptions:
+        # Chỉ tự tạo đơn mặc định + "nhận nuôi" thuốc mồ côi (nếu có) khi thật sự
+        # chưa có đơn nào - tránh chạy lại SELECT kiểm tra tồn tại ở mọi lần load
+        # trang, vì trong đại đa số trường hợp đơn mặc định đã tồn tại rồi (xem
+        # _get_or_create_default_prescription).
+        prescriptions = [_get_or_create_default_prescription(patient_id, db)]
     rows = (
         db.query(PatientMedication, Product)
         .join(Product, Product.id == PatientMedication.product_id)
@@ -974,9 +976,9 @@ async def get_patient_profile(
     if current_user.id != patient_id:
         raise HTTPException(status_code=403, detail="Người dùng chưa cho phép xem hồ sơ cá nhân")
 
-    user = db.query(User).filter_by(id=patient_id).first()
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+    # current_user đã được nạp sẵn (cùng patient_id) lúc xác thực token, không cần
+    # query lại User.
+    user = current_user
 
     profile = db.query(PatientProfile).filter_by(user_id=patient_id).first()
     if profile is None:
@@ -1004,7 +1006,9 @@ async def update_patient_profile(
     if current_user.id != patient_id:
         raise HTTPException(status_code=403, detail="Chỉ tự sửa hồ sơ của chính mình")
 
-    user = db.query(User).filter_by(id=patient_id).first()
+    # current_user đã được nạp sẵn (cùng patient_id) lúc xác thực token, không cần
+    # query lại User.
+    user = current_user
     if request.ho_ten:
         user.ho_ten = request.ho_ten
 
@@ -1021,11 +1025,10 @@ async def update_patient_profile(
     profile.di_ung_thuoc = request.di_ung_thuoc
     profile.tinh_trang_khac = request.tinh_trang_khac
 
-    db.commit()
-    db.refresh(profile)
-    db.refresh(user)
-
-    return PatientProfileInfo(
+    # Dựng response từ giá trị đã có sẵn trong bộ nhớ trước khi commit - tránh 2
+    # round-trip refresh() thừa (sau commit, SQLAlchemy sẽ tự expire object và phải
+    # SELECT lại nếu đọc thuộc tính, refresh() tường minh cũng tốn round-trip y hệt).
+    response = PatientProfileInfo(
         ho_ten=user.ho_ten,
         ngay_sinh=profile.ngay_sinh,
         gioi_tinh=profile.gioi_tinh,
@@ -1035,6 +1038,8 @@ async def update_patient_profile(
         di_ung_thuoc=profile.di_ung_thuoc,
         tinh_trang_khac=profile.tinh_trang_khac,
     )
+    db.commit()
+    return response
 
 
 # ---- Kiểm tra tương tác (chạy agent) ----
