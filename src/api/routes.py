@@ -108,19 +108,11 @@ def _strip_pharmacist_fields(items: list[dict]) -> list[dict]:
 def _ensure_can_view_patient(current_user: User, patient_id: str, db: Session) -> None:
     if current_user.id == patient_id:
         return
-    if current_user.vai_tro == "pharmacist":
-        review = (
-            db.query(PharmacistReview)
-            .join(InteractionCheck, PharmacistReview.interaction_check_id == InteractionCheck.id)
-            .filter(
-                PharmacistReview.pharmacist_id == current_user.id,
-                InteractionCheck.patient_id == patient_id
-            )
-            .first()
-        )
-        if review is not None:
-            return
-    raise HTTPException(status_code=403, detail="Không có quyền xem thuốc của bệnh nhân này")
+    # Dược sĩ chỉ được xem dữ liệu cần cho đúng lần tra cứu qua các endpoint
+    # /pharmacist/reviews/{check_id}/..., không được dùng patient_id để đọc toàn bộ
+    # thuốc, đơn thuốc, bệnh nền hay lịch sử của người dùng. `db` được giữ trong
+    # chữ ký để tránh thay đổi hàng loạt call site hiện có.
+    raise HTTPException(status_code=403, detail="Không có quyền xem dữ liệu của người dùng này")
 
 
 def _get_or_create_default_prescription(patient_id: str, db: Session) -> PatientPrescription:
@@ -533,7 +525,12 @@ async def check_products(
     current_user: User = Depends(require_role("patient")),
     db: Session = Depends(get_db),
 ) -> MedicationCheckResponse:
-    disease_ids, disease_scope, condition_snapshot = _patient_disease_context(current_user.id, db)
+    if request.personalized:
+        disease_ids, disease_scope, condition_snapshot = _patient_disease_context(
+            current_user.id, db
+        )
+    else:
+        disease_ids, disease_scope, condition_snapshot = None, "general", []
     result, unknown, no_data = await _run_product_check(
         request.prescriptions,
         db,
@@ -541,6 +538,7 @@ async def check_products(
         disease_interaction_scope=disease_scope,
         patient_conditions_snapshot=condition_snapshot,
     )
+    result["is_personalized"] = request.personalized
 
     check = InteractionCheck(
         patient_id=current_user.id,
@@ -556,6 +554,7 @@ async def check_products(
 
     return MedicationCheckResponse(
         interaction_check_id=check.id,
+        is_personalized=request.personalized,
         ranked_results=_strip_pharmacist_fields(result.get("ranked_results", [])),
         explanations=_strip_pharmacist_fields(result.get("explanations", [])),
         has_severe=result.get("has_severe", False),
@@ -969,7 +968,11 @@ async def get_patient_profile(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> PatientProfileInfo:
-    _ensure_can_view_patient(current_user, patient_id, db)
+    # Hồ sơ cá nhân chỉ được đọc trực tiếp bởi chính người dùng. Dược sĩ phải dùng
+    # endpoint gắn với một yêu cầu review cụ thể, nơi quyền chia sẻ được kiểm tra
+    # theo lựa chọn gui_kem_ho_so của chính yêu cầu đó.
+    if current_user.id != patient_id:
+        raise HTTPException(status_code=403, detail="Người dùng chưa cho phép xem hồ sơ cá nhân")
 
     user = db.query(User).filter_by(id=patient_id).first()
     if user is None:
@@ -1185,6 +1188,7 @@ async def get_patient_check_detail(
     ghi_chu_duoc_si, ten_duoc_si_xac_nhan, cau_hoi_benh_nhan, cau_tra_loi_duoc_si = _review_note(db, check_id)
     return MedicationCheckResponse(
         interaction_check_id=check.id,
+        is_personalized=result.get("is_personalized", False),
         ranked_results=_strip_pharmacist_fields(result.get("ranked_results", [])),
         explanations=_strip_pharmacist_fields(result.get("explanations", [])),
         has_severe=result.get("has_severe", False),
@@ -1326,7 +1330,14 @@ async def list_pharmacist_requests(
             ReviewRequestSummary(
                 check_id=check.id,
                 patient_id=patient.id,
-                patient_name=patient.ho_ten,
+                # Không để tên tài khoản vô tình trở thành một phần bắt buộc của
+                # kết quả tra tương tác. Chỉ hiện danh tính khi người dùng đồng ý
+                # chia sẻ hồ sơ (hoặc đã chủ động nhập tên theo API cũ).
+                patient_name=(
+                    patient.ho_ten
+                    if review.gui_kem_ho_so
+                    else review.ten_nguoi_duoc_kiem_tra or "Người dùng ẩn danh"
+                ),
                 thoi_gian_kiem_tra=check.thoi_gian_kiem_tra,
                 co_canh_bao_nang=check.co_canh_bao_nang,
                 trang_thai_xac_nhan=review.trang_thai_xac_nhan,
@@ -1352,6 +1363,50 @@ async def list_pharmacist_requests(
 
     results.sort(key=_sort_key, reverse=True)
     return results
+
+
+@router.get(
+    "/pharmacist/reviews/{check_id}/patient-profile",
+    response_model=PatientProfileInfo,
+)
+async def get_shared_patient_profile(
+    check_id: str,
+    current_user: User = Depends(require_role("pharmacist")),
+    db: Session = Depends(get_db),
+) -> PatientProfileInfo:
+    """Trả hồ sơ chỉ khi yêu cầu review cụ thể có sự đồng ý chia sẻ."""
+
+    review = (
+        db.query(PharmacistReview)
+        .filter_by(interaction_check_id=check_id, pharmacist_id=current_user.id)
+        .first()
+    )
+    if review is None:
+        raise HTTPException(status_code=403, detail="Bạn không được yêu cầu xem xét lần kiểm tra này")
+    if not review.gui_kem_ho_so:
+        raise HTTPException(status_code=403, detail="Người dùng không chia sẻ hồ sơ cá nhân")
+
+    check = db.get(InteractionCheck, check_id)
+    if check is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy lần kiểm tra")
+
+    patient = db.get(User, check.patient_id)
+    if patient is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy người dùng")
+    profile = db.query(PatientProfile).filter_by(user_id=patient.id).first()
+    if profile is None:
+        return PatientProfileInfo(ho_ten=patient.ho_ten)
+
+    return PatientProfileInfo(
+        ho_ten=patient.ho_ten,
+        ngay_sinh=profile.ngay_sinh,
+        gioi_tinh=profile.gioi_tinh,
+        can_nang=profile.can_nang,
+        chieu_cao=profile.chieu_cao,
+        benh_nen_ghi_chu=profile.benh_nen_ghi_chu,
+        di_ung_thuoc=profile.di_ung_thuoc,
+        tinh_trang_khac=profile.tinh_trang_khac,
+    )
 
 
 def _ensure_pharmacist_can_review(current_user: User, check: InteractionCheck, db: Session) -> None:
