@@ -108,6 +108,8 @@ export type DiseaseInteractionExplanation = {
 
 export type MedicationCheckResponse = {
   interaction_check_id: string;
+  // true chỉ với lượt chạy từ "Đơn thuốc của tôi"; false với tra cứu chung/tra cứu hộ.
+  is_personalized?: boolean;
   ranked_results: Record<string, unknown>[];
   explanations: InteractionExplanation[];
   has_severe: boolean;
@@ -440,12 +442,13 @@ export async function checkGuestMedications(medications: string[]): Promise<Medi
 
 export async function checkProducts(
   prescriptions: PrescriptionCheckInput[],
-  token: string
+  token: string,
+  options?: { personalized?: boolean }
 ): Promise<MedicationCheckResponse> {
   return request<MedicationCheckResponse>("/api/v1/products/check", {
     method: "POST",
     token,
-    body: JSON.stringify({ prescriptions }),
+    body: JSON.stringify({ prescriptions, personalized: options?.personalized ?? false }),
   });
 }
 
@@ -625,6 +628,13 @@ export async function getPatientProfile(
   token: string
 ): Promise<PatientProfileInfo> {
   return request<PatientProfileInfo>(`/api/v1/patients/${patientId}/profile`, { token });
+}
+
+export async function getSharedPatientProfile(
+  checkId: string,
+  token: string
+): Promise<PatientProfileInfo> {
+  return request<PatientProfileInfo>(`/api/v1/pharmacist/reviews/${checkId}/patient-profile`, { token });
 }
 
 export async function updatePatientProfile(

@@ -20,6 +20,7 @@ import MediFox from "@/components/MediFox";
 // GET /pharmacist/reviews/{id} trả nguyên state agent, không kèm field đó).
 export type InteractionOverviewResult = Pick<
   MedicationCheckResponse,
+  | "is_personalized"
   | "explanations"
   | "has_severe"
   | "has_severe_disease_interaction"
@@ -280,7 +281,12 @@ export default function InteractionOverview({ result, prescriptions, session, au
       {showReviewPrompt && (requireLoginToReview || result.interaction_check_id) && (
         <section className="pharmacist-review-section">
           {session && result.interaction_check_id ? (
-            <PharmacistReviewPrompt checkId={result.interaction_check_id} token={session.accessToken} patientId={session.userId} />
+            <PharmacistReviewPrompt
+              checkId={result.interaction_check_id}
+              token={session.accessToken}
+              patientId={session.userId}
+              personalized={result.is_personalized === true}
+            />
           ) : (
             <div className="pharmacist-login-required">
               <div>

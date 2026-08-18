@@ -64,7 +64,8 @@ export default function PatientDashboardPage() {
         prescriptions
           .filter((p) => p.medications.length > 0)
           .map((p) => ({ label: p.label, products: p.medications.map((m) => m.ten_thuoc) })),
-        session.accessToken
+        session.accessToken,
+        { personalized: true }
       );
       window.sessionStorage.setItem("medguard_last_check", JSON.stringify(result));
       router.push("/check-result");

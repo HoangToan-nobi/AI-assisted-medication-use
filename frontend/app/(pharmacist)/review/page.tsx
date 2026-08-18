@@ -8,7 +8,7 @@ import InteractionOverview from "@/components/graph/InteractionOverview";
 import {
   ApiError,
   getInteractionCheckDetail,
-  getPatientProfile,
+  getSharedPatientProfile,
   listPharmacistRequests,
   submitPharmacistReview,
   type AgentCheckResult,
@@ -44,7 +44,7 @@ function ReviewContent() {
         // Chỉ đọc hồ sơ cá nhân (chung, không snapshot) khi bệnh nhân CHỌN gửi kèm -
         // nếu không, dùng đúng thông tin tự nhập lúc gửi yêu cầu (xem req bên dưới).
         if (req.gui_kem_ho_so) {
-          getPatientProfile(req.patient_id, session.accessToken).then(setProfile).catch(err => console.error(err));
+          getSharedPatientProfile(checkId, session.accessToken).then(setProfile).catch(err => console.error(err));
         }
       }
     }).catch(err => console.error(err));
@@ -119,7 +119,7 @@ function ReviewContent() {
         </button>
         <div>
           <p className="eyebrow">XEM XÉT CHUYÊN MÔN</p>
-          <h1 className="page-header__title page-title-icon"><MaterialIcon name="assignment_ind" size={25} />{reviewRequest ? `Hồ sơ: ${reviewRequest.patient_name}` : "Chi tiết cảnh báo"}</h1>
+          <h1 className="page-header__title page-title-icon"><MaterialIcon name="assignment_ind" size={25} />{reviewRequest ? `Yêu cầu: ${reviewRequest.patient_name}` : "Chi tiết cảnh báo"}</h1>
         </div>
       </div>
 
@@ -132,10 +132,16 @@ function ReviewContent() {
         <section className="panel profile-medications">
           <div className="dashboard-section__header"><h2 className="section-heading-icon"><MaterialIcon name="person_search" size={21} />Thông tin người được kiểm tra</h2></div>
           {reviewRequest?.gui_kem_ho_so ? (
-            (profile?.ngay_sinh || profile?.benh_nen_ghi_chu) ? (
+            profile ? (
               <div className="field" style={{ marginBottom: 16 }}>
+                {profile.ho_ten && <p><strong>Họ tên:</strong> {profile.ho_ten}</p>}
                 {profile?.ngay_sinh && <p><strong>Ngày sinh:</strong> {profile.ngay_sinh}</p>}
+                {profile?.gioi_tinh && <p><strong>Giới tính:</strong> {profile.gioi_tinh}</p>}
+                {profile?.can_nang != null && <p><strong>Cân nặng:</strong> {profile.can_nang} kg</p>}
+                {profile?.chieu_cao != null && <p><strong>Chiều cao:</strong> {profile.chieu_cao} cm</p>}
                 {profile?.benh_nen_ghi_chu && <p><strong>Bệnh nền / ghi chú:</strong> {profile.benh_nen_ghi_chu}</p>}
+                {profile?.di_ung_thuoc && <p><strong>Dị ứng thuốc:</strong> {profile.di_ung_thuoc}</p>}
+                {profile?.tinh_trang_khac && <p><strong>Tình trạng khác:</strong> {profile.tinh_trang_khac}</p>}
               </div>
             ) : (
               <p className="empty-state__hint">Bệnh nhân chưa cập nhật thông tin cá nhân.</p>

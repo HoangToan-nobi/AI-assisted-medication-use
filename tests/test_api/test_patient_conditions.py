@@ -212,13 +212,17 @@ async def test_product_check_uses_conditions_or_general_fallback_and_saves_snaps
     patient_id = auth["user_id"]
     headers = _headers(auth)
     conditions_url = f"/api/v1/patients/{patient_id}/conditions"
-    check_payload = {"prescriptions": [{"label": "Đơn 1", "products": ["Thuốc test"]}]}
+    check_payload = {
+        "prescriptions": [{"label": "Đơn 1", "products": ["Thuốc test"]}],
+        "personalized": True,
+    }
 
     fallback = await client.post("/api/v1/products/check", headers=headers, json=check_payload)
     assert fallback.status_code == 200, fallback.text
     assert calls[-1]["disease_ids"] is None
     assert fallback.json()["has_severe"] is False
     assert fallback.json()["has_severe_disease_interaction"] is True
+    assert fallback.json()["is_personalized"] is True
     assert fallback.json()["disease_interaction_scope"] == "general_fallback"
     assert fallback.json()["patient_conditions_snapshot"] == []
 
@@ -240,6 +244,18 @@ async def test_product_check_uses_conditions_or_general_fallback_and_saves_snaps
         1
     ]
 
+    # Luồng Tra cứu tương tác/tra cứu hộ không lấy bệnh nền của tài khoản đang đăng nhập.
+    general_payload = {
+        "prescriptions": [{"label": "Đơn tra cứu hộ", "products": ["Thuốc test"]}],
+        "personalized": False,
+    }
+    general = await client.post("/api/v1/products/check", headers=headers, json=general_payload)
+    assert general.status_code == 200, general.text
+    assert calls[-1]["disease_ids"] is None
+    assert general.json()["is_personalized"] is False
+    assert general.json()["disease_interaction_scope"] == "general"
+    assert general.json()["patient_conditions_snapshot"] == []
+
     # Lịch sử giữ snapshot tại thời điểm kiểm tra dù profile được sửa sau đó.
     await client.put(conditions_url, headers=headers, json={"disease_ids": []})
     check_id = personalized_data["interaction_check_id"]
@@ -247,6 +263,7 @@ async def test_product_check_uses_conditions_or_general_fallback_and_saves_snaps
         f"/api/v1/patients/{patient_id}/checks/{check_id}", headers=headers
     )
     assert history.status_code == 200, history.text
+    assert history.json()["is_personalized"] is True
     assert history.json()["disease_interaction_scope"] == "personalized"
     assert [item["id"] for item in history.json()["patient_conditions_snapshot"]] == [
         1

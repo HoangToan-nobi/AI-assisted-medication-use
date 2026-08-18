@@ -3798,6 +3798,17 @@ html[data-theme="dark"] .bottom-nav.sidebar {
     border-color 0.15s ease,
     background 0.15s ease;
 }
+.pharmacist-prompt__attach-option > span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.pharmacist-prompt__attach-option small {
+  color: var(--on-surface-variant);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+}
 .pharmacist-prompt__attach-option:hover {
   background: #f2f6fb;
 }
@@ -3807,6 +3818,7 @@ html[data-theme="dark"] .bottom-nav.sidebar {
   color: #1a2b4c;
   font-weight: 600;
 }
+.pharmacist-prompt__attach-option input[type="checkbox"],
 .pharmacist-prompt__attach-option input[type="radio"] {
   width: 16px;
   height: 16px;
@@ -3819,6 +3831,19 @@ html[data-theme="dark"] .bottom-nav.sidebar {
   flex-direction: column;
   gap: 10px;
   margin-bottom: 12px;
+}
+.pharmacist-prompt__privacy-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 2px 2px 0;
+  color: var(--on-surface-variant);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.pharmacist-prompt__privacy-note .material-symbols-outlined {
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 .pharmacist-prompt__assign {
   padding: 8px 16px;

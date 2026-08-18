@@ -106,6 +106,9 @@ class PrescriptionInput(BaseModel):
 
 class ProductCheckRequest(BaseModel):
     prescriptions: list[PrescriptionInput] = Field(..., min_length=1)
+    # Chỉ bật khi chạy từ "Đơn thuốc của tôi". Luồng "Tra cứu tương tác" có thể
+    # dùng để tra cứu hộ nên mặc định không lấy bệnh nền trong hồ sơ người đăng nhập.
+    personalized: bool = False
 
 
 class AddProductRequest(BaseModel):
@@ -125,6 +128,9 @@ class MedicationCheckRequest(BaseModel):
 
 class MedicationCheckResponse(BaseModel):
     interaction_check_id: str
+    # Ghi lại ngữ cảnh để giao diện biết đây là hồ sơ của chính người dùng hay một
+    # lượt tra cứu chung/tra cứu hộ.
+    is_personalized: bool = False
     ranked_results: list[dict]
     explanations: list[dict]
     has_severe: bool

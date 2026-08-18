@@ -414,6 +414,7 @@ function ProfilePageContent() {
           products: prescription.drugs.map((drug) => drug.name),
         })),
         session.accessToken,
+        { personalized: true },
       );
       setPrescriptionCheck(result);
       window.setTimeout(() => {
