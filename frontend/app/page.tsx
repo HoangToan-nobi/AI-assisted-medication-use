@@ -360,7 +360,8 @@ function HeroSection({
         alt="Viên nang minh họa MediCheck"
         fill
         priority
-        sizes="(max-width: 800px) 50vw,800px"
+        quality={95}
+        sizes="(max-width: 760px) 145vw, 125vw"
       />
       <div className="mc-hero__overlay" />
       <div className="mc-hero__caption">
@@ -2213,8 +2214,12 @@ export default function LandingPage() {
         /* Living capsule: subtle floating motion keeps the hero active without
            competing with the search interaction. */
         .mc-hero__capsule {
-          animation: mc-capsule-float 8s ease-in-out infinite;
-          will-change: transform;
+          animation:
+            mc-capsule-float 7s ease-in-out infinite,
+            mc-capsule-glow 4.5s ease-in-out infinite;
+          backface-visibility: hidden;
+          image-rendering: auto;
+          will-change: transform, filter;
         }
 
         @keyframes mc-capsule-float {
@@ -2222,14 +2227,24 @@ export default function LandingPage() {
             transform: translate3d(18vw, 0, 0) rotate(-2deg) scale(1.78);
           }
           50% {
-            transform: translate3d(18vw, -14px, 0) rotate(0deg) scale(1.82);
+            transform: translate3d(calc(18vw + 8px), -18px, 0) rotate(1deg) scale(1.82);
+          }
+        }
+
+        @keyframes mc-capsule-glow {
+          0%, 100% {
+            filter: drop-shadow(0 18px 24px rgba(39, 96, 183, 0.16));
+          }
+          50% {
+            filter: drop-shadow(0 26px 34px rgba(39, 96, 183, 0.28));
           }
         }
 
         @media (max-width: 760px) {
           .mc-hero__capsule {
-            animation-name: mc-capsule-float-mobile;
-            animation-duration: 7s;
+            animation:
+              mc-capsule-float-mobile 6.5s ease-in-out infinite,
+              mc-capsule-glow 4.5s ease-in-out infinite;
           }
 
           @keyframes mc-capsule-float-mobile {
@@ -2237,7 +2252,7 @@ export default function LandingPage() {
               transform: translate3d(0, 0, 0) rotate(-4deg) scale(1.5);
             }
             50% {
-              transform: translate3d(0, -8px, 0) rotate(-2deg) scale(1.53);
+              transform: translate3d(5px, -10px, 0) rotate(-1deg) scale(1.53);
             }
           }
         }

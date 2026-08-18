@@ -84,6 +84,17 @@ function ReviewContent() {
   // không phải "đơn thuốc của tôi" chung của bệnh nhân - gộp từ MỌI đơn (không chỉ
   // đơn đầu tiên) để không thiếu thuốc khi bệnh nhân so nhiều đơn cùng lúc.
   const productNames = mergedDrugNames(prescriptions);
+  const patientConditionNames = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (detail?.patient_conditions_snapshot ?? [])
+            .map((condition) => condition.ten_benh_vi || condition.ten_benh)
+            .filter(Boolean)
+        )
+      ),
+    [detail]
+  );
   const isConfirmed = reviewRequest?.trang_thai_xac_nhan === "da_xac_nhan";
 
   async function handleConfirm() {
@@ -139,7 +150,8 @@ function ReviewContent() {
                 {profile?.gioi_tinh && <p><strong>Giới tính:</strong> {profile.gioi_tinh}</p>}
                 {profile?.can_nang != null && <p><strong>Cân nặng:</strong> {profile.can_nang} kg</p>}
                 {profile?.chieu_cao != null && <p><strong>Chiều cao:</strong> {profile.chieu_cao} cm</p>}
-                {profile?.benh_nen_ghi_chu && <p><strong>Bệnh nền / ghi chú:</strong> {profile.benh_nen_ghi_chu}</p>}
+                {patientConditionNames.length > 0 && <p><strong>Bệnh nền:</strong> {patientConditionNames.join(", ")}</p>}
+                {profile?.benh_nen_ghi_chu && <p><strong>Ghi chú bệnh nền:</strong> {profile.benh_nen_ghi_chu}</p>}
                 {profile?.di_ung_thuoc && <p><strong>Dị ứng thuốc:</strong> {profile.di_ung_thuoc}</p>}
                 {profile?.tinh_trang_khac && <p><strong>Tình trạng khác:</strong> {profile.tinh_trang_khac}</p>}
               </div>
@@ -196,6 +208,8 @@ function ReviewContent() {
             overview: detail.overview,
             food_interactions: detail.food_interactions ?? [],
             disease_interactions: detail.disease_interactions ?? [],
+            disease_interaction_scope: detail.disease_interaction_scope,
+            patient_conditions_snapshot: detail.patient_conditions_snapshot ?? [],
             canh_bao_thuc_pham_benh_nen: detail.canh_bao_thuc_pham_benh_nen,
           }}
           prescriptions={prescriptions}

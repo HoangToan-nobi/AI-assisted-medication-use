@@ -118,29 +118,12 @@ p {
 
 a {
   color: var(--primary-container);
-  text-decoration: none;
-}
-a:hover {
-  text-decoration: underline;
+  text-decoration: none !important;
 }
 
-/* Link dùng hình thức button không nhận underline từ rule a:hover phía trên. */
-button:hover,
-a.btn:hover,
-a.primary:hover,
-a.secondary:hover,
-a.btn-block:hover,
-a.check-cta:hover,
-a.dashboard-action:hover,
-a.mc-button:hover,
-a.mc-login:hover,
-a.guest-login-link:hover,
-a.pharmacist-login-required__action:hover,
-a.bottom-nav__item:hover,
-a.sidebar__brand-link:hover,
-a.patient-header__identity:hover,
-.emergency-card a:hover,
-.contact-row__actions a:hover {
+a:hover,
+a:focus,
+a:active {
   text-decoration: none !important;
 }
 
@@ -5827,8 +5810,7 @@ textarea:focus {
 .disease-scope-note a {
   color: var(--primary);
   font-weight: 700;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration: none;
 }
 .medi-alert-backdrop {
   position: fixed;
