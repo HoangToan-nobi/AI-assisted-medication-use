@@ -2,6 +2,7 @@ import uuid
 
 import pytest
 
+from src.db.models import User
 from src.db.session import SessionLocal
 
 
@@ -33,10 +34,17 @@ async def _register(client, ho_ten: str, vai_tro: str) -> dict:
     email = _unique_email(vai_tro)
     response = await client.post(
         "/api/v1/auth/register",
-        json={"ho_ten": ho_ten, "email": email, "mat_khau": "matkhau123", "vai_tro": vai_tro},
+        json={"ho_ten": ho_ten, "email": email, "mat_khau": "matkhau-password-123", "vai_tro": vai_tro, **({"so_chung_chi_hanh_nghe": "TEST-CCHN", "noi_cong_tac": "Test hospital"} if vai_tro == "pharmacist" else {})},
     )
-    assert response.status_code == 201, response.text
-    return response.json()
+    assert response.status_code == 202, response.text
+    with SessionLocal() as db:
+        user = db.query(User).filter_by(email_normalized=email).one()
+        user.email_verified_at = __import__("datetime").datetime.utcnow()
+        user.account_status = "active"
+        db.commit()
+    login = await client.post("/api/v1/auth/login", json={"email": email, "mat_khau": "matkhau-password-123"})
+    assert login.status_code == 200, login.text
+    return login.json()
 
 
 def _auth_headers(token: str) -> dict:
@@ -52,15 +60,19 @@ async def test_register_and_login(client):
         json={
             "ho_ten": "Co Lan",
             "email": email,
-            "mat_khau": "matkhau123",
+            "mat_khau": "matkhau-password-123",
             "vai_tro": "patient",
         },
     )
-    assert register_resp.status_code == 201
-    assert register_resp.json()["vai_tro"] == "patient"
+    assert register_resp.status_code == 202
+    with SessionLocal() as db:
+        user = db.query(User).filter_by(email_normalized=email).one()
+        user.email_verified_at = __import__("datetime").datetime.utcnow()
+        user.account_status = "active"
+        db.commit()
 
     login_resp = await client.post(
-        "/api/v1/auth/login", json={"email": email, "mat_khau": "matkhau123"}
+        "/api/v1/auth/login", json={"email": email, "mat_khau": "matkhau-password-123"}
     )
     assert login_resp.status_code == 200
     assert login_resp.json()["access_token"]
@@ -249,7 +261,10 @@ async def test_pharmacist_receives_review_request_and_can_review(monkeypatch, mo
 
     from src.main import app
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app, client=(f"pytest-{uuid.uuid4().hex}", 123)),
+        base_url="http://test",
+    ) as client:
         patient = await _register(client, "Benh nhan C", "patient")
         pharmacist = await _register(client, "Duoc si D", "pharmacist")
         patient_headers = _auth_headers(patient["access_token"])

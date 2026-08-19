@@ -30,13 +30,62 @@ class User(Base):
     id = Column(String, primary_key=True, default=_uuid)
     ho_ten = Column(String(255), nullable=False)
     email = Column(String(255), unique=True, nullable=False)
-    mat_khau_hash = Column(String(255), nullable=False)
-    vai_tro = Column(String(20), nullable=False)  # patient | pharmacist
+    email_normalized = Column(String(255), unique=True, nullable=False)
+    email_verified_at = Column(DateTime, nullable=True)
+    mat_khau_hash = Column(String(255), nullable=True)
+    vai_tro = Column(String(20), nullable=False)  # patient | pharmacist | admin
+    account_status = Column(String(30), nullable=False, default="pending_email")
+    so_chung_chi_hanh_nghe = Column(String(100), nullable=True)
+    ly_do_tu_choi = Column(Text, nullable=True)
     noi_cong_tac = Column(String(255), nullable=True)
     # Mô tả ngắn của dược sĩ (bio) - hiện ở khung chọn dược sĩ khi bệnh nhân nhờ xác
     # nhận, tự cập nhật qua tab "Hồ sơ cá nhân" bên luồng dược sĩ.
     mo_ta_ngan = Column(Text, nullable=True)
     ngay_tao = Column(DateTime, default=datetime.utcnow)
+
+
+class AuthIdentity(Base):
+    __tablename__ = "auth_identities"
+    __table_args__ = (
+        UniqueConstraint("provider", "subject", name="uq_auth_identity_provider_subject"),
+    )
+    id = Column(String, primary_key=True, default=_uuid)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    provider = Column(String(30), nullable=False)
+    subject = Column(String(255), nullable=False)
+    ngay_tao = Column(DateTime, default=datetime.utcnow)
+
+
+class AuthActionToken(Base):
+    __tablename__ = "auth_action_tokens"
+    id = Column(String, primary_key=True, default=_uuid)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    purpose = Column(String(30), nullable=False)
+    token_hash = Column(String(64), unique=True, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+    ngay_tao = Column(DateTime, default=datetime.utcnow)
+
+
+class RefreshSession(Base):
+    __tablename__ = "refresh_sessions"
+    id = Column(String, primary_key=True, default=_uuid)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    token_hash = Column(String(64), unique=True, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    revoked_at = Column(DateTime, nullable=True)
+    replaced_by_id = Column(String, nullable=True)
+    ngay_tao = Column(DateTime, default=datetime.utcnow)
+
+
+class AuthEvent(Base):
+    __tablename__ = "auth_events"
+    id = Column(String, primary_key=True, default=_uuid)
+    action = Column(String(40), nullable=False)
+    key_hash = Column(String(64), nullable=False)
+    succeeded = Column(Boolean, default=False, nullable=False)
+    ngay_tao = Column(DateTime, default=datetime.utcnow, nullable=False)
+    __table_args__ = (Index("idx_auth_events_action_key_time", "action", "key_hash", "ngay_tao"),)
 
 
 class PatientProfile(Base):

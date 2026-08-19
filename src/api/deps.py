@@ -1,4 +1,4 @@
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Cookie, Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
 from src.db.models import User
@@ -8,13 +8,18 @@ from src.services.auth import decode_token
 
 async def get_current_user(
     authorization: str | None = Header(default=None),
+    medguard_access: str | None = Cookie(default=None),
     db: Session = Depends(get_db),
 ) -> User:
-    if not authorization or not authorization.startswith("Bearer "):
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.removeprefix("Bearer ").strip()
+    elif medguard_access:
+        token = medguard_access
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Thieu Bearer token"
         )
-    token = authorization.removeprefix("Bearer ").strip()
     payload = decode_token(token)
     if payload is None:
         raise HTTPException(
@@ -26,6 +31,8 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Nguoi dung khong ton tai"
         )
+    if getattr(user, "account_status", "active") != "active":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tai khoan chua duoc kich hoat")
     return user
 
 

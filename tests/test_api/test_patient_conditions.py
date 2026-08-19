@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from src.db.models import Base, Disease
+from src.db.models import Base, Disease, User
 from src.db.session import get_db
 from src.main import app
 
@@ -42,7 +42,11 @@ async def conditions_client():
 
     app.dependency_overrides[get_db] = override_get_db
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app, client=(f"pytest-{uuid.uuid4().hex}", 123)),
+            base_url="http://test",
+        ) as client:
+            client.testing_session = testing_session
             yield client
     finally:
         app.dependency_overrides.pop(get_db, None)
@@ -56,12 +60,19 @@ async def _register_patient(client: AsyncClient) -> dict:
         json={
             "ho_ten": "Bệnh nhân test",
             "email": f"patient-{unique}@example.com",
-            "mat_khau": "secret123",
+            "mat_khau": "secret-password-123",
             "vai_tro": "patient",
         },
     )
-    assert response.status_code == 201, response.text
-    return response.json()
+    assert response.status_code == 202, response.text
+    with client.testing_session() as db:
+        user = db.query(User).filter_by(email_normalized=f"patient-{unique}@example.com").one()
+        user.email_verified_at = __import__("datetime").datetime.utcnow()
+        user.account_status = "active"
+        db.commit()
+    login = await client.post("/api/v1/auth/login", json={"email": f"patient-{unique}@example.com", "mat_khau": "secret-password-123"})
+    assert login.status_code == 200, login.text
+    return login.json()
 
 
 def _headers(auth: dict) -> dict[str, str]:
