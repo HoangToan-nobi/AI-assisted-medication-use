@@ -8,6 +8,8 @@ import BrandLogo from "@/components/BrandLogo";
 import MaterialIcon from "@/components/MaterialIcon";
 import { useMediAlert } from "@/components/MediAlertProvider";
 import ThemeModeToggle from "@/components/ThemeModeToggle";
+import { getMe, logout as logoutApi } from "@/lib/api";
+import { saveSession, sessionFromAuth } from "@/lib/auth";
 
 export default function PharmacistLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -23,18 +25,21 @@ export default function PharmacistLayout({ children }: { children: React.ReactNo
   }, [pathname]);
 
   useEffect(() => {
-    const s = getSession();
-    if (!s || s.vaiTro !== "pharmacist") {
-      router.replace("/");
-      return;
-    }
-    setSession(s);
-    setChecked(true);
+    let active = true;
+    getMe().then((auth) => {
+      if (!active) return;
+      const s = sessionFromAuth(auth); saveSession(s);
+      if (s.vaiTro !== "pharmacist") router.replace("/");
+      else setSession(s);
+    }).catch(() => { clearSession(); router.replace("/"); })
+      .finally(() => { if (active) setChecked(true); });
+    return () => { active = false; };
   }, [router]);
 
   useEffect(() => onSessionUpdated(() => setSession(getSession())), []);
 
-  function handleLogout() {
+  async function handleLogout() {
+    await logoutApi().catch(() => undefined);
     clearSession();
     toast({ title: "Đã đăng xuất", message: "Hẹn gặp lại bạn tại MediCheck.", tone: "info" });
     router.replace("/");
