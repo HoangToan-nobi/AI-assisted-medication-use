@@ -383,8 +383,7 @@ function HeroSection({
           <em>dùng thuốc an toàn</em>
         </h1>
         <p>
-          Sử dụng thuốc an toàn là ưu tiên hàng đầu — tra cứu thông tin thuốc,
-          liều dùng và tương tác chỉ trong vài giây.
+          Tra cứu tương tác thuốc nhanh chóng, hỗ trợ sử dụng thuốc an toàn hơn.
         </p>
       </div>
       <HeroDrugSearch onComplete={onComplete} />
