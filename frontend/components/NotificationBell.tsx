@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import MaterialIcon from "@/components/MaterialIcon";
-import { listPatientNotifications, markNotificationRead, type NotificationItem } from "@/lib/api";
+import { markNotificationRead, type NotificationItem } from "@/lib/api";
+import { usePatientNotifications } from "@/lib/hooks";
 import { formatVietnameseDateTime } from "@/lib/datetime";
 
 type NotificationBellProps = {
@@ -14,37 +15,26 @@ type NotificationBellProps = {
 // Chuông thông báo ở header - liệt kê TOÀN BỘ thông báo (đã đọc lẫn chưa đọc) mới
 // nhất trước, chưa đọc thì in đậm + chấm xanh. Bấm 1 thông báo -> đánh dấu đã đọc
 // rồi điều hướng tới kết quả lần kiểm tra liên quan (nếu có).
+//
+// Chuông sống trong layout - mount 1 lần duy nhất cho cả phiên, không remount mỗi
+// khi chuyển trang như các page component (VD dashboard) - nên vẫn cần tự làm mới
+// định kỳ để thông báo mới từ dược sĩ xác nhận hiện ra không cần tải lại cả trang.
+// Trước đây tự quản lý setInterval + visibilitychange thủ công; giờ dùng SWR
+// (refreshInterval/revalidateOnFocus) cho việc đó, đồng thời DÙNG CHUNG cache key
+// với dashboard (frontend/lib/hooks.ts) - 2 nơi cùng hiện notifications không còn
+// gọi API trùng lặp, và đánh dấu đã đọc ở nơi này cũng phản ánh ngay ở nơi kia.
 export default function NotificationBell({ patientId, token }: NotificationBellProps) {
   const router = useRouter();
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const { data: notifications = [], mutate } = usePatientNotifications(patientId, token, {
+    refreshInterval: 30000,
+    revalidateOnFocus: true,
+  });
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Chuông sống trong layout - mount 1 lần duy nhất cho cả phiên, không remount mỗi
-  // khi chuyển trang như các page component (VD dashboard) - nên phải TỰ làm mới
-  // định kỳ + mỗi lần mở panel, chứ không thể chỉ fetch 1 lần lúc mount như trước
-  // (khi đó thông báo mới từ dược sĩ xác nhận sẽ không hiện cho tới khi tải lại cả trang).
-  useEffect(() => {
-    let cancelled = false;
-    function refresh() {
-      listPatientNotifications(patientId, token).then((data) => { if (!cancelled) setNotifications(data); }).catch(() => undefined);
-    }
-    refresh();
-    const interval = window.setInterval(refresh, 30000);
-    function handleVisibility() {
-      if (document.visibilityState === "visible") refresh();
-    }
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, [patientId, token]);
-
   useEffect(() => {
     if (!open) return;
-    listPatientNotifications(patientId, token).then(setNotifications).catch(() => undefined);
+    mutate();
     function handleClickOutside(e: MouseEvent) {
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) setOpen(false);
     }
@@ -59,7 +49,10 @@ export default function NotificationBell({ patientId, token }: NotificationBellP
     if (!n.da_doc) {
       try {
         await markNotificationRead(patientId, n.id, token);
-        setNotifications((prev) => prev.map((item) => (item.id === n.id ? { ...item, da_doc: true } : item)));
+        mutate(
+          (prev) => prev?.map((item) => (item.id === n.id ? { ...item, da_doc: true } : item)),
+          { revalidate: false }
+        );
       } catch { /* vẫn điều hướng dù lỡ đánh dấu đã đọc thất bại */ }
     }
     setOpen(false);

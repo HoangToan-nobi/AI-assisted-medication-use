@@ -62,8 +62,6 @@ from src.services.food_disease_explain import (
 from src.services.food_disease_lookup import lookup_disease_interactions, lookup_food_interactions
 from src.services.rollup_explain import (
     build_overview_explanation,
-    build_prescription_edges,
-    build_prescription_explanations,
     build_product_edges,
     build_product_explanations,
     filter_cross_prescription_edges,
@@ -369,11 +367,6 @@ async def _run_product_check(
     cho cấp thuốc. Cả 2 luồng đều sinh overview (tóm tắt tổng quan) - khác nhau ở
     audience truyền vào build_overview_explanation (giọng thân thiện cho bệnh nhân,
     khoa học/chuyên nghiệp cho dược sĩ).
-
-    for_pharmacist=True (công cụ tra cứu độc lập của dược sĩ, vẫn giữ drill-down đầy
-    đủ): sinh thêm prescription_explanations (cấp đơn) khi có từ 2 đơn trở lên.
-    for_pharmacist=False (luồng bệnh nhân): KHÔNG sinh prescription_explanations
-    (không còn UI nào dùng tới, tránh tốn LLM call vô ích).
     """
     _t_start = time.perf_counter()
     flat_products, origins_by_input = _flatten_prescriptions(prescriptions)
@@ -383,7 +376,13 @@ async def _run_product_check(
     )
     logger.info("[timing] resolve_products: %.3fs", time.perf_counter() - _t_resolve)
 
-    result = dict(await _timed("agent_total (normalize+lookup+rank+explain+guardrail)", agent.ainvoke({"raw_medications": ingredient_names})))
+    audience = "pharmacist" if for_pharmacist else "patient"
+    result = dict(
+        await _timed(
+            "agent_total (normalize+lookup+rank+explain+guardrail)",
+            agent.ainvoke({"raw_medications": ingredient_names, "audience": audience}),
+        )
+    )
     if result.get("error"):
         raise HTTPException(status_code=422, detail=result["error"])
 
@@ -414,16 +413,6 @@ async def _run_product_check(
         else product_edges
     )
 
-    async def _prescription_chain() -> list[dict]:
-        if not (for_pharmacist and len(prescriptions) > 1):
-            return []
-        labels = [p.label for p in prescriptions]
-        prescription_edges = build_prescription_edges(product_edges, product_origins)
-        return await _timed(
-            "prescription_explanations (rollup cấp đơn)",
-            build_prescription_explanations(prescription_edges, labels),
-        )
-
     # Tương tác thuốc-thực phẩm/thuốc-bệnh nền chạy NGOÀI agent. Thuốc-bệnh được
     # lọc bằng disease_id khi luồng bệnh nhân có patient_conditions; disease_ids=None
     # giữ hành vi cảnh báo chung cho fallback/guest/dược sĩ.
@@ -437,7 +426,7 @@ async def _run_product_check(
     disease_rows = lookup_disease_interactions(valid_medication_ids, db, disease_ids=disease_ids)
     logger.info("[timing] food_disease_lookup (SQL): %.3fs", time.perf_counter() - _t_food_lookup)
 
-    # 5 nhánh sinh giải thích HOÀN TOÀN không phụ thuộc lẫn nhau - kể cả overview giờ
+    # 4 nhánh sinh giải thích HOÀN TOÀN không phụ thuộc lẫn nhau - kể cả overview giờ
     # cũng đọc thẳng product_edges (dữ liệu gốc + bản dịch đã cache), không còn đợi
     # product_explanations viết xong như trước (xem build_overview_explanation). Chạy
     # song song bằng asyncio.gather thay vì await nối tiếp từng nhánh, cắt phần lớn
@@ -446,23 +435,33 @@ async def _run_product_check(
     (
         product_explanations,
         overview,
-        prescription_explanations,
         food_interactions,
         disease_interactions,
     ) = await asyncio.gather(
-        _timed("product_explanations (rollup cấp thuốc)", build_product_explanations(overview_product_edges)),
+        _timed(
+            "product_explanations (rollup cấp thuốc)",
+            build_product_explanations(overview_product_edges, audience=audience),
+        ),
         _timed(
             "overview (tổng quan tóm tắt)",
-            build_overview_explanation(overview_product_edges, audience="pharmacist" if for_pharmacist else "patient"),
+            build_overview_explanation(
+                overview_product_edges,
+                audience=audience,
+                prescription_count=len(prescriptions),
+            ),
         ),
-        _prescription_chain(),
-        _timed("food_interactions (thuốc-thực phẩm)", build_food_interaction_explanations(food_rows, ingredient_to_products)),
-        _timed("disease_interactions (thuốc-bệnh nền)", build_disease_interaction_explanations(disease_rows, ingredient_to_products)),
+        _timed(
+            "food_interactions (thuốc-thực phẩm)",
+            build_food_interaction_explanations(food_rows, ingredient_to_products, audience=audience),
+        ),
+        _timed(
+            "disease_interactions (thuốc-bệnh nền)",
+            build_disease_interaction_explanations(disease_rows, ingredient_to_products, audience=audience),
+        ),
     )
     logger.info("[timing] === product_check total: %.3fs ===", time.perf_counter() - _t_start)
 
     result["product_explanations"] = product_explanations
-    result["prescription_explanations"] = prescription_explanations
     result["overview"] = overview
     result["checked_products"] = flat_products
     result["prescriptions"] = [{"label": p.label, "products": p.products} for p in prescriptions]
@@ -508,6 +507,7 @@ async def check_products(
             result.get("has_severe") or result.get("has_severe_disease_interaction")
         ),
         co_chua_phan_loai=bool(result.get("has_unclassified")),
+        thuoc_da_kiem_tra=_checked_drug_names(result),
     )
     db.add(check)
     db.commit()
@@ -526,7 +526,6 @@ async def check_products(
         checked_products=result.get("checked_products", []),
         prescriptions=result.get("prescriptions", []),
         product_explanations=_strip_pharmacist_fields(result.get("product_explanations", [])),
-        prescription_explanations=_strip_pharmacist_fields(result.get("prescription_explanations", [])),
         overview=result.get("overview"),
         food_interactions=_strip_pharmacist_fields(result.get("food_interactions", [])),
         disease_interactions=_strip_pharmacist_fields(result.get("disease_interactions", [])),
@@ -554,7 +553,6 @@ async def guest_check_products(
         checked_products=result.get("checked_products", []),
         prescriptions=result.get("prescriptions", []),
         product_explanations=_strip_pharmacist_fields(result.get("product_explanations", [])),
-        prescription_explanations=_strip_pharmacist_fields(result.get("prescription_explanations", [])),
         overview=result.get("overview"),
         food_interactions=_strip_pharmacist_fields(result.get("food_interactions", [])),
         disease_interactions=_strip_pharmacist_fields(result.get("disease_interactions", [])),
@@ -584,7 +582,6 @@ async def check_products_as_pharmacist(
         checked_products=result.get("checked_products", []),
         prescriptions=result.get("prescriptions", []),
         product_explanations=result.get("product_explanations", []),
-        prescription_explanations=result.get("prescription_explanations", []),
         overview=result.get("overview"),
         food_interactions=result.get("food_interactions", []),
         disease_interactions=result.get("disease_interactions", []),
@@ -696,16 +693,18 @@ async def list_patient_prescriptions(
 ) -> list[PatientPrescriptionSummary]:
     _ensure_can_view_patient(current_user, patient_id, db)
 
-    # Tự tạo đơn mặc định + "nhận nuôi" thuốc mồ côi (nếu có) ở lần load đầu tiên -
-    # xem _get_or_create_default_prescription.
-    _get_or_create_default_prescription(patient_id, db)
-
     prescriptions = (
         db.query(PatientPrescription)
         .filter(PatientPrescription.patient_id == patient_id)
         .order_by(PatientPrescription.ngay_tao)
         .all()
     )
+    if not prescriptions:
+        # Chỉ tự tạo đơn mặc định + "nhận nuôi" thuốc mồ côi (nếu có) khi thật sự
+        # chưa có đơn nào - tránh chạy lại SELECT kiểm tra tồn tại ở mọi lần load
+        # trang, vì trong đại đa số trường hợp đơn mặc định đã tồn tại rồi (xem
+        # _get_or_create_default_prescription).
+        prescriptions = [_get_or_create_default_prescription(patient_id, db)]
     rows = (
         db.query(PatientMedication, Product)
         .join(Product, Product.id == PatientMedication.product_id)
@@ -935,9 +934,9 @@ async def get_patient_profile(
     if current_user.id != patient_id:
         raise HTTPException(status_code=403, detail="Người dùng chưa cho phép xem hồ sơ cá nhân")
 
-    user = db.query(User).filter_by(id=patient_id).first()
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+    # current_user đã được nạp sẵn (cùng patient_id) lúc xác thực token, không cần
+    # query lại User.
+    user = current_user
 
     profile = db.query(PatientProfile).filter_by(user_id=patient_id).first()
     if profile is None:
@@ -965,7 +964,9 @@ async def update_patient_profile(
     if current_user.id != patient_id:
         raise HTTPException(status_code=403, detail="Chỉ tự sửa hồ sơ của chính mình")
 
-    user = db.query(User).filter_by(id=patient_id).first()
+    # current_user đã được nạp sẵn (cùng patient_id) lúc xác thực token, không cần
+    # query lại User.
+    user = current_user
     if request.ho_ten:
         user.ho_ten = request.ho_ten
 
@@ -982,11 +983,10 @@ async def update_patient_profile(
     profile.di_ung_thuoc = request.di_ung_thuoc
     profile.tinh_trang_khac = request.tinh_trang_khac
 
-    db.commit()
-    db.refresh(profile)
-    db.refresh(user)
-
-    return PatientProfileInfo(
+    # Dựng response từ giá trị đã có sẵn trong bộ nhớ trước khi commit - tránh 2
+    # round-trip refresh() thừa (sau commit, SQLAlchemy sẽ tự expire object và phải
+    # SELECT lại nếu đọc thuộc tính, refresh() tường minh cũng tốn round-trip y hệt).
+    response = PatientProfileInfo(
         ho_ten=user.ho_ten,
         ngay_sinh=profile.ngay_sinh,
         gioi_tinh=profile.gioi_tinh,
@@ -996,6 +996,8 @@ async def update_patient_profile(
         di_ung_thuoc=profile.di_ung_thuoc,
         tinh_trang_khac=profile.tinh_trang_khac,
     )
+    db.commit()
+    return response
 
 
 # ---- Kiểm tra tương tác (chạy agent) ----
@@ -1007,7 +1009,7 @@ async def check_medications(
     current_user: User = Depends(require_role("patient")),
     db: Session = Depends(get_db),
 ) -> MedicationCheckResponse:
-    result = dict(await agent.ainvoke({"raw_medications": request.medications}))
+    result = dict(await agent.ainvoke({"raw_medications": request.medications, "audience": "patient"}))
 
     if result.get("error"):
         # guardrail_node chặn (thiếu nguồn trích dẫn) -> KHÔNG trả kết quả cho bệnh nhân.
@@ -1018,6 +1020,7 @@ async def check_medications(
         ket_qua_json=result,
         co_canh_bao_nang=bool(result.get("has_severe")),
         co_chua_phan_loai=bool(result.get("has_unclassified")),
+        thuoc_da_kiem_tra=_checked_drug_names(result),
     )
     db.add(check)
     db.commit()
@@ -1038,7 +1041,7 @@ async def guest_check_medications(
     request: MedicationCheckRequest,
 ) -> MedicationCheckResponse:
     """Kiểm tra tương tác cho khách vãng lai; chỉ chạy phân tích, không lưu lịch sử."""
-    result = dict(await agent.ainvoke({"raw_medications": request.medications}))
+    result = dict(await agent.ainvoke({"raw_medications": request.medications, "audience": "patient"}))
     if result.get("error"):
         raise HTTPException(status_code=422, detail=result["error"])
     return MedicationCheckResponse(
@@ -1111,20 +1114,48 @@ async def list_patient_checks(
     được phân công đều xem được danh sách tóm tắt này."""
     _ensure_can_view_patient(current_user, patient_id, db)
 
+    # CHỈ select các cột nhẹ cần cho danh sách tóm tắt - KHÔNG động tới ket_qua_json
+    # (thực đo trung bình ~260KB/dòng, có thể tới hàng chục MB cho cả danh sách).
+    # thuoc_da_kiem_tra được lưu sẵn lúc TẠO check (xem check_products/check_medications)
+    # thay vì trích lại từ ket_qua_json ở đây mỗi lần load trang Lịch sử/Trang chủ.
     checks = (
-        db.query(InteractionCheck)
+        db.query(
+            InteractionCheck.id,
+            InteractionCheck.thoi_gian_kiem_tra,
+            InteractionCheck.co_canh_bao_nang,
+            InteractionCheck.co_chua_phan_loai,
+            InteractionCheck.thuoc_da_kiem_tra,
+        )
         .filter_by(patient_id=patient_id)
         .order_by(InteractionCheck.thoi_gian_kiem_tra.desc())
         .all()
     )
+
+    # Trước đây gọi _review_status() (1 SELECT riêng) cho MỖI check trong vòng lặp
+    # bên dưới - N+1 query. Gộp lại thành 1 SELECT duy nhất lấy hết review liên
+    # quan tới các check này, dựng map tra cứu O(1) thay vì round-trip DB riêng.
+    check_ids = [c.id for c in checks]
+    review_status_by_check: dict[str, str] = {}
+    if check_ids:
+        for review in (
+            db.query(PharmacistReview)
+            .filter(PharmacistReview.interaction_check_id.in_(check_ids))
+            .all()
+        ):
+            review_status_by_check.setdefault(
+                review.interaction_check_id, review.trang_thai_xac_nhan
+            )
+
     return [
         InteractionCheckSummary(
             id=check.id,
             thoi_gian_kiem_tra=check.thoi_gian_kiem_tra,
             co_canh_bao_nang=check.co_canh_bao_nang,
             co_chua_phan_loai=check.co_chua_phan_loai,
-            trang_thai_xac_nhan=_review_status(db, check.id),
-            thuoc_da_kiem_tra=_checked_drug_names(check.ket_qua_json),
+            trang_thai_xac_nhan=review_status_by_check.get(check.id, "chua_xac_nhan"),
+            # Rơi về [] cho các check tạo trước khi có cột này (chưa backfill) -
+            # xem scripts/backfill_checked_drug_names.py.
+            thuoc_da_kiem_tra=check.thuoc_da_kiem_tra or [],
         )
         for check in checks
     ]
@@ -1160,7 +1191,6 @@ async def get_patient_check_detail(
         checked_products=result.get("checked_products", []),
         prescriptions=result.get("prescriptions", []),
         product_explanations=_strip_pharmacist_fields(result.get("product_explanations", [])),
-        prescription_explanations=_strip_pharmacist_fields(result.get("prescription_explanations", [])),
         overview=result.get("overview"),
         food_interactions=_strip_pharmacist_fields(result.get("food_interactions", [])),
         disease_interactions=_strip_pharmacist_fields(result.get("disease_interactions", [])),
@@ -1536,7 +1566,7 @@ async def check_medications_as_pharmacist(
 ) -> MedicationCheckResponse:
     """Công cụ tra cứu tương tác độc lập cho dược sĩ - không gắn bệnh nhân nào,
     không lưu lịch sử, và KHÔNG ẩn xu_tri/thay_the (dược sĩ được xem đầy đủ)."""
-    result = dict(await agent.ainvoke({"raw_medications": request.medications}))
+    result = dict(await agent.ainvoke({"raw_medications": request.medications, "audience": "pharmacist"}))
     if result.get("error"):
         raise HTTPException(status_code=422, detail=result["error"])
     return MedicationCheckResponse(

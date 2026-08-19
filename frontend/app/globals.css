@@ -1313,7 +1313,49 @@ button.primary:hover,
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  margin-bottom: 10px;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+/* Tab "Dữ liệu tương tác gốc"/"Cách xử lý gốc" bung ra - trượt nhẹ xuống + mờ
+   dần vào thay vì bật ra đột ngột. */
+.alert-detail-box--reveal {
+  animation: alert-card-reveal 0.18s ease;
+}
+
+@keyframes alert-card-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Nút "Xem thêm"/"Thu gọn" nội tuyến cuối đoạn text bị rút gọn (ExpandableText) -
+   in đậm + xanh primary, cùng ngôn ngữ thị giác với .overview-highlight để nhất
+   quán "đây là điểm bấm được" trong toàn bộ khu vực kết quả tương tác. */
+.expandable-text__toggle {
+  /* Rule .btn/button dùng chung toàn app ép display:inline-flex + padding lớn +
+     min-height + box-shadow (xem "---- Buttons ----" phía trên) - reset sạch
+     bằng all:unset trước rồi mới khai lại đúng những gì cần, thay vì liệt kê
+     từng thuộc tính (dễ sót, dễ tái diễn lỗi nút to/có bóng như 1 nút thật). */
+  all: unset;
+  display: inline;
+  font-weight: 700;
+  color: var(--primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* all:unset ở trên xoá luôn outline focus mặc định - thêm lại tường minh để vẫn
+   thấy focus khi điều hướng bàn phím (giống .overview-highlight--clickable). */
+.expandable-text__toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 .alert-icon-wrap {
@@ -1450,6 +1492,25 @@ button.primary:hover,
 .severity-none .alert-icon-wrap {
   background: var(--surface-variant);
   color: var(--on-surface-variant);
+}
+
+/* Cụm từ AI tự nhấn mạnh trong đoạn tóm tắt tổng quan (interaction-overview__summary)
+   - in đậm + màu xanh primary, không tô nền, xem renderOverviewText trong
+   InteractionOverview.tsx. Reset nền vàng mặc định của <mark>. */
+.overview-highlight {
+  background: none;
+  font-weight: 700;
+  color: var(--primary);
+}
+/* Bấm được: cuộn xuống đúng thẻ giải thích tương ứng bên dưới (scrollToPairCard,
+   xem InteractionOverview.tsx/InteractionGraphView.tsx). */
+.overview-highlight--clickable {
+  cursor: pointer;
+}
+.overview-highlight--clickable:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 /* ---- Banners ---- */
@@ -7802,6 +7863,10 @@ html[data-theme="dark"] .empty-state {
   .mc-audience-card,
   button {
     transition: none !important;
+  }
+
+  .alert-detail-box--reveal {
+    animation: none !important;
   }
 }
 

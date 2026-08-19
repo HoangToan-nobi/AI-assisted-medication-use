@@ -9,7 +9,10 @@ export type InteractionExplanation = {
   medication_a_id?: string;
   medication_b_id?: string;
   muc_do?: Severity;
-  giai_thich: string;
+  // Chỉ có giá trị ở 2 trường hợp đặc biệt (thiếu dữ liệu/chưa phân loại) - cấp
+  // hoạt chất không còn qua LLM viết văn nữa (xem explain_node.py), và giai_thich
+  // cấp này chưa từng hiển thị ở bất kỳ luồng nào trong app (chỉ dùng dựng đồ thị).
+  giai_thich?: string;
   // Bản giọng điệu khoa học/chuyên nghiệp dành cho dược sĩ - chỉ có mặt khi gọi qua
   // endpoint/luồng dành cho dược sĩ (giống xu_tri/thay_the/mo_ta bên dưới).
   giai_thich_duoc_si?: string;
@@ -49,23 +52,13 @@ export type ProductLevelExplanation = {
   xu_tri_dich?: string;
 };
 
-// Giải thích cấp đơn thuốc (đơn-với-đơn) - don_a_index/don_b_index là chỉ số đơn
-// theo đúng thứ tự mảng "prescriptions" đã gửi lên trong request.
-export type PrescriptionLevelExplanation = {
-  don_a: string;
-  don_b: string;
-  don_a_index: number;
-  don_b_index: number;
-  muc_do?: Severity;
-  giai_thich: string;
-  giai_thich_duoc_si?: string;
-  nguon_trich_dan: string;
-};
-
 // Đoạn tóm tắt tổng quan toàn bộ lần phân tích (cả luồng bệnh nhân và dược sĩ, khác
 // giọng điệu) - LLM sinh 1 đoạn dựa trên thống kê + toàn bộ giải thích cấp thuốc-thuốc tìm được.
 export type InteractionOverviewExplanation = {
   giai_thich: string;
+  // Cụm từ AI tự chọn nhấn mạnh trong giai_thich, kèm mức độ để tô màu đúng -
+  // backend tách sẵn từ markup {{muc_do:...}}, xem rollup_explain.py::_parse_highlights.
+  nhan_manh?: { text: string; muc_do: Severity }[];
   so_cap_nang: number;
   so_cap_trung_binh: number;
   so_cap_nhe: number;
@@ -126,15 +119,14 @@ export type MedicationCheckResponse = {
   checked_products?: string[];
   prescriptions?: PrescriptionSummary[];
   product_explanations?: ProductLevelExplanation[];
-  prescription_explanations?: PrescriptionLevelExplanation[];
   overview?: InteractionOverviewExplanation;
   food_interactions?: FoodInteractionExplanation[];
   disease_interactions?: DiseaseInteractionExplanation[];
   disease_interaction_scope?: "personalized" | "general_fallback" | "general";
   patient_conditions_snapshot?: DiseaseInfo[];
-  // Câu liệt kê cố định (không qua LLM) tên thực phẩm/bệnh nền cần lưu ý, ghép thêm
-  // vào bảng tóm tắt tổng quan sau đoạn overview.giai_thich do LLM sinh.
-  canh_bao_thuc_pham_benh_nen?: string;
+  // Danh sách 1-3 câu liệt kê cố định (không qua LLM) tên thực phẩm/bệnh nền cần
+  // lưu ý, hiện thành các đoạn riêng sau đoạn overview.giai_thich do LLM sinh.
+  canh_bao_thuc_pham_benh_nen?: string[];
   // Ghi chú dược sĩ để lại khi xác nhận lần kiểm tra này - chỉ có ở
   // getPatientCheckDetail khi đã có dược sĩ xác nhận, undefined mọi trường hợp khác.
   ghi_chu_duoc_si?: string;
@@ -156,13 +148,12 @@ export type AgentCheckResult = {
   checked_products?: string[];
   prescriptions?: PrescriptionSummary[];
   product_explanations?: ProductLevelExplanation[];
-  prescription_explanations?: PrescriptionLevelExplanation[];
   overview?: InteractionOverviewExplanation;
   food_interactions?: FoodInteractionExplanation[];
   disease_interactions?: DiseaseInteractionExplanation[];
   disease_interaction_scope?: "personalized" | "general_fallback" | "general";
   patient_conditions_snapshot?: DiseaseInfo[];
-  canh_bao_thuc_pham_benh_nen?: string;
+  canh_bao_thuc_pham_benh_nen?: string[];
 };
 
 // Payload gửi lên các endpoint /products/check - 1 phần tử = 1 đơn thuốc.
