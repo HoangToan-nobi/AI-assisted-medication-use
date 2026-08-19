@@ -98,7 +98,8 @@ class UpdatePatientConditionsRequest(BaseModel):
 class PrescriptionInput(BaseModel):
     """1 đơn thuốc gửi lên từ frontend - "đơn thuốc" chỉ là khái niệm ở phía người
     dùng nhập liệu, backend dùng label + danh sách thuốc này để tự tính cạnh cấp
-    thuốc/cấp đơn thuốc và sinh giải thích tương ứng (rollup_explain.py)."""
+    thuốc và sinh giải thích tương ứng (rollup_explain.py), cùng lọc tương tác GIỮA
+    các đơn khi so từ 2 đơn trở lên."""
 
     label: str = Field(..., min_length=1, max_length=100)
     products: list[str] = Field(..., min_length=1)
@@ -147,18 +148,14 @@ class MedicationCheckResponse(BaseModel):
     # sĩ review, thay vì suy ra danh sách thuốc từ các cặp trong explanations (sẽ
     # thiếu thuốc không có cặp tương tác nào).
     checked_products: list[str] = Field(default_factory=list)
-    # Đúng cấu trúc đơn thuốc gốc đã gửi lên (label + danh sách thuốc mỗi đơn), theo
-    # đúng thứ tự khớp với don_a_index/don_b_index của prescription_explanations -
-    # để xem lại lịch sử/dược sĩ review vẫn dựng được đúng "bàn cân" nhiều đơn như
-    # lúc kiểm tra, thay vì gộp hết thuốc vào 1 đơn ảo duy nhất (mất khả năng lọc
-    # tương tác GIỮA các đơn). Rỗng ở dữ liệu lịch sử cũ lưu trước khi field này tồn tại.
+    # Đúng cấu trúc đơn thuốc gốc đã gửi lên (label + danh sách thuốc mỗi đơn) - để
+    # xem lại lịch sử/dược sĩ review vẫn dựng được đúng "bàn cân" nhiều đơn như lúc
+    # kiểm tra, thay vì gộp hết thuốc vào 1 đơn ảo duy nhất (mất khả năng lọc tương
+    # tác GIỮA các đơn). Rỗng ở dữ liệu lịch sử cũ lưu trước khi field này tồn tại.
     prescriptions: list[PrescriptionInput] = Field(default_factory=list)
-    # Giải thích riêng cấp thuốc (thuốc-với-thuốc) và cấp đơn thuốc (đơn-với-đơn),
-    # chỉ nhắc tên ở đúng cấp đó - KHÔNG lấy nguyên văn giải thích cấp hoạt chất
-    # trong `explanations` như trước. prescription_explanations chỉ khác rỗng ở
-    # luồng dược sĩ (pharmacist/products/check) khi request có từ 2 đơn trở lên.
+    # Giải thích riêng cấp thuốc (thuốc-với-thuốc), chỉ nhắc tên thuốc - KHÔNG lấy
+    # nguyên văn giải thích cấp hoạt chất trong `explanations` như trước.
     product_explanations: list[dict] = Field(default_factory=list)
-    prescription_explanations: list[dict] = Field(default_factory=list)
     # Tóm tắt tổng quan toàn bộ lần phân tích - sinh cho cả luồng bệnh nhân và dược
     # sĩ, khác nhau ở giọng điệu (xem build_overview_explanation).
     overview: dict | None = None
@@ -172,9 +169,9 @@ class MedicationCheckResponse(BaseModel):
     disease_interaction_scope: Literal["personalized", "general_fallback", "general"] = "general"
     # Snapshot condition tại thời điểm kiểm tra để lịch sử không đổi nghĩa khi hồ sơ được sửa sau đó.
     patient_conditions_snapshot: list[DiseaseInfo] = Field(default_factory=list)
-    # Câu liệt kê cố định (không qua LLM) tên thực phẩm/bệnh nền cần lưu ý, ghép thêm
-    # vào bảng tóm tắt tổng quan sau đoạn overview.giai_thich do LLM sinh.
-    canh_bao_thuc_pham_benh_nen: str | None = None
+    # Danh sách 1-3 câu liệt kê cố định (không qua LLM) tên thực phẩm/bệnh nền cần
+    # lưu ý, hiện thành các đoạn riêng sau đoạn overview.giai_thich do LLM sinh.
+    canh_bao_thuc_pham_benh_nen: list[str] | None = None
     # Ghi chú dược sĩ để lại khi xác nhận lần kiểm tra này (PharmacistReview.ghi_chu)
     # - chỉ có ở GET /patients/{id}/checks/{check_id} khi đã có dược sĩ xác nhận,
     # None ở mọi trường hợp khác (lần kiểm tra mới chạy, guest, chưa ai xác nhận).

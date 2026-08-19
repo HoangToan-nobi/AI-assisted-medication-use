@@ -80,11 +80,8 @@ async def test_medications_check_requires_auth(client):
 
 # TC-A03: bệnh nhân kiểm tra tương tác - cặp thật mức "nang", response KHÔNG có xu_tri (pharmacist-only).
 @pytest.mark.asyncio
-async def test_check_medications_severe_pair_hides_pharmacist_fields(client, monkeypatch, mock_llm):
-    # Mức "nang" (khác chua_phan_loai) đi qua nhánh gọi LLM thật trong explain_node -
-    # mock lại để test không phụ thuộc DEEPSEEK_API_KEY thật.
-    monkeypatch.setattr("src.agents.nodes.explain_node.ainvoke_llm", mock_llm.ainvoke)
-
+async def test_check_medications_severe_pair_hides_pharmacist_fields(client):
+    # explain_node không còn gọi LLM (chỉ giữ field cấu trúc) - không cần mock nữa.
     patient = await _register(client, "Benh nhan A", "patient")
     headers = _auth_headers(patient["access_token"])
 
@@ -242,9 +239,7 @@ async def test_search_medications_matches_alias(client):
 
 
 @pytest.mark.asyncio
-async def test_pharmacist_receives_review_request_and_can_review(client, monkeypatch, mock_llm):
-    monkeypatch.setattr("src.agents.nodes.explain_node.ainvoke_llm", mock_llm.ainvoke)
-
+async def test_pharmacist_receives_review_request_and_can_review(client):
     patient = await _register(client, "Benh nhan C", "patient")
     pharmacist = await _register(client, "Duoc si D", "pharmacist")
     patient_headers = _auth_headers(patient["access_token"])
@@ -348,11 +343,7 @@ async def test_pharmacist_receives_review_request_and_can_review(client, monkeyp
 
 
 @pytest.mark.asyncio
-async def test_patient_profile_sharing_is_optional_and_does_not_gate_interaction_review(
-    client, monkeypatch, mock_llm
-):
-    monkeypatch.setattr("src.agents.nodes.explain_node.ainvoke_llm", mock_llm.ainvoke)
-
+async def test_patient_profile_sharing_is_optional_and_does_not_gate_interaction_review(client):
     patient = await _register(client, "Benh nhan rieng tu", "patient")
     pharmacist = await _register(client, "Duoc si quyen rieng tu", "pharmacist")
     patient_headers = _auth_headers(patient["access_token"])

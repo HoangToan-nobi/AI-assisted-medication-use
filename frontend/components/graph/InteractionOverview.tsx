@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import MaterialIcon from "@/components/MaterialIcon";
 import PharmacistReviewPrompt from "@/components/PharmacistReviewPrompt";
@@ -10,7 +10,7 @@ import { assignGroupColors, buildPrescriptionGraph, buildProductGraph, withDataO
 import { drugOrigins, firstPrescriptionIndex, isCrossPrescription, mergedDrugNames, type Prescription } from "@/lib/prescription";
 import type { GraphPairItem } from "./GraphPairList";
 import InteractionDetailTabs from "./InteractionDetailTabs";
-import InteractionGraphView, { type GraphEdgeVM, type GraphNodeVM } from "./InteractionGraphView";
+import InteractionGraphView, { scrollToPairCard, type GraphEdgeVM, type GraphNodeVM } from "./InteractionGraphView";
 import SeverityCountStrip from "./SeverityCountStrip";
 import MediFox from "@/components/MediFox";
 
@@ -61,10 +61,65 @@ function pickText(item: { giai_thich: string; giai_thich_duoc_si?: string } | un
   return audience === "pharmacist" ? item.giai_thich_duoc_si ?? item.giai_thich : item.giai_thich;
 }
 
+// In đậm + tô màu xanh primary cụm từ AI tự chọn nhấn mạnh trong đoạn tóm tắt
+// tổng quan (backend tách sẵn markup {{muc_do:...}} thành danh sách này, xem
+// rollup_explain.py::_parse_highlights) - muc_do chỉ còn dùng để tra key React,
+// không còn ảnh hưởng màu (xem .overview-highlight trong globals.css). Tìm theo
+// thứ tự xuất hiện, bỏ qua cụm nào lệch khỏi text (an toàn nếu AI paraphrase
+// khác đi 1 chút) thay vì báo lỗi.
+//
+// resolveEdgeId: tìm ID cạnh thuốc-thuốc khớp với cụm nhấn mạnh (dựa theo tên 2
+// thuốc có mặt trong cụm), để bấm vào cụm sẽ cuộn xuống đúng thẻ giải thích bên
+// dưới - tái dùng scrollToPairCard đã có sẵn cho việc bấm cạnh trên đồ thị
+// (InteractionGraphView.tsx). Không tìm được thì hiện như văn bản thường, không
+// bấm được (an toàn nếu AI paraphrase tên thuốc khác đi).
+function renderOverviewText(
+  text: string,
+  highlights: { text: string; muc_do: Severity }[] | undefined,
+  resolveEdgeId: (highlightText: string) => string | undefined,
+): ReactNode {
+  if (!highlights || highlights.length === 0) return text;
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  highlights.forEach((h, i) => {
+    const idx = text.indexOf(h.text, cursor);
+    if (idx === -1) return;
+    if (idx > cursor) nodes.push(text.slice(cursor, idx));
+    const edgeId = resolveEdgeId(h.text);
+    nodes.push(
+      edgeId ? (
+        <mark
+          key={i}
+          className="overview-highlight overview-highlight--clickable"
+          role="button"
+          tabIndex={0}
+          onClick={() => scrollToPairCard(edgeId)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              scrollToPairCard(edgeId);
+            }
+          }}
+        >
+          {h.text}
+        </mark>
+      ) : (
+        <mark key={i} className="overview-highlight">
+          {h.text}
+        </mark>
+      ),
+    );
+    cursor = idx + h.text.length;
+  });
+  if (nodes.length === 0) return text;
+  if (cursor < text.length) nodes.push(text.slice(cursor));
+  return nodes;
+}
+
 // Kết quả cho luồng bệnh nhân: không còn phân cấp drill-down (đơn -> thuốc ->
-// hoạt chất) như InteractionGraphExplorer (không còn nơi nào dùng, giữ lại nếu
-// cần khôi phục drill-down sau này) - chỉ còn 1 đồ thị (nút = đơn thuốc nếu so
-// nhiều đơn, ngược lại = thuốc) + 1 đoạn tóm tắt tổng quan do LLM sinh
+// hoạt chất, cấp hoạt chất giờ không còn giai_thich để hiển thị nữa) - chỉ còn 1
+// đồ thị (nút = đơn thuốc nếu so nhiều đơn, ngược lại = thuốc) + 1 đoạn tóm tắt
+// tổng quan do LLM sinh
 // (result.overview), và danh sách chi tiết TỪNG CẶP THUỐC-THUỐC (không còn hoạt
 // chất-hoạt chất hay đơn-đơn nữa) hiện LUÔN sẵn, mặc định ở tab "Thuốc - Thuốc"
 // (không còn nút bung/ẩn - xem InteractionDetailTabs). Cũng dùng lại cho bàn cân
@@ -105,6 +160,18 @@ export default function InteractionOverview({ result, prescriptions, session, au
     () => (boardMode ? buildPrescriptionGraph(productEdges, origins) : []),
     [boardMode, productEdges, origins]
   );
+
+  // Khớp cụm nhấn mạnh trong tóm tắt tổng quan với đúng cạnh thuốc-thuốc (ID
+  // `${productA}::${productB}`, giống hệt id thẻ giải thích - xem GraphPairList)
+  // bằng cách kiểm tra cả 2 tên thuốc có mặt trong cụm - không cần khớp thứ tự
+  // hay từ nối ("và"/"+"...) vì AI diễn đạt tự nhiên.
+  const resolveHighlightEdgeId = (highlightText: string): string | undefined => {
+    const lower = highlightText.toLowerCase();
+    const match = productEdges.find(
+      (e) => lower.includes(e.productA.toLowerCase()) && lower.includes(e.productB.toLowerCase())
+    );
+    return match ? `${match.productA}::${match.productB}` : undefined;
+  };
 
   const productExplanationByPair = useMemo(() => {
     const map = new Map<string, NonNullable<typeof result.product_explanations>[number]>();
@@ -271,10 +338,11 @@ export default function InteractionOverview({ result, prescriptions, session, au
       {result.overview && (
         <div className="interaction-overview__summary">
           <p className="eyebrow">TÓM TẮT TỔNG QUAN</p>
-          <p>{result.overview.giai_thich}</p>
-          {/* Câu liệt kê cố định (không qua LLM) thực phẩm cần tránh/bệnh nền cần
-              thận trọng - backend ghép sẵn thành 1 câu, xem build_food_disease_warning_line. */}
-          {result.canh_bao_thuc_pham_benh_nen && <p>{result.canh_bao_thuc_pham_benh_nen}</p>}
+          <p>{renderOverviewText(result.overview.giai_thich, result.overview.nhan_manh, resolveHighlightEdgeId)}</p>
+          {/* 1-3 câu liệt kê cố định (không qua LLM) thực phẩm cần tránh/bệnh nền cần
+              thận trọng/mời trao đổi dược sĩ - mỗi câu 1 đoạn riêng, xem
+              build_food_disease_warning_line. */}
+          {result.canh_bao_thuc_pham_benh_nen?.map((line, i) => <p key={i}>{line}</p>)}
         </div>
       )}
 

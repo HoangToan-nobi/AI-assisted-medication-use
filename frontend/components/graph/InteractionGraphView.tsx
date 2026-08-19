@@ -29,7 +29,9 @@ function truncateLabel(label: string, max = 7): string {
 // Bấm vào 1 cạnh không drill-down xuống cấp dưới nữa (đó là việc của nút "Xem chi
 // tiết" trên từng thẻ giải thích) - chỉ cuộn tới đúng thẻ giải thích tương ứng và
 // nháy viền vàng để người dùng dễ nhận ra, tái dùng class ".interaction-pair-card--focused" đã có sẵn.
-function scrollToPairCard(edgeId: string) {
+// Export để InteractionOverview.tsx dùng lại cho việc bấm cụm từ nhấn mạnh trong
+// đoạn tóm tắt tổng quan (cùng hành vi cuộn + nháy viền, không viết lại lần 2).
+export function scrollToPairCard(edgeId: string) {
   const target = document.getElementById(`interaction-pair-${edgeId}`);
   if (!target) return;
   target.scrollIntoView({ behavior: "smooth", block: "center" });

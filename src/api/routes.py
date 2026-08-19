@@ -66,8 +66,6 @@ from src.services.food_disease_explain import (
 from src.services.food_disease_lookup import lookup_disease_interactions, lookup_food_interactions
 from src.services.rollup_explain import (
     build_overview_explanation,
-    build_prescription_edges,
-    build_prescription_explanations,
     build_product_edges,
     build_product_explanations,
     filter_cross_prescription_edges,
@@ -408,11 +406,6 @@ async def _run_product_check(
     cho cấp thuốc. Cả 2 luồng đều sinh overview (tóm tắt tổng quan) - khác nhau ở
     audience truyền vào build_overview_explanation (giọng thân thiện cho bệnh nhân,
     khoa học/chuyên nghiệp cho dược sĩ).
-
-    for_pharmacist=True (công cụ tra cứu độc lập của dược sĩ, vẫn giữ drill-down đầy
-    đủ): sinh thêm prescription_explanations (cấp đơn) khi có từ 2 đơn trở lên.
-    for_pharmacist=False (luồng bệnh nhân): KHÔNG sinh prescription_explanations
-    (không còn UI nào dùng tới, tránh tốn LLM call vô ích).
     """
     _t_start = time.perf_counter()
     flat_products, origins_by_input = _flatten_prescriptions(prescriptions)
@@ -422,7 +415,13 @@ async def _run_product_check(
     )
     logger.info("[timing] resolve_products: %.3fs", time.perf_counter() - _t_resolve)
 
-    result = dict(await _timed("agent_total (normalize+lookup+rank+explain+guardrail)", agent.ainvoke({"raw_medications": ingredient_names})))
+    audience = "pharmacist" if for_pharmacist else "patient"
+    result = dict(
+        await _timed(
+            "agent_total (normalize+lookup+rank+explain+guardrail)",
+            agent.ainvoke({"raw_medications": ingredient_names, "audience": audience}),
+        )
+    )
     if result.get("error"):
         raise HTTPException(status_code=422, detail=result["error"])
 
@@ -453,16 +452,6 @@ async def _run_product_check(
         else product_edges
     )
 
-    async def _prescription_chain() -> list[dict]:
-        if not (for_pharmacist and len(prescriptions) > 1):
-            return []
-        labels = [p.label for p in prescriptions]
-        prescription_edges = build_prescription_edges(product_edges, product_origins)
-        return await _timed(
-            "prescription_explanations (rollup cấp đơn)",
-            build_prescription_explanations(prescription_edges, labels),
-        )
-
     # Tương tác thuốc-thực phẩm/thuốc-bệnh nền chạy NGOÀI agent. Thuốc-bệnh được
     # lọc bằng disease_id khi luồng bệnh nhân có patient_conditions; disease_ids=None
     # giữ hành vi cảnh báo chung cho fallback/guest/dược sĩ.
@@ -476,7 +465,7 @@ async def _run_product_check(
     disease_rows = lookup_disease_interactions(valid_medication_ids, db, disease_ids=disease_ids)
     logger.info("[timing] food_disease_lookup (SQL): %.3fs", time.perf_counter() - _t_food_lookup)
 
-    # 5 nhánh sinh giải thích HOÀN TOÀN không phụ thuộc lẫn nhau - kể cả overview giờ
+    # 4 nhánh sinh giải thích HOÀN TOÀN không phụ thuộc lẫn nhau - kể cả overview giờ
     # cũng đọc thẳng product_edges (dữ liệu gốc + bản dịch đã cache), không còn đợi
     # product_explanations viết xong như trước (xem build_overview_explanation). Chạy
     # song song bằng asyncio.gather thay vì await nối tiếp từng nhánh, cắt phần lớn
@@ -485,23 +474,33 @@ async def _run_product_check(
     (
         product_explanations,
         overview,
-        prescription_explanations,
         food_interactions,
         disease_interactions,
     ) = await asyncio.gather(
-        _timed("product_explanations (rollup cấp thuốc)", build_product_explanations(overview_product_edges)),
+        _timed(
+            "product_explanations (rollup cấp thuốc)",
+            build_product_explanations(overview_product_edges, audience=audience),
+        ),
         _timed(
             "overview (tổng quan tóm tắt)",
-            build_overview_explanation(overview_product_edges, audience="pharmacist" if for_pharmacist else "patient"),
+            build_overview_explanation(
+                overview_product_edges,
+                audience=audience,
+                prescription_count=len(prescriptions),
+            ),
         ),
-        _prescription_chain(),
-        _timed("food_interactions (thuốc-thực phẩm)", build_food_interaction_explanations(food_rows, ingredient_to_products)),
-        _timed("disease_interactions (thuốc-bệnh nền)", build_disease_interaction_explanations(disease_rows, ingredient_to_products)),
+        _timed(
+            "food_interactions (thuốc-thực phẩm)",
+            build_food_interaction_explanations(food_rows, ingredient_to_products, audience=audience),
+        ),
+        _timed(
+            "disease_interactions (thuốc-bệnh nền)",
+            build_disease_interaction_explanations(disease_rows, ingredient_to_products, audience=audience),
+        ),
     )
     logger.info("[timing] === product_check total: %.3fs ===", time.perf_counter() - _t_start)
 
     result["product_explanations"] = product_explanations
-    result["prescription_explanations"] = prescription_explanations
     result["overview"] = overview
     result["checked_products"] = flat_products
     result["prescriptions"] = [{"label": p.label, "products": p.products} for p in prescriptions]
@@ -566,7 +565,6 @@ async def check_products(
         checked_products=result.get("checked_products", []),
         prescriptions=result.get("prescriptions", []),
         product_explanations=_strip_pharmacist_fields(result.get("product_explanations", [])),
-        prescription_explanations=_strip_pharmacist_fields(result.get("prescription_explanations", [])),
         overview=result.get("overview"),
         food_interactions=_strip_pharmacist_fields(result.get("food_interactions", [])),
         disease_interactions=_strip_pharmacist_fields(result.get("disease_interactions", [])),
@@ -594,7 +592,6 @@ async def guest_check_products(
         checked_products=result.get("checked_products", []),
         prescriptions=result.get("prescriptions", []),
         product_explanations=_strip_pharmacist_fields(result.get("product_explanations", [])),
-        prescription_explanations=_strip_pharmacist_fields(result.get("prescription_explanations", [])),
         overview=result.get("overview"),
         food_interactions=_strip_pharmacist_fields(result.get("food_interactions", [])),
         disease_interactions=_strip_pharmacist_fields(result.get("disease_interactions", [])),
@@ -624,7 +621,6 @@ async def check_products_as_pharmacist(
         checked_products=result.get("checked_products", []),
         prescriptions=result.get("prescriptions", []),
         product_explanations=result.get("product_explanations", []),
-        prescription_explanations=result.get("prescription_explanations", []),
         overview=result.get("overview"),
         food_interactions=result.get("food_interactions", []),
         disease_interactions=result.get("disease_interactions", []),
@@ -1052,7 +1048,7 @@ async def check_medications(
     current_user: User = Depends(require_role("patient")),
     db: Session = Depends(get_db),
 ) -> MedicationCheckResponse:
-    result = dict(await agent.ainvoke({"raw_medications": request.medications}))
+    result = dict(await agent.ainvoke({"raw_medications": request.medications, "audience": "patient"}))
 
     if result.get("error"):
         # guardrail_node chặn (thiếu nguồn trích dẫn) -> KHÔNG trả kết quả cho bệnh nhân.
@@ -1084,7 +1080,7 @@ async def guest_check_medications(
     request: MedicationCheckRequest,
 ) -> MedicationCheckResponse:
     """Kiểm tra tương tác cho khách vãng lai; chỉ chạy phân tích, không lưu lịch sử."""
-    result = dict(await agent.ainvoke({"raw_medications": request.medications}))
+    result = dict(await agent.ainvoke({"raw_medications": request.medications, "audience": "patient"}))
     if result.get("error"):
         raise HTTPException(status_code=422, detail=result["error"])
     return MedicationCheckResponse(
@@ -1234,7 +1230,6 @@ async def get_patient_check_detail(
         checked_products=result.get("checked_products", []),
         prescriptions=result.get("prescriptions", []),
         product_explanations=_strip_pharmacist_fields(result.get("product_explanations", [])),
-        prescription_explanations=_strip_pharmacist_fields(result.get("prescription_explanations", [])),
         overview=result.get("overview"),
         food_interactions=_strip_pharmacist_fields(result.get("food_interactions", [])),
         disease_interactions=_strip_pharmacist_fields(result.get("disease_interactions", [])),
@@ -1610,7 +1605,7 @@ async def check_medications_as_pharmacist(
 ) -> MedicationCheckResponse:
     """Công cụ tra cứu tương tác độc lập cho dược sĩ - không gắn bệnh nhân nào,
     không lưu lịch sử, và KHÔNG ẩn xu_tri/thay_the (dược sĩ được xem đầy đủ)."""
-    result = dict(await agent.ainvoke({"raw_medications": request.medications}))
+    result = dict(await agent.ainvoke({"raw_medications": request.medications, "audience": "pharmacist"}))
     if result.get("error"):
         raise HTTPException(status_code=422, detail=result["error"])
     return MedicationCheckResponse(

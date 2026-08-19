@@ -286,3 +286,55 @@ class Notification(Base):
     noi_dung = Column(Text, nullable=False)
     da_doc = Column(Boolean, default=False)
     thoi_gian_tao = Column(DateTime, default=datetime.utcnow)
+
+
+class ProductExplanationCache(Base):
+    """Cache giải thích cấp thuốc-thuốc (rollup_explain.py::_explain_product_edge) -
+    dữ liệu DDInter đứng sau 1 cặp thuốc cố định nên nhiều user tra trùng cặp phổ
+    biến sẽ dùng lại đúng 1 bản ghi thay vì gọi LLM lại từ đầu. product_a/product_b
+    LUÔN lowercase + sort (product_a <= product_b) để không phân biệt thứ tự nhập
+    hay hoa/thường - xem src/services/explanation_cache.py."""
+
+    __tablename__ = "product_explanation_cache"
+    __table_args__ = (
+        UniqueConstraint(
+            "product_a", "product_b", "muc_do", "audience", name="uq_product_explanation_cache"
+        ),
+    )
+    id = Column(String, primary_key=True, default=_uuid)
+    product_a = Column(String(255), nullable=False)
+    product_b = Column(String(255), nullable=False)
+    muc_do = Column(String(20), nullable=False)
+    audience = Column(String(20), nullable=False)
+    giai_thich = Column(Text, nullable=False)
+    giai_thich_duoc_si = Column(Text, nullable=True)
+    nguon_trich_dan = Column(Text)
+    mo_ta_dich = Column(Text, nullable=True)
+    xu_tri_dich = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class FoodDiseaseExplanationCache(Base):
+    """Cache giải thích cấp thuốc-thực phẩm/thuốc-bệnh nền (food_disease_explain.py)
+    - cùng cơ chế như ProductExplanationCache, gộp chung 1 bảng cho cả 2 loại (kind)
+    vì shape output giống hệt nhau, chỉ khác 1 cột phân loại."""
+
+    __tablename__ = "food_disease_explanation_cache"
+    __table_args__ = (
+        UniqueConstraint(
+            "kind", "san_pham", "doi_tuong", "muc_do", "audience",
+            name="uq_food_disease_explanation_cache",
+        ),
+    )
+    id = Column(String, primary_key=True, default=_uuid)
+    kind = Column(String(10), nullable=False)  # "food" | "disease"
+    san_pham = Column(String(255), nullable=False)
+    doi_tuong = Column(String(255), nullable=False)
+    muc_do = Column(String(20), nullable=False)
+    audience = Column(String(20), nullable=False)
+    giai_thich = Column(Text, nullable=False)
+    giai_thich_duoc_si = Column(Text, nullable=True)
+    nguon_trich_dan = Column(Text)
+    mo_ta_dich = Column(Text, nullable=True)
+    xu_tri_dich = Column(Text, nullable=True)  # NULL cho disease (DDSI không có xu_tri)
+    created_at = Column(DateTime, default=datetime.utcnow)
