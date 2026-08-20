@@ -40,6 +40,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         setSession(current);
       })
       .catch(() => {
+        if (!active) return;
         clearSession();
         router.replace("/auth");
       })

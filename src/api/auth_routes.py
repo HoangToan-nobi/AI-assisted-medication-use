@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse
-from sqlalchemy import func, or_
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from src.api.deps import get_current_user, require_role
@@ -389,19 +389,38 @@ async def reject_pharmacist(user_id: str, payload: RejectPharmacistRequest, back
 
 @admin_router.get("/overview", response_model=AdminOverview)
 async def admin_overview(_: User = Depends(require_role("admin")), db: Session = Depends(get_db)) -> AdminOverview:
-    role_counts = dict(db.query(User.vai_tro, func.count(User.id)).group_by(User.vai_tro).all())
+    statement = select(
+        func.count(User.id).label("total_users"),
+        func.coalesce(func.sum(case((User.vai_tro == "patient", 1), else_=0)), 0).label("patients"),
+        func.coalesce(func.sum(case((User.vai_tro == "pharmacist", 1), else_=0)), 0).label("pharmacists"),
+        func.coalesce(func.sum(case((User.account_status == "locked", 1), else_=0)), 0).label("locked_users"),
+        func.coalesce(
+            func.sum(case((User.account_status == "pending_pharmacist", 1), else_=0)),
+            0,
+        ).label("pending_pharmacists"),
+        select(func.count(Medication.id)).scalar_subquery().label("medications"),
+        select(func.count(Product.id)).scalar_subquery().label("products"),
+        select(func.count(Interaction.id)).scalar_subquery().label("drug_interactions"),
+        select(func.count(FoodInteraction.id)).scalar_subquery().label("food_interactions"),
+        select(func.count(DiseaseInteraction.id)).scalar_subquery().label("disease_interactions"),
+        select(func.count(FeedbackReport.id))
+        .where(FeedbackReport.status != "resolved")
+        .scalar_subquery()
+        .label("open_feedback"),
+    )
+    stats = db.execute(statement).mappings().one()
     return AdminOverview(
-        total_users=db.query(func.count(User.id)).scalar() or 0,
-        patients=role_counts.get("patient", 0),
-        pharmacists=role_counts.get("pharmacist", 0),
-        locked_users=db.query(func.count(User.id)).filter(User.account_status == "locked").scalar() or 0,
-        pending_pharmacists=db.query(func.count(User.id)).filter(User.account_status == "pending_pharmacist").scalar() or 0,
-        medications=db.query(func.count(Medication.id)).scalar() or 0,
-        products=db.query(func.count(Product.id)).scalar() or 0,
-        drug_interactions=db.query(func.count(Interaction.id)).scalar() or 0,
-        food_interactions=db.query(func.count(FoodInteraction.id)).scalar() or 0,
-        disease_interactions=db.query(func.count(DiseaseInteraction.id)).scalar() or 0,
-        open_feedback=db.query(func.count(FeedbackReport.id)).filter(FeedbackReport.status != "resolved").scalar() or 0,
+        total_users=stats["total_users"] or 0,
+        patients=stats["patients"] or 0,
+        pharmacists=stats["pharmacists"] or 0,
+        locked_users=stats["locked_users"] or 0,
+        pending_pharmacists=stats["pending_pharmacists"] or 0,
+        medications=stats["medications"] or 0,
+        products=stats["products"] or 0,
+        drug_interactions=stats["drug_interactions"] or 0,
+        food_interactions=stats["food_interactions"] or 0,
+        disease_interactions=stats["disease_interactions"] or 0,
+        open_feedback=stats["open_feedback"] or 0,
     )
 
 
@@ -459,7 +478,7 @@ async def update_user_status(
         db.query(RefreshSession).filter(
             RefreshSession.user_id == user.id,
             RefreshSession.revoked_at.is_(None),
-        ).update({RefreshSession.revoked_at: datetime.utcnow()}, synchronize_session=False)
+        ).update({RefreshSession.revoked_at: func.now()}, synchronize_session=False)
     db.commit()
     action = "khóa" if payload.account_status == "locked" else "mở khóa"
     return MessageResponse(message=f"Đã {action} tài khoản", account_status=payload.account_status)
