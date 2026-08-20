@@ -6784,6 +6784,16 @@ html[data-theme="dark"] textarea {
 .mc-header .theme-toggle:not(:disabled):active {
   transform: translateX(-12px) translateY(1px);
 }
+/* On the landing nav pill the -12px shift above eats almost all of
+   .mc-nav's left padding, leaving too little room for its rounded corner
+   to read as curved next to the toggle - it looked squared-off compared
+   to the right side. Cancel the shift here only. */
+.mc-header .theme-toggle {
+  transform: none;
+}
+.mc-header .theme-toggle:not(:disabled):active {
+  transform: translateY(1px);
+}
 .patient-header .theme-toggle--light,
 .mc-header .theme-toggle--light {
   background: #6689b3;
