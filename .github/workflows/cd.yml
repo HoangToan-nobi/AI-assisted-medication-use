@@ -23,11 +23,19 @@ jobs:
       - name: Lint with ruff
         run: ruff check src/ tests/
 
+      - name: Prepare isolated integration database
+        run: python scripts/seed_ci_data.py
+        env:
+          APP_ENV: test
+          DATABASE_URL: sqlite:///./data/ci.db
+
       - name: Run tests
         run: pytest tests/ -v --tb=short
         env:
           APP_ENV: test
+          DATABASE_URL: sqlite:///./data/ci.db
           OPENAI_API_KEY: test-key
+          DEEPSEEK_API_KEY: test-key
 
   deploy-backend:
     needs: test
