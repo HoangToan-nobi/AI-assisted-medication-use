@@ -9749,6 +9749,16 @@ html[data-theme="dark"] .profile-tabs__item--active {
   height: 48px;
 }
 
+.admin-filter-select {
+  width: 210px;
+  flex: 0 0 auto;
+}
+
+.admin-filter-select .select-field__trigger {
+  min-height: 48px;
+  padding-block: 11px;
+}
+
 .admin-search {
   min-width: 240px;
   height: 48px;
@@ -9970,7 +9980,7 @@ html[data-theme="dark"] .admin-segmented button.active { color: #c7d9fa; backgro
   .admin-stat-card { min-height: 105px; padding: 14px; }
   .admin-data-summary__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-toolbar, .admin-toolbar--tabs { align-items: stretch; flex-direction: column; }
-  .admin-toolbar select, .admin-search, .admin-toolbar--tabs .admin-search { width: 100%; max-width: none; }
+  .admin-toolbar select, .admin-filter-select, .admin-search, .admin-toolbar--tabs .admin-search { width: 100%; max-width: none; }
   .admin-segmented button { flex: 1; justify-content: center; }
   .admin-list-meta span { display: none; }
   .admin-drug-grid { grid-template-columns: 1fr; }

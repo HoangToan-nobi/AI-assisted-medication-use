@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AdminEmptyState, AdminPageHeader, AdminStatusBadge } from "@/components/AdminUI";
 import MaterialIcon from "@/components/MaterialIcon";
+import SelectField from "@/components/SelectField";
 import { useMediAlert } from "@/components/MediAlertProvider";
 import { ApiError, listAdminUsers, updateAdminUserStatus, type AdminUser } from "@/lib/api";
 
@@ -46,8 +47,8 @@ export default function AdminUsersPage() {
       <AdminPageHeader eyebrow="TÀI KHOẢN" title="Quản lý người dùng" icon="manage_accounts" description="Tra cứu bệnh nhân, dược sĩ và kiểm soát trạng thái truy cập hệ thống." />
       <section className="panel admin-toolbar">
         <label className="admin-search"><MaterialIcon name="search" size={21} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm theo họ tên hoặc email" /></label>
-        <select value={role} onChange={(e) => setRole(e.target.value)} aria-label="Lọc vai trò"><option value="">Tất cả vai trò</option><option value="patient">Bệnh nhân</option><option value="pharmacist">Dược sĩ</option></select>
-        <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Lọc trạng thái"><option value="">Tất cả trạng thái</option><option value="active">Đang hoạt động</option><option value="locked">Đã khóa</option><option value="pending_email">Chờ xác minh email</option><option value="pending_pharmacist">Chờ duyệt dược sĩ</option></select>
+        <div className="admin-filter-select"><SelectField aria-label="Lọc vai trò" value={role} onChange={setRole} options={[{ value: "", label: "Tất cả vai trò" }, { value: "patient", label: "Bệnh nhân" }, { value: "pharmacist", label: "Dược sĩ" }]} /></div>
+        <div className="admin-filter-select"><SelectField aria-label="Lọc trạng thái" value={status} onChange={setStatus} options={[{ value: "", label: "Tất cả trạng thái" }, { value: "active", label: "Đang hoạt động" }, { value: "locked", label: "Đã khóa" }, { value: "pending_email", label: "Chờ xác minh email" }, { value: "pending_pharmacist", label: "Chờ duyệt dược sĩ" }]} /></div>
       </section>
       <div className="admin-list-meta"><strong>{total} tài khoản</strong><span>Tối đa 200 kết quả gần nhất</span></div>
       {error && <div className="admin-alert admin-alert--error"><MaterialIcon name="error" size={20} />{error}</div>}
