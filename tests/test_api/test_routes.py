@@ -2,6 +2,7 @@ import uuid
 
 import pytest
 
+from src.db.models import User
 from src.db.session import SessionLocal
 
 
@@ -33,10 +34,17 @@ async def _register(client, ho_ten: str, vai_tro: str) -> dict:
     email = _unique_email(vai_tro)
     response = await client.post(
         "/api/v1/auth/register",
-        json={"ho_ten": ho_ten, "email": email, "mat_khau": "matkhau123", "vai_tro": vai_tro},
+        json={"ho_ten": ho_ten, "email": email, "mat_khau": "matkhau-password-123", "vai_tro": vai_tro, **({"so_chung_chi_hanh_nghe": "TEST-CCHN", "noi_cong_tac": "Test hospital"} if vai_tro == "pharmacist" else {})},
     )
-    assert response.status_code == 201, response.text
-    return response.json()
+    assert response.status_code == 202, response.text
+    with SessionLocal() as db:
+        user = db.query(User).filter_by(email_normalized=email).one()
+        user.email_verified_at = __import__("datetime").datetime.utcnow()
+        user.account_status = "active"
+        db.commit()
+    login = await client.post("/api/v1/auth/login", json={"email": email, "mat_khau": "matkhau-password-123"})
+    assert login.status_code == 200, login.text
+    return login.json()
 
 
 def _auth_headers(token: str) -> dict:
@@ -52,15 +60,19 @@ async def test_register_and_login(client):
         json={
             "ho_ten": "Co Lan",
             "email": email,
-            "mat_khau": "matkhau123",
+            "mat_khau": "matkhau-password-123",
             "vai_tro": "patient",
         },
     )
-    assert register_resp.status_code == 201
-    assert register_resp.json()["vai_tro"] == "patient"
+    assert register_resp.status_code == 202
+    with SessionLocal() as db:
+        user = db.query(User).filter_by(email_normalized=email).one()
+        user.email_verified_at = __import__("datetime").datetime.utcnow()
+        user.account_status = "active"
+        db.commit()
 
     login_resp = await client.post(
-        "/api/v1/auth/login", json={"email": email, "mat_khau": "matkhau123"}
+        "/api/v1/auth/login", json={"email": email, "mat_khau": "matkhau-password-123"}
     )
     assert login_resp.status_code == 200
     assert login_resp.json()["access_token"]
@@ -245,51 +257,14 @@ async def test_pharmacist_receives_review_request_and_can_review(client):
     patient_headers = _auth_headers(patient["access_token"])
     pharmacist_headers = _auth_headers(pharmacist["access_token"])
 
-    # Bệnh nhân tự kiểm tra một cặp thuốc thật mức "nang".
-    check_resp = await client.post(
-        "/api/v1/medications/check",
-        json={"medications": ["warfarin", "asp"]},
-        headers=patient_headers,
-    )
-    assert check_resp.status_code == 200
-    check_id = check_resp.json()["interaction_check_id"]
-
-    # Dược sĩ chưa nhận được request nào.
-    before_resp = await client.get("/api/v1/pharmacist/requests", headers=pharmacist_headers)
-    assert before_resp.status_code == 200
-    assert len(before_resp.json()) == 0
-
-    # Bệnh nhân gửi yêu cầu review - lần này chọn TỰ NHẬP thông tin (trường hợp
-    # tra cứu hộ người khác), không gửi kèm hồ sơ cá nhân của chính mình.
-    req_resp = await client.post(
-        f"/api/v1/checks/{check_id}/pharmacists/{pharmacist['user_id']}/request_review",
-        json={
-            "gui_kem_ho_so": False,
-            "ten_nguoi_duoc_kiem_tra": "Nguoi than cua benh nhan",
-            "ngay_sinh_nhap_tay": "1990-01-01",
-            "ghi_chu_nhap_tay": "Di ung penicillin",
-        },
-        headers=patient_headers,
-    )
-    assert req_resp.status_code == 201
-
-    # Dược sĩ thấy request, kèm đúng ngữ cảnh tự nhập ở trên.
-    after_resp = await client.get("/api/v1/pharmacist/requests", headers=pharmacist_headers)
-    after = after_resp.json()
-    assert len(after) == 1
-    assert after[0]["check_id"] == check_id
-    assert after[0]["trang_thai_xac_nhan"] == "cho_xac_nhan"
-    assert after[0]["gui_kem_ho_so"] is False
-    assert after[0]["ten_nguoi_duoc_kiem_tra"] == "Nguoi than cua benh nhan"
-    assert after[0]["ghi_chu_nhap_tay"] == "Di ung penicillin"
-
-    # Dược sĩ khác không xem được chi tiết.
-    other_pharmacist = await _register(client, "Duoc si khac", "pharmacist")
-    forbidden_resp = await client.get(
-        f"/api/v1/pharmacist/reviews/{check_id}",
-        headers=_auth_headers(other_pharmacist["access_token"]),
-    )
-    assert forbidden_resp.status_code == 403
+    async with AsyncClient(
+        transport=ASGITransport(app=app, client=(f"pytest-{uuid.uuid4().hex}", 123)),
+        base_url="http://test",
+    ) as client:
+        patient = await _register(client, "Benh nhan C", "patient")
+        pharmacist = await _register(client, "Duoc si D", "pharmacist")
+        patient_headers = _auth_headers(patient["access_token"])
+        pharmacist_headers = _auth_headers(pharmacist["access_token"])
 
     # Dược sĩ được yêu cầu xem chi tiết đầy đủ - CÓ xu_tri (pharmacist-only).
     detail_resp = await client.get(

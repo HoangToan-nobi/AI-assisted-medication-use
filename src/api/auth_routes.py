@@ -1,0 +1,367 @@
+import hashlib
+from datetime import datetime, timedelta
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
+
+from src.api.deps import get_current_user, require_role
+from src.config import get_settings
+from src.db.models import AuthEvent, AuthIdentity, RefreshSession, User
+from src.db.session import get_db
+from src.models.schemas import (
+    AuthResponse,
+    EmailRequest,
+    GoogleCredentialRequest,
+    GoogleLinkRequest,
+    GoogleRegistrationRequest,
+    LoginRequest,
+    MessageResponse,
+    PendingPharmacistInfo,
+    RegisterRequest,
+    RejectPharmacistRequest,
+    ResetPasswordRequest,
+    TokenRequest,
+)
+from src.services.auth import (
+    consume_action_token,
+    create_token,
+    hash_password,
+    issue_action_token,
+    issue_refresh_session,
+    new_csrf_token,
+    normalize_email,
+    password_needs_rehash,
+    revoke_refresh_session,
+    rotate_refresh_session,
+    verify_google_credential,
+    verify_password,
+)
+from src.services.email import (
+    send_password_reset_email,
+    send_pharmacist_decision_email,
+    send_verification_email,
+)
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+admin_router = APIRouter(prefix="/admin", tags=["admin"])
+
+ACCESS_COOKIE = "medguard_access"
+REFRESH_COOKIE = "medguard_refresh"
+CSRF_COOKIE = "medguard_csrf"
+
+
+def _cookie_options() -> dict:
+    settings = get_settings()
+    return {
+        "secure": settings.cookie_secure,
+        "samesite": settings.cookie_samesite,
+        "domain": settings.cookie_domain,
+        "path": "/",
+    }
+
+
+def _auth_result(user: User, access_token: str | None = None) -> AuthResponse:
+    return AuthResponse(
+        access_token=access_token if get_settings().app_env != "production" else None,
+        vai_tro=user.vai_tro,
+        user_id=user.id,
+        ho_ten=user.ho_ten,
+        email=user.email,
+        account_status=user.account_status,
+    )
+
+
+def _set_session_cookies(response: Response, db: Session, user: User, refresh_raw: str | None = None) -> str:
+    settings = get_settings()
+    access = create_token(user.id, user.vai_tro)
+    if refresh_raw is None:
+        refresh_raw, _ = issue_refresh_session(db, user.id)
+    options = _cookie_options()
+    response.set_cookie(ACCESS_COOKIE, access, httponly=True, max_age=settings.access_token_expire_minutes * 60, **options)
+    response.set_cookie(REFRESH_COOKIE, refresh_raw, httponly=True, max_age=settings.refresh_token_expire_days * 86400, **options)
+    return access
+
+
+def _clear_session_cookies(response: Response) -> None:
+    options = _cookie_options()
+    for name in (ACCESS_COOKIE, REFRESH_COOKIE):
+        response.delete_cookie(name, domain=options["domain"], path="/", samesite=options["samesite"], secure=options["secure"])
+
+
+def _rate_key(value: str) -> str:
+    return hashlib.sha256(value.encode()).hexdigest()
+
+
+def _enforce_rate_limit(db: Session, action: str, key: str, limit: int, minutes: int) -> None:
+    cutoff = datetime.utcnow() - timedelta(minutes=minutes)
+    count = db.query(AuthEvent).filter(AuthEvent.action == action, AuthEvent.key_hash == _rate_key(key), AuthEvent.ngay_tao >= cutoff).count()
+    if count >= limit:
+        raise HTTPException(status_code=429, detail="Bạn đã thử quá nhiều lần, vui lòng thử lại sau")
+
+
+def _record_event(db: Session, action: str, key: str, succeeded: bool = False) -> None:
+    db.query(AuthEvent).filter(AuthEvent.ngay_tao < datetime.utcnow() - timedelta(days=7)).delete(synchronize_session=False)
+    db.add(AuthEvent(action=action, key_hash=_rate_key(key), succeeded=succeeded))
+    db.commit()
+
+
+def _validate_pharmacist_fields(role: str, license_number: str | None, workplace: str | None) -> None:
+    if role == "pharmacist" and (not (license_number or "").strip() or not (workplace or "").strip()):
+        raise HTTPException(status_code=422, detail="Dược sĩ phải cung cấp số CCHN và nơi công tác")
+
+
+def _status_response(user: User) -> JSONResponse:
+    if user.account_status == "pending_email":
+        return JSONResponse(status_code=202, content={"code": "EMAIL_VERIFICATION_REQUIRED", "account_status": user.account_status, "message": "Vui lòng xác minh email"})
+    if user.account_status == "pending_pharmacist":
+        return JSONResponse(status_code=202, content={"code": "PHARMACIST_APPROVAL_PENDING", "account_status": user.account_status, "message": "Hồ sơ dược sĩ đang chờ duyệt"})
+    if user.account_status == "locked":
+        return JSONResponse(status_code=423, content={"code": "ACCOUNT_LOCKED", "message": "Tài khoản đã bị khóa"})
+    return JSONResponse(status_code=403, content={"code": "ACCOUNT_REJECTED", "message": user.ly_do_tu_choi or "Tài khoản chưa được kích hoạt"})
+
+
+@router.get("/csrf")
+async def csrf(response: Response) -> dict[str, str]:
+    token = new_csrf_token()
+    response.set_cookie(CSRF_COOKIE, token, httponly=False, max_age=86400, **_cookie_options())
+    return {"csrf_token": token}
+
+
+@router.post("/register", response_model=MessageResponse, status_code=202)
+async def register(payload: RegisterRequest, background: BackgroundTasks, request: Request, db: Session = Depends(get_db)) -> MessageResponse:
+    email = normalize_email(payload.email)
+    rate_key = request.client.host if request.client else "unknown"
+    _enforce_rate_limit(db, "register", rate_key, 10, 60)
+    _validate_pharmacist_fields(payload.vai_tro, payload.so_chung_chi_hanh_nghe, payload.noi_cong_tac)
+    if db.query(User).filter_by(email_normalized=email).first() is not None:
+        raise HTTPException(status_code=409, detail="Email đã được sử dụng")
+    user = User(
+        ho_ten=payload.ho_ten.strip(), email=email, email_normalized=email,
+        mat_khau_hash=hash_password(payload.mat_khau), vai_tro=payload.vai_tro,
+        account_status="pending_email", so_chung_chi_hanh_nghe=payload.so_chung_chi_hanh_nghe,
+        noi_cong_tac=payload.noi_cong_tac,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    token = issue_action_token(db, user.id, "verify_email", 24 * 60)
+    _record_event(db, "register", rate_key, True)
+    background.add_task(send_verification_email, user.email, token)
+    return MessageResponse(message="Hãy kiểm tra email để kích hoạt tài khoản", account_status=user.account_status)
+
+
+@router.post("/verify-email", response_model=MessageResponse)
+async def verify_email(payload: TokenRequest, db: Session = Depends(get_db)) -> MessageResponse:
+    user = consume_action_token(db, payload.token, "verify_email")
+    if user is None:
+        raise HTTPException(status_code=400, detail="Liên kết xác minh không hợp lệ hoặc đã hết hạn")
+    user.email_verified_at = datetime.utcnow()
+    user.account_status = "pending_pharmacist" if user.vai_tro == "pharmacist" else "active"
+    db.commit()
+    return MessageResponse(message="Email đã được xác minh", account_status=user.account_status)
+
+
+@router.post("/resend-verification", response_model=MessageResponse)
+async def resend_verification(payload: EmailRequest, background: BackgroundTasks, db: Session = Depends(get_db)) -> MessageResponse:
+    email = normalize_email(payload.email)
+    _enforce_rate_limit(db, "resend", email, 3, 60)
+    user = db.query(User).filter_by(email_normalized=email).first()
+    if user and user.account_status == "pending_email":
+        token = issue_action_token(db, user.id, "verify_email", 24 * 60)
+        background.add_task(send_verification_email, user.email, token)
+    _record_event(db, "resend", email)
+    return MessageResponse(message="Nếu tài khoản phù hợp tồn tại, email xác minh đã được gửi")
+
+
+@router.post("/login", response_model=AuthResponse, responses={202: {"model": MessageResponse}})
+async def login(payload: LoginRequest, response: Response, request: Request, db: Session = Depends(get_db)):
+    email = normalize_email(payload.email)
+    key = f"{request.client.host if request.client else 'unknown'}:{email}"
+    _enforce_rate_limit(db, "login_failed", key, 5, 15)
+    user = db.query(User).filter_by(email_normalized=email).first()
+    if user is None or not verify_password(payload.mat_khau, user.mat_khau_hash):
+        _record_event(db, "login_failed", key)
+        raise HTTPException(status_code=401, detail="Email hoặc mật khẩu không đúng")
+    if email in {"demo-patient@medguard.local", "demo-pharmacist@medguard.local"} and not get_settings().enable_demo_accounts:
+        raise HTTPException(status_code=403, detail="Tài khoản demo không được bật trong môi trường này")
+    if password_needs_rehash(user.mat_khau_hash):
+        user.mat_khau_hash = hash_password(payload.mat_khau)
+        db.commit()
+    if user.account_status != "active":
+        return _status_response(user)
+    access = _set_session_cookies(response, db, user)
+    return _auth_result(user, access)
+
+
+def _verified_google(credential: str) -> dict:
+    try:
+        return verify_google_credential(credential)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
+@router.post("/google")
+async def google_login(payload: GoogleCredentialRequest, response: Response, db: Session = Depends(get_db)):
+    claims = _verified_google(payload.credential)
+    identity = db.query(AuthIdentity).filter_by(provider="google", subject=claims["sub"]).first()
+    if identity:
+        user = db.get(User, identity.user_id)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Danh tính Google không còn tài khoản")
+        if user.account_status != "active":
+            return _status_response(user)
+        access = _set_session_cookies(response, db, user)
+        return _auth_result(user, access)
+    email = normalize_email(claims["email"])
+    if db.query(User).filter_by(email_normalized=email).first():
+        return JSONResponse(status_code=409, content={"code": "ACCOUNT_LINK_REQUIRED", "message": "Nhập mật khẩu hiện tại để liên kết Google"})
+    return JSONResponse(status_code=202, content={"code": "REGISTRATION_REQUIRED", "email": email, "ho_ten": claims.get("name") or email.split("@", 1)[0]})
+
+
+@router.post("/google/complete-registration")
+async def google_complete_registration(payload: GoogleRegistrationRequest, response: Response, db: Session = Depends(get_db)):
+    claims = _verified_google(payload.credential)
+    _validate_pharmacist_fields(payload.vai_tro, payload.so_chung_chi_hanh_nghe, payload.noi_cong_tac)
+    email = normalize_email(claims["email"])
+    if db.query(AuthIdentity).filter_by(provider="google", subject=claims["sub"]).first() or db.query(User).filter_by(email_normalized=email).first():
+        raise HTTPException(status_code=409, detail="Tài khoản đã tồn tại; hãy đăng nhập hoặc liên kết")
+    user = User(
+        ho_ten=(claims.get("name") or email.split("@", 1)[0])[:255], email=email,
+        email_normalized=email, email_verified_at=datetime.utcnow(), mat_khau_hash=None,
+        vai_tro=payload.vai_tro,
+        account_status="pending_pharmacist" if payload.vai_tro == "pharmacist" else "active",
+        so_chung_chi_hanh_nghe=payload.so_chung_chi_hanh_nghe, noi_cong_tac=payload.noi_cong_tac,
+    )
+    db.add(user)
+    db.flush()
+    db.add(AuthIdentity(user_id=user.id, provider="google", subject=claims["sub"]))
+    db.commit()
+    db.refresh(user)
+    if user.account_status != "active":
+        return _status_response(user)
+    access = _set_session_cookies(response, db, user)
+    return _auth_result(user, access)
+
+
+@router.post("/google/link")
+async def google_link(payload: GoogleLinkRequest, response: Response, request: Request, db: Session = Depends(get_db)):
+    claims = _verified_google(payload.credential)
+    email = normalize_email(claims["email"])
+    key = f"{request.client.host if request.client else 'unknown'}:{email}"
+    _enforce_rate_limit(db, "google_link_failed", key, 5, 15)
+    if db.query(AuthIdentity).filter_by(provider="google", subject=claims["sub"]).first():
+        raise HTTPException(status_code=409, detail="Google đã được liên kết")
+    user = db.query(User).filter_by(email_normalized=email).first()
+    if user is None or not verify_password(payload.mat_khau, user.mat_khau_hash):
+        _record_event(db, "google_link_failed", key)
+        raise HTTPException(status_code=401, detail="Mật khẩu hiện tại không đúng")
+    if password_needs_rehash(user.mat_khau_hash):
+        user.mat_khau_hash = hash_password(payload.mat_khau)
+    db.add(AuthIdentity(user_id=user.id, provider="google", subject=claims["sub"]))
+    user.email_verified_at = user.email_verified_at or datetime.utcnow()
+    if user.account_status in {"locked", "pending_email"}:
+        user.account_status = "pending_pharmacist" if user.vai_tro == "pharmacist" else "active"
+    db.commit()
+    if user.account_status != "active":
+        return _status_response(user)
+    access = _set_session_cookies(response, db, user)
+    return _auth_result(user, access)
+
+
+@router.post("/forgot-password", response_model=MessageResponse)
+async def forgot_password(payload: EmailRequest, background: BackgroundTasks, db: Session = Depends(get_db)) -> MessageResponse:
+    email = normalize_email(payload.email)
+    _enforce_rate_limit(db, "forgot", email, 3, 60)
+    user = db.query(User).filter_by(email_normalized=email).first()
+    if user is None:
+        _record_event(db, "forgot", email)
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Không tìm thấy tài khoản với email này.\n"
+                "Email này chưa được đăng ký trên MediCheck. Vui lòng kiểm tra lại địa chỉ email hoặc đăng ký tài khoản mới."
+            ),
+        )
+    token = issue_action_token(db, user.id, "reset_password", 30)
+    background.add_task(send_password_reset_email, user.email, token)
+    _record_event(db, "forgot", email)
+    return MessageResponse(
+        message=(
+            "Email đặt lại mật khẩu đã được gửi.\n"
+            "Vui lòng kiểm tra Gmail, bao gồm Hộp thư đến (Inbox) và Thư rác (Spam), "
+            "để tìm email từ MediCheck và làm theo hướng dẫn đặt lại mật khẩu."
+        )
+    )
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+async def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)) -> MessageResponse:
+    user = consume_action_token(db, payload.token, "reset_password")
+    if user is None:
+        raise HTTPException(status_code=400, detail="Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn")
+    user.mat_khau_hash = hash_password(payload.mat_khau_moi)
+    db.query(RefreshSession).filter(RefreshSession.user_id == user.id, RefreshSession.revoked_at.is_(None)).update({"revoked_at": datetime.utcnow()})
+    db.commit()
+    return MessageResponse(message="Mật khẩu đã được cập nhật", email=user.email)
+
+
+@router.get("/me", response_model=AuthResponse)
+async def me(current_user: User = Depends(get_current_user)) -> AuthResponse:
+    return _auth_result(current_user)
+
+
+@router.post("/refresh", response_model=AuthResponse)
+async def refresh(request: Request, response: Response, db: Session = Depends(get_db)) -> AuthResponse:
+    raw = request.cookies.get(REFRESH_COOKIE)
+    rotated = rotate_refresh_session(db, raw or "")
+    if rotated is None:
+        _clear_session_cookies(response)
+        raise HTTPException(status_code=401, detail="Phiên đăng nhập không hợp lệ hoặc đã hết hạn")
+    new_raw, session = rotated
+    user = db.get(User, session.user_id)
+    if user is None or user.account_status != "active":
+        revoke_refresh_session(db, new_raw)
+        _clear_session_cookies(response)
+        raise HTTPException(status_code=403, detail="Tài khoản chưa được kích hoạt")
+    access = _set_session_cookies(response, db, user, new_raw)
+    return _auth_result(user, access)
+
+
+@router.post("/logout", status_code=204)
+async def logout(request: Request, response: Response, db: Session = Depends(get_db)) -> Response:
+    revoke_refresh_session(db, request.cookies.get(REFRESH_COOKIE))
+    _clear_session_cookies(response)
+    response.status_code = status.HTTP_204_NO_CONTENT
+    return response
+
+
+@admin_router.get("/pharmacists/pending", response_model=list[PendingPharmacistInfo])
+async def pending_pharmacists(_: User = Depends(require_role("admin")), db: Session = Depends(get_db)) -> list[PendingPharmacistInfo]:
+    users = db.query(User).filter_by(vai_tro="pharmacist", account_status="pending_pharmacist").order_by(User.ngay_tao).all()
+    return [PendingPharmacistInfo(user_id=u.id, ho_ten=u.ho_ten, email=u.email, so_chung_chi_hanh_nghe=u.so_chung_chi_hanh_nghe or "", noi_cong_tac=u.noi_cong_tac or "", ngay_tao=u.ngay_tao) for u in users]
+
+
+@admin_router.post("/pharmacists/{user_id}/approve", response_model=MessageResponse)
+async def approve_pharmacist(user_id: str, background: BackgroundTasks, _: User = Depends(require_role("admin")), db: Session = Depends(get_db)) -> MessageResponse:
+    user = db.get(User, user_id)
+    if user is None or user.vai_tro != "pharmacist" or user.account_status != "pending_pharmacist":
+        raise HTTPException(status_code=404, detail="Không tìm thấy hồ sơ dược sĩ đang chờ")
+    user.account_status = "active"
+    user.ly_do_tu_choi = None
+    db.commit()
+    background.add_task(send_pharmacist_decision_email, user.email, True)
+    return MessageResponse(message="Đã duyệt tài khoản dược sĩ", account_status="active")
+
+
+@admin_router.post("/pharmacists/{user_id}/reject", response_model=MessageResponse)
+async def reject_pharmacist(user_id: str, payload: RejectPharmacistRequest, background: BackgroundTasks, _: User = Depends(require_role("admin")), db: Session = Depends(get_db)) -> MessageResponse:
+    user = db.get(User, user_id)
+    if user is None or user.vai_tro != "pharmacist" or user.account_status != "pending_pharmacist":
+        raise HTTPException(status_code=404, detail="Không tìm thấy hồ sơ dược sĩ đang chờ")
+    user.vai_tro = "patient"
+    user.account_status = "active"
+    user.ly_do_tu_choi = payload.ly_do.strip()
+    db.commit()
+    background.add_task(send_pharmacist_decision_email, user.email, False, user.ly_do_tu_choi)
+    return MessageResponse(message="Đã từ chối vai trò dược sĩ; tài khoản chuyển thành người dùng", account_status="active")

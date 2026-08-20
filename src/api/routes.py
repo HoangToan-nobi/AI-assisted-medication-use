@@ -27,13 +27,11 @@ from src.db.models import (
 from src.db.session import get_db
 from src.models.schemas import (
     AddProductRequest,
-    AuthResponse,
     ChatRequest,
     ChatResponse,
     CreatePrescriptionRequest,
     DiseaseInfo,
     InteractionCheckSummary,
-    LoginRequest,
     MedicationCheckRequest,
     MedicationCheckResponse,
     MedicationItem,
@@ -48,7 +46,6 @@ from src.models.schemas import (
     PrescriptionInput,
     ProductCheckRequest,
     ProductSearchResult,
-    RegisterRequest,
     RenamePrescriptionRequest,
     RequestReviewRequest,
     ReviewRequestSummary,
@@ -56,7 +53,6 @@ from src.models.schemas import (
     UpdatePatientProfileRequest,
     UpdatePharmacistProfileRequest,
 )
-from src.services.auth import create_token, hash_password, verify_password
 from src.services.disease_search import rank_disease_matches
 from src.services.food_disease_explain import (
     build_disease_interaction_explanations,
@@ -157,41 +153,6 @@ async def chat(request: ChatRequest) -> ChatResponse:
 async def agent_status():
     """Kiểm tra trạng thái agent."""
     return {"status": "ready", "agent": "LangGraph Agent v1.0"}
-
-
-# ---- Auth ----
-
-
-@router.post("/auth/register", response_model=AuthResponse, status_code=201)
-async def register(request: RegisterRequest, db: Session = Depends(get_db)) -> AuthResponse:
-    """Đăng ký tài khoản theo vai trò (FR-01). Không có trong bảng API gốc GD2 nhưng
-    bắt buộc phải có để /auth/login hoạt động được."""
-    existing = db.query(User).filter_by(email=request.email).first()
-    if existing is not None:
-        raise HTTPException(status_code=409, detail="Email đã được sử dụng")
-
-    user = User(
-        ho_ten=request.ho_ten,
-        email=request.email,
-        mat_khau_hash=hash_password(request.mat_khau),
-        vai_tro=request.vai_tro,
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    token = create_token(user.id, user.vai_tro)
-    return AuthResponse(access_token=token, vai_tro=user.vai_tro, user_id=user.id, ho_ten=user.ho_ten)
-
-
-@router.post("/auth/login", response_model=AuthResponse)
-async def login(request: LoginRequest, db: Session = Depends(get_db)) -> AuthResponse:
-    user = db.query(User).filter_by(email=request.email).first()
-    if user is None or not verify_password(request.mat_khau, user.mat_khau_hash):
-        raise HTTPException(status_code=401, detail="Email hoặc mật khẩu không đúng")
-
-    token = create_token(user.id, user.vai_tro)
-    return AuthResponse(access_token=token, vai_tro=user.vai_tro, user_id=user.id, ho_ten=user.ho_ten)
 
 
 # ---- Tra cứu / chuẩn hóa thuốc ----
@@ -1293,7 +1254,7 @@ async def list_pharmacists(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[PharmacistSummary]:
-    pharmacists = db.query(User).filter_by(vai_tro="pharmacist").all()
+    pharmacists = db.query(User).filter_by(vai_tro="pharmacist", account_status="active").all()
     return [
         PharmacistSummary(
             id=p.id,
@@ -1318,7 +1279,7 @@ async def request_review(
         raise HTTPException(status_code=404, detail="Không tìm thấy lịch sử tra cứu của bạn")
 
     pharmacist = db.get(User, pharmacist_id)
-    if pharmacist is None or pharmacist.vai_tro != "pharmacist":
+    if pharmacist is None or pharmacist.vai_tro != "pharmacist" or pharmacist.account_status != "active":
         raise HTTPException(status_code=404, detail="Không tìm thấy dược sĩ")
 
     review = db.query(PharmacistReview).filter_by(

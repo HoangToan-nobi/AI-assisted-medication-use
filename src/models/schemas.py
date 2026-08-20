@@ -1,7 +1,15 @@
+import re
 from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
+
+
+def _valid_email(value: str) -> str:
+    value = value.strip()
+    if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value):
+        raise ValueError("Email không hợp lệ")
+    return value
 
 
 class ChatRequest(BaseModel):
@@ -19,20 +27,77 @@ class ChatResponse(BaseModel):
 class RegisterRequest(BaseModel):
     ho_ten: str = Field(..., min_length=1, max_length=255)
     email: str = Field(..., min_length=3, max_length=255)
-    mat_khau: str = Field(..., min_length=6, max_length=255)
+    mat_khau: str = Field(..., min_length=8, max_length=128)
     vai_tro: Literal["patient", "pharmacist"]
+    so_chung_chi_hanh_nghe: str | None = Field(default=None, max_length=100)
+    noi_cong_tac: str | None = Field(default=None, max_length=255)
+
+    _validate_email = field_validator("email")(_valid_email)
 
 
 class LoginRequest(BaseModel):
     email: str = Field(..., min_length=3, max_length=255)
     mat_khau: str = Field(..., min_length=1, max_length=255)
 
+    _validate_email = field_validator("email")(_valid_email)
+
 
 class AuthResponse(BaseModel):
-    access_token: str
+    # Chỉ được điền ngoài production để các client/test Bearer cũ có thời gian
+    # chuyển đổi. Giao diện mới xác thực hoàn toàn bằng HttpOnly cookie.
+    access_token: str | None = None
     vai_tro: str
     user_id: str
     ho_ten: str
+    email: str
+    account_status: str
+
+
+class EmailRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=255)
+
+    _validate_email = field_validator("email")(_valid_email)
+
+
+class TokenRequest(BaseModel):
+    token: str = Field(..., min_length=20, max_length=512)
+
+
+class ResetPasswordRequest(TokenRequest):
+    mat_khau_moi: str = Field(..., min_length=8, max_length=128)
+
+
+class GoogleCredentialRequest(BaseModel):
+    credential: str = Field(..., min_length=20, max_length=10000)
+
+
+class GoogleRegistrationRequest(GoogleCredentialRequest):
+    vai_tro: Literal["patient", "pharmacist"]
+    so_chung_chi_hanh_nghe: str | None = Field(default=None, max_length=100)
+    noi_cong_tac: str | None = Field(default=None, max_length=255)
+
+
+class GoogleLinkRequest(GoogleCredentialRequest):
+    mat_khau: str = Field(..., min_length=1, max_length=128)
+
+
+class MessageResponse(BaseModel):
+    message: str
+    account_status: str | None = None
+    email: str | None = None
+
+
+class PendingPharmacistInfo(BaseModel):
+    user_id: str
+    ho_ten: str
+    email: str
+    so_chung_chi_hanh_nghe: str
+    noi_cong_tac: str
+    ngay_tao: datetime
+
+
+class RejectPharmacistRequest(BaseModel):
+    ly_do: str = Field(..., min_length=3, max_length=1000)
 
 
 # ---- Medications (hồ sơ thuốc bệnh nhân) ----

@@ -1,4 +1,5 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+let csrfCache: string | undefined;
 
 export type Severity = "nhe" | "trung_binh" | "nang" | "chua_phan_loai";
 
@@ -159,10 +160,21 @@ export type AgentCheckResult = {
 export type PrescriptionCheckInput = { label: string; products: string[] };
 
 export type AuthResponse = {
-  access_token: string;
-  vai_tro: "patient" | "pharmacist";
+  access_token?: string | null;
+  vai_tro: "patient" | "pharmacist" | "admin";
   user_id: string;
   ho_ten: string;
+  email: string;
+  account_status: string;
+};
+
+export type AuthMessage = { message: string; account_status?: string | null; email?: string | null };
+export type GoogleAuthResult = AuthResponse | {
+  code: "REGISTRATION_REQUIRED" | "ACCOUNT_LINK_REQUIRED" | "PHARMACIST_APPROVAL_PENDING" | "EMAIL_VERIFICATION_REQUIRED";
+  message?: string;
+  email?: string;
+  ho_ten?: string;
+  account_status?: string;
 };
 
 export type MedicationItem = {
@@ -224,39 +236,75 @@ export type PharmacistReviewResponse = {
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  code?: string;
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
 async function request<T>(
   path: string,
-  options: RequestInit & { token?: string } = {}
+  options: RequestInit & { token?: string; skipRefresh?: boolean } = {},
+  retried = false,
 ): Promise<T> {
-  const { token, headers, ...rest } = options;
+  const { token: _legacyToken, skipRefresh, headers, ...rest } = options;
+  const method = (rest.method || "GET").toUpperCase();
+  let csrfToken: string | undefined;
+  if (!["GET", "HEAD", "OPTIONS"].includes(method) && path !== "/api/v1/auth/csrf") {
+    csrfToken = await ensureCsrfToken();
+  }
   const res = await fetch(`${API_URL}${path}`, {
     ...rest,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
       ...headers,
     },
   });
 
+  if (res.status === 401 && !retried && !skipRefresh && !["/api/v1/auth/login", "/api/v1/auth/refresh"].includes(path)) {
+    const refreshCsrf = csrfToken || await ensureCsrfToken();
+    const refreshed = await fetch(`${API_URL}/api/v1/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+      headers: refreshCsrf ? { "X-CSRF-Token": refreshCsrf } : {},
+    });
+    if (refreshed.ok) return request<T>(path, options, true);
+  }
+
   if (!res.ok) {
     let detail = `Lỗi ${res.status}`;
+    let code: string | undefined;
     try {
       const body = await res.json();
       if (body?.detail) detail = body.detail;
+      else if (body?.message) detail = body.message;
+      code = body?.code;
     } catch {
       // body không phải JSON hợp lệ - giữ nguyên thông báo mặc định
     }
-    throw new ApiError(res.status, detail);
+    throw new ApiError(res.status, detail, code);
   }
 
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+function getCookie(name: string): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  const prefix = `${name}=`;
+  return document.cookie.split("; ").find((part) => part.startsWith(prefix))?.slice(prefix.length);
+}
+
+async function ensureCsrfToken(): Promise<string | undefined> {
+  csrfCache ||= getCookie("medguard_csrf");
+  if (csrfCache) return csrfCache;
+  const response = await fetch(`${API_URL}/api/v1/auth/csrf`, { credentials: "include" });
+  if (response.ok) csrfCache = (await response.json()).csrf_token;
+  return csrfCache;
 }
 
 // ---- Auth ----
@@ -265,20 +313,39 @@ export async function register(
   hoTen: string,
   email: string,
   matKhau: string,
-  vaiTro: "patient" | "pharmacist"
-): Promise<AuthResponse> {
-  return request<AuthResponse>("/api/v1/auth/register", {
+  vaiTro: "patient" | "pharmacist",
+  soChungChi?: string,
+  noiCongTac?: string,
+): Promise<AuthMessage> {
+  return request<AuthMessage>("/api/v1/auth/register", {
     method: "POST",
-    body: JSON.stringify({ ho_ten: hoTen, email, mat_khau: matKhau, vai_tro: vaiTro }),
+    skipRefresh: true,
+    body: JSON.stringify({ ho_ten: hoTen, email, mat_khau: matKhau, vai_tro: vaiTro, so_chung_chi_hanh_nghe: soChungChi, noi_cong_tac: noiCongTac }),
   });
 }
 
-export async function login(email: string, matKhau: string): Promise<AuthResponse> {
-  return request<AuthResponse>("/api/v1/auth/login", {
+export async function login(email: string, matKhau: string): Promise<GoogleAuthResult> {
+  return request<GoogleAuthResult>("/api/v1/auth/login", {
     method: "POST",
+    skipRefresh: true,
     body: JSON.stringify({ email, mat_khau: matKhau }),
   });
 }
+
+export const getMe = () => request<AuthResponse>("/api/v1/auth/me");
+export const logout = () => request<void>("/api/v1/auth/logout", { method: "POST", skipRefresh: true });
+export const verifyEmail = (token: string) => request<AuthMessage>("/api/v1/auth/verify-email", { method: "POST", skipRefresh: true, body: JSON.stringify({ token }) });
+export const resendVerification = (email: string) => request<AuthMessage>("/api/v1/auth/resend-verification", { method: "POST", skipRefresh: true, body: JSON.stringify({ email }) });
+export const forgotPassword = (email: string) => request<AuthMessage>("/api/v1/auth/forgot-password", { method: "POST", skipRefresh: true, body: JSON.stringify({ email }) });
+export const resetPassword = (token: string, password: string) => request<AuthMessage>("/api/v1/auth/reset-password", { method: "POST", skipRefresh: true, body: JSON.stringify({ token, mat_khau_moi: password }) });
+export const googleLogin = (credential: string) => request<GoogleAuthResult>("/api/v1/auth/google", { method: "POST", skipRefresh: true, body: JSON.stringify({ credential }) });
+export const completeGoogleRegistration = (credential: string, vaiTro: "patient" | "pharmacist", soChungChi?: string, noiCongTac?: string) => request<GoogleAuthResult>("/api/v1/auth/google/complete-registration", { method: "POST", skipRefresh: true, body: JSON.stringify({ credential, vai_tro: vaiTro, so_chung_chi_hanh_nghe: soChungChi, noi_cong_tac: noiCongTac }) });
+export const linkGoogle = (credential: string, password: string) => request<GoogleAuthResult>("/api/v1/auth/google/link", { method: "POST", skipRefresh: true, body: JSON.stringify({ credential, mat_khau: password }) });
+
+export type PendingPharmacist = { user_id: string; ho_ten: string; email: string; so_chung_chi_hanh_nghe: string; noi_cong_tac: string; ngay_tao: string };
+export const listPendingPharmacists = () => request<PendingPharmacist[]>("/api/v1/admin/pharmacists/pending");
+export const approvePharmacist = (userId: string) => request<AuthMessage>(`/api/v1/admin/pharmacists/${userId}/approve`, { method: "POST" });
+export const rejectPharmacist = (userId: string, reason: string) => request<AuthMessage>(`/api/v1/admin/pharmacists/${userId}/reject`, { method: "POST", body: JSON.stringify({ ly_do: reason }) });
 
 // ---- Tra cứu / hồ sơ thuốc ----
 

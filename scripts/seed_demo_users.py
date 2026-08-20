@@ -11,7 +11,7 @@ Usage:
   python scripts/seed_demo_users.py
 """
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -33,9 +33,19 @@ ACETYLSALICYLIC_ACID_ID = "DDInter20"
 def _get_or_create_user(db, email: str, ho_ten: str, vai_tro: str) -> User:
     user = db.query(User).filter_by(email=email).first()
     if user is not None:
+        user.email_normalized = email.lower()
+        user.email_verified_at = user.email_verified_at or datetime.utcnow()
+        user.account_status = "active"
+        db.commit()
         return user
     user = User(
-        ho_ten=ho_ten, email=email, mat_khau_hash=hash_password(DEMO_PASSWORD), vai_tro=vai_tro
+        ho_ten=ho_ten,
+        email=email,
+        email_normalized=email.lower(),
+        email_verified_at=datetime.utcnow(),
+        mat_khau_hash=hash_password(DEMO_PASSWORD),
+        vai_tro=vai_tro,
+        account_status="active",
     )
     db.add(user)
     db.commit()
@@ -48,7 +58,7 @@ def main() -> None:
     db = SessionLocal()
     try:
         patient = _get_or_create_user(db, DEMO_PATIENT_EMAIL, "Bệnh Nhân Demo", "patient")
-        pharmacist = _get_or_create_user(db, DEMO_PHARMACIST_EMAIL, "Dược Sĩ Demo", "pharmacist")
+        _get_or_create_user(db, DEMO_PHARMACIST_EMAIL, "Dược Sĩ Demo", "pharmacist")
 
 
 
