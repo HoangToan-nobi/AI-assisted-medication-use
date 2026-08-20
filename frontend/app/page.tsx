@@ -646,6 +646,10 @@ export default function LandingPage() {
           position: absolute;
           inset: 0;
           z-index: 1;
+          /* .mc-hero switches to overflow: visible below so .mc-hero__capsule
+             can bleed past the card edge - this fills the same box and needs
+             its own radius or its flat corners show through unclipped. */
+          border-radius: 28px;
           background: linear-gradient(
             90deg,
             #07111acc 0%,
