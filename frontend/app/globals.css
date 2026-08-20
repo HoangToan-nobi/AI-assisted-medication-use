@@ -625,6 +625,26 @@ textarea {
     box-shadow 0.15s;
 }
 
+/* Keep browser autofill visually identical to a normal field. The inset fill
+   stays inside the input's own border and cannot paint over compound wrappers. */
+input:not([type="checkbox"]):-webkit-autofill,
+input:not([type="checkbox"]):-webkit-autofill:hover,
+input:not([type="checkbox"]):-webkit-autofill:focus,
+input:not([type="checkbox"]):-webkit-autofill:active {
+  -webkit-text-fill-color: var(--on-surface) !important;
+  caret-color: var(--on-surface);
+  -webkit-box-shadow: 0 0 0 1000px var(--surface-container-lowest) inset !important;
+  box-shadow: 0 0 0 1000px var(--surface-container-lowest) inset !important;
+  background-color: var(--surface-container-lowest) !important;
+  background-clip: padding-box;
+}
+
+input:not([type="checkbox"]):autofill {
+  color: var(--on-surface) !important;
+  background-color: var(--surface-container-lowest) !important;
+  box-shadow: 0 0 0 1000px var(--surface-container-lowest) inset !important;
+}
+
 .input-field input {
   padding-left: 44px;
 }
@@ -4303,6 +4323,110 @@ html[data-theme="dark"] .bottom-nav.sidebar {
   margin-right: 4px;
   padding: 8px 13px;
 }
+
+/* Pharmacist profile fields: one compound border with a consistent leading icon. */
+.profile-field-control {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 70px;
+  overflow: hidden;
+  border: 1px solid #d5dfed;
+  border-radius: 11px;
+  background: #fff;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.profile-field-control:hover {
+  border-color: #aebfda;
+}
+
+.profile-field-control:focus-within {
+  border-color: #6f89c2;
+  box-shadow: 0 0 0 3px rgba(79, 111, 186, 0.12);
+}
+
+.profile-field-control > .material-symbols-outlined {
+  flex: 0 0 auto;
+  margin-left: 20px;
+  color: #5578bc;
+}
+
+.profile-field-control > input:not([type="checkbox"]),
+.profile-field-control > textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: 0;
+}
+
+.profile-field-control > input:not([type="checkbox"]) {
+  min-height: 68px;
+  padding: 0 20px 0 16px;
+}
+
+.profile-field-control--textarea {
+  align-items: flex-start;
+}
+
+.profile-field-control--textarea > .material-symbols-outlined {
+  margin-top: 20px;
+}
+
+.profile-field-control > textarea {
+  min-height: 126px;
+  padding: 19px 20px 16px 16px;
+}
+
+.profile-field-control > input:not([type="checkbox"]):hover,
+.profile-field-control > input:not([type="checkbox"]):focus,
+.profile-field-control > textarea:hover,
+.profile-field-control > textarea:focus {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: 0;
+}
+
+.profile-field-control > input:-webkit-autofill,
+.profile-field-control > input:-webkit-autofill:hover,
+.profile-field-control > input:-webkit-autofill:focus,
+.profile-field-control > input:-webkit-autofill:active {
+  -webkit-text-fill-color: #1a3357 !important;
+  -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
+  box-shadow: 0 0 0 1000px #fff inset !important;
+}
+
+html[data-theme="dark"] .profile-field-control {
+  border-color: #344966;
+  background: #142238;
+}
+
+html[data-theme="dark"] .profile-field-control:hover {
+  border-color: #54709a;
+}
+
+html[data-theme="dark"] .profile-field-control:focus-within {
+  border-color: #7fa2e3;
+  box-shadow: 0 0 0 3px rgba(111, 145, 205, 0.16);
+}
+
+html[data-theme="dark"] .profile-field-control > .material-symbols-outlined {
+  color: #91b0ea;
+}
+
+html[data-theme="dark"] .profile-field-control > input:-webkit-autofill,
+html[data-theme="dark"] .profile-field-control > input:-webkit-autofill:hover,
+html[data-theme="dark"] .profile-field-control > input:-webkit-autofill:focus,
+html[data-theme="dark"] .profile-field-control > input:-webkit-autofill:active {
+  -webkit-text-fill-color: #edf4ff !important;
+  -webkit-box-shadow: 0 0 0 1000px #142238 inset !important;
+  box-shadow: 0 0 0 1000px #142238 inset !important;
+}
+
 .profile-details-form {
   margin-bottom: 24px;
 }
@@ -7286,6 +7410,35 @@ html[data-theme="dark"] .mc-auth__tab--active {
   background: #29466e;
   color: #fff;
 }
+html[data-theme="dark"] .mc-auth__role-option {
+  border-color: #3d5a80;
+  background: #12223a;
+  color: #aebfda;
+  box-shadow: none;
+}
+html[data-theme="dark"] .mc-auth__role-option .material-symbols-outlined {
+  color: #86a4d2;
+}
+html[data-theme="dark"] .mc-auth__role-option:hover:not(.mc-auth__role-option--active) {
+  border-color: #5879a8;
+  background: #172b47;
+  color: #d4e2f5;
+}
+html[data-theme="dark"] .mc-auth__role-option--active {
+  border-color: #83a9e8;
+  background: #edf4ff;
+  color: #244b8d;
+  box-shadow: 0 0 0 3px rgba(110, 153, 226, 0.2);
+}
+html[data-theme="dark"] .mc-auth__role-option--active .material-symbols-outlined {
+  color: #4167b2;
+}
+html[data-theme="dark"] .mc-auth__error {
+  color: #ff9eaa;
+}
+html[data-theme="dark"] .mc-auth__notice {
+  color: #91b5f2;
+}
 html[data-theme="dark"] .mc-auth__demo button,
 html[data-theme="dark"] .mc-auth__input {
   background: #12223a;
@@ -8373,6 +8526,25 @@ html[data-theme="dark"] .mc-auth__input input,
 html[data-theme="dark"] .mc-auth__input select {
   background: transparent !important;
   color: #edf4ff;
+}
+
+html[data-theme="dark"] .mc-auth__input input:-webkit-autofill,
+html[data-theme="dark"] .mc-auth__input input:-webkit-autofill:hover,
+html[data-theme="dark"] .mc-auth__input input:-webkit-autofill:focus,
+html[data-theme="dark"] .mc-auth__input input:-webkit-autofill:active {
+  border: 0 !important;
+  -webkit-text-fill-color: #edf4ff !important;
+  caret-color: #edf4ff;
+  -webkit-box-shadow: 0 0 0 1000px #12223a inset !important;
+  box-shadow: 0 0 0 1000px #12223a inset !important;
+  background-color: #12223a !important;
+  background-clip: padding-box;
+}
+
+html[data-theme="dark"] .mc-auth__input input:autofill {
+  color: #edf4ff !important;
+  background-color: #12223a !important;
+  box-shadow: 0 0 0 1000px #12223a inset !important;
 }
 
 html[data-theme="dark"] .mc-auth__input input::placeholder {

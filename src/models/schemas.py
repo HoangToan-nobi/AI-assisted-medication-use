@@ -83,6 +83,7 @@ class GoogleLinkRequest(GoogleCredentialRequest):
 
 class MessageResponse(BaseModel):
     message: str
+    code: str | None = None
     account_status: str | None = None
     email: str | None = None
 

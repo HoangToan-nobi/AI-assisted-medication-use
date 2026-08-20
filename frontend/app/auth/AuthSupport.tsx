@@ -67,10 +67,9 @@ export function AuthIconButton({ children, ...props }: ButtonHTMLAttributes<HTML
 }
 
 export function AuthNotice({ tone, children }: { tone: "info" | "success" | "error" | "pending"; children: ReactNode }) {
-  const icon = tone === "success" ? "check_circle" : tone === "error" ? "error" : tone === "pending" ? "hourglass_top" : "info";
-  return <div className={`${styles.notice} ${styles[tone]}`} role={tone === "error" ? "alert" : "status"} aria-live="polite">
-    <MaterialIcon name={icon} size={20} filled={tone === "success"} /><span>{children}</span>
-  </div>;
+  return <p className={`${styles.notice} ${styles[tone]}`} role={tone === "error" ? "alert" : "status"} aria-live="polite">
+    {children}
+  </p>;
 }
 
 export function AuthPageFooter({ children = "Quay lại đăng nhập" }: { children?: ReactNode }) {

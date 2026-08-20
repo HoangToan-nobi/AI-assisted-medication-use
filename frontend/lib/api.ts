@@ -168,7 +168,7 @@ export type AuthResponse = {
   account_status: string;
 };
 
-export type AuthMessage = { message: string; account_status?: string | null; email?: string | null };
+export type AuthMessage = { message: string; code?: string | null; account_status?: string | null; email?: string | null };
 export type GoogleAuthResult = AuthResponse | {
   code: "REGISTRATION_REQUIRED" | "ACCOUNT_LINK_REQUIRED" | "PHARMACIST_APPROVAL_PENDING" | "EMAIL_VERIFICATION_REQUIRED";
   message?: string;
