@@ -7287,6 +7287,7 @@ html[data-theme="dark"] .mc-auth__tab--active {
   color: #fff;
 }
 html[data-theme="dark"] .mc-auth__demo button,
+html[data-theme="dark"] .mc-auth__google-btn,
 html[data-theme="dark"] .mc-auth__input {
   background: #12223a;
   border-color: #3d5a80;
