@@ -373,7 +373,13 @@ export type AdminUser = {
 
 export type AdminUsersResponse = { items: AdminUser[]; total: number };
 export type AdminDrugItem = { id: string; name: string; detail: string | null; source: string | null };
-export type AdminDrugDataResponse = { items: AdminDrugItem[]; total: number };
+export type AdminDrugDataResponse = {
+  items: AdminDrugItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+};
 export type AdminFeedback = {
   id: string;
   user_id: string;
@@ -401,8 +407,8 @@ export const updateAdminUserStatus = (userId: string, accountStatus: "active" | 
     method: "POST",
     body: JSON.stringify({ account_status: accountStatus }),
   });
-export const listAdminDrugData = (q = "", kind: "medication" | "product" = "medication") => {
-  const query = new URLSearchParams({ q, kind });
+export const listAdminDrugData = (q = "", kind: "medication" | "product" = "medication", page = 1, pageSize = 24) => {
+  const query = new URLSearchParams({ q, kind, page: String(page), page_size: String(pageSize) });
   return request<AdminDrugDataResponse>(`/api/v1/admin/drug-data?${query}`);
 };
 export const listAdminFeedback = (status = "") =>

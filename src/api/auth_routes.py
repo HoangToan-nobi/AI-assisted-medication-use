@@ -1,5 +1,6 @@
 import hashlib
 from datetime import datetime, timedelta
+from time import monotonic
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse
@@ -69,6 +70,13 @@ admin_router = APIRouter(prefix="/admin", tags=["admin"])
 ACCESS_COOKIE = "medguard_access"
 REFRESH_COOKIE = "medguard_refresh"
 CSRF_COOKIE = "medguard_csrf"
+ADMIN_OVERVIEW_CACHE_TTL_SECONDS = 30
+_admin_overview_cache: tuple[float, AdminOverview] | None = None
+
+
+def _invalidate_admin_overview_cache() -> None:
+    global _admin_overview_cache
+    _admin_overview_cache = None
 
 
 def _cookie_options() -> dict:
@@ -370,6 +378,7 @@ async def approve_pharmacist(user_id: str, background: BackgroundTasks, _: User 
     user.account_status = "active"
     user.ly_do_tu_choi = None
     db.commit()
+    _invalidate_admin_overview_cache()
     background.add_task(send_pharmacist_decision_email, user.email, True)
     return MessageResponse(message="Đã duyệt tài khoản dược sĩ", account_status="active")
 
@@ -383,12 +392,18 @@ async def reject_pharmacist(user_id: str, payload: RejectPharmacistRequest, back
     user.account_status = "active"
     user.ly_do_tu_choi = payload.ly_do.strip()
     db.commit()
+    _invalidate_admin_overview_cache()
     background.add_task(send_pharmacist_decision_email, user.email, False, user.ly_do_tu_choi)
     return MessageResponse(message="Đã từ chối vai trò dược sĩ; tài khoản chuyển thành người dùng", account_status="active")
 
 
 @admin_router.get("/overview", response_model=AdminOverview)
 async def admin_overview(_: User = Depends(require_role("admin")), db: Session = Depends(get_db)) -> AdminOverview:
+    global _admin_overview_cache
+    now = monotonic()
+    if _admin_overview_cache and now - _admin_overview_cache[0] < ADMIN_OVERVIEW_CACHE_TTL_SECONDS:
+        return _admin_overview_cache[1]
+
     statement = select(
         func.count(User.id).label("total_users"),
         func.coalesce(func.sum(case((User.vai_tro == "patient", 1), else_=0)), 0).label("patients"),
@@ -409,7 +424,7 @@ async def admin_overview(_: User = Depends(require_role("admin")), db: Session =
         .label("open_feedback"),
     )
     stats = db.execute(statement).mappings().one()
-    return AdminOverview(
+    overview = AdminOverview(
         total_users=stats["total_users"] or 0,
         patients=stats["patients"] or 0,
         pharmacists=stats["pharmacists"] or 0,
@@ -422,6 +437,8 @@ async def admin_overview(_: User = Depends(require_role("admin")), db: Session =
         disease_interactions=stats["disease_interactions"] or 0,
         open_feedback=stats["open_feedback"] or 0,
     )
+    _admin_overview_cache = (now, overview)
+    return overview
 
 
 @admin_router.get("/users", response_model=AdminUsersResponse)
@@ -480,6 +497,7 @@ async def update_user_status(
             RefreshSession.revoked_at.is_(None),
         ).update({RefreshSession.revoked_at: func.now()}, synchronize_session=False)
     db.commit()
+    _invalidate_admin_overview_cache()
     action = "khóa" if payload.account_status == "locked" else "mở khóa"
     return MessageResponse(message=f"Đã {action} tài khoản", account_status=payload.account_status)
 
@@ -488,6 +506,8 @@ async def update_user_status(
 async def admin_drug_data(
     q: str = Query(default="", max_length=255),
     kind: str = Query(default="medication"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=24, ge=1, le=100),
     _: User = Depends(require_role("admin")),
     db: Session = Depends(get_db),
 ) -> AdminDrugDataResponse:
@@ -497,16 +517,22 @@ async def admin_drug_data(
         if q.strip():
             query = query.filter(Product.ten_thuoc.ilike(pattern))
         total = query.count()
-        rows = query.order_by(Product.ten_thuoc).limit(100).all()
+        rows = query.order_by(Product.ten_thuoc).offset((page - 1) * page_size).limit(page_size).all()
         items = [AdminDrugItem(id=row.id, name=row.ten_thuoc, detail=row.loai, source=row.nguon_du_lieu) for row in rows]
     else:
         query = db.query(Medication)
         if q.strip():
             query = query.filter(or_(Medication.ten_chuan_hoa.ilike(pattern), Medication.hoat_chat.ilike(pattern)))
         total = query.count()
-        rows = query.order_by(Medication.ten_chuan_hoa).limit(100).all()
+        rows = query.order_by(Medication.ten_chuan_hoa).offset((page - 1) * page_size).limit(page_size).all()
         items = [AdminDrugItem(id=row.id, name=row.ten_chuan_hoa, detail=row.hoat_chat, source=row.nguon_du_lieu) for row in rows]
-    return AdminDrugDataResponse(items=items, total=total)
+    return AdminDrugDataResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=(total + page_size - 1) // page_size,
+    )
 
 
 @admin_router.get("/feedback", response_model=list[FeedbackInfo])
@@ -547,16 +573,19 @@ async def update_feedback(
     feedback = db.get(FeedbackReport, feedback_id)
     if feedback is None:
         raise HTTPException(status_code=404, detail="Không tìm thấy phản hồi")
+    user = db.get(User, feedback.user_id)
+    user_name = user.ho_ten if user else "Người dùng"
+    user_email = user.email if user else ""
     feedback.status = payload.status
     feedback.resolution_note = payload.resolution_note.strip() if payload.resolution_note else None
     feedback.ngay_cap_nhat = datetime.utcnow()
     db.commit()
-    user = db.get(User, feedback.user_id)
+    _invalidate_admin_overview_cache()
     return FeedbackInfo(
         id=feedback.id,
         user_id=feedback.user_id,
-        user_name=user.ho_ten if user else "Người dùng",
-        user_email=user.email if user else "",
+        user_name=user_name,
+        user_email=user_email,
         category=feedback.category,
         title=feedback.title,
         description=feedback.description,

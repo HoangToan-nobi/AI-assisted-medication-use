@@ -9890,6 +9890,10 @@ html[data-theme="dark"] .profile-tabs__item--active {
 .admin-drug-card small { display: flex; align-items: center; gap: 5px; color: #8090a6; }
 .admin-info-note { margin-top: 18px; align-items: flex-start; }
 .admin-info-note p { margin: 0; line-height: 1.5; }
+.admin-pagination { margin-top: 18px; display: flex; justify-content: center; align-items: center; gap: 14px; }
+.admin-pagination button { min-width: 124px; }
+.admin-pagination > span { color: #718199; font-size: 13px; }
+.admin-pagination > span strong { color: #2f466b; }
 
 .admin-feedback-list { display: grid; gap: 14px; }
 .admin-feedback-card { padding: 20px; }
@@ -9970,6 +9974,9 @@ html[data-theme="dark"] .admin-segmented button.active { color: #c7d9fa; backgro
   .admin-segmented button { flex: 1; justify-content: center; }
   .admin-list-meta span { display: none; }
   .admin-drug-grid { grid-template-columns: 1fr; }
+  .admin-pagination { justify-content: space-between; gap: 8px; }
+  .admin-pagination button { min-width: 0; padding-inline: 10px; }
+  .admin-pagination > span { font-size: 12px; }
   .admin-pharmacist-card dl { grid-template-columns: 1fr; }
   .admin-pharmacist-card__header small { display: none; }
   .admin-pharmacist-card__actions, .admin-feedback-editor > div, .admin-modal__actions { flex-direction: column-reverse; }

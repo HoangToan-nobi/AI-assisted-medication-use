@@ -143,6 +143,9 @@ class AdminDrugItem(BaseModel):
 class AdminDrugDataResponse(BaseModel):
     items: list[AdminDrugItem]
     total: int
+    page: int
+    page_size: int
+    total_pages: int
 
 
 class FeedbackCreateRequest(BaseModel):
