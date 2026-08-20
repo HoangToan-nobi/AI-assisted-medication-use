@@ -88,6 +88,19 @@ class AuthEvent(Base):
     __table_args__ = (Index("idx_auth_events_action_key_time", "action", "key_hash", "ngay_tao"),)
 
 
+class FeedbackReport(Base):
+    __tablename__ = "feedback_reports"
+    id = Column(String, primary_key=True, default=_uuid)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    category = Column(String(30), nullable=False, default="other")
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=False)
+    status = Column(String(30), nullable=False, default="new")
+    resolution_note = Column(Text, nullable=True)
+    ngay_tao = Column(DateTime, default=datetime.utcnow, nullable=False)
+    ngay_cap_nhat = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class PatientProfile(Base):
     __tablename__ = "patient_profiles"
     id = Column(String, primary_key=True, default=_uuid)

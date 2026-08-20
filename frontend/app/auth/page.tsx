@@ -71,7 +71,7 @@ export default function AuthPage() {
       message: wasRegistration ? `Chào mừng ${auth.ho_ten} đến với MediCheck.` : `Chào mừng ${auth.ho_ten} quay lại MediCheck.`,
     });
     router.replace(
-      auth.vai_tro === "patient" ? "/dashboard" : auth.vai_tro === "admin" ? "/admin/pharmacists" : "/pharmacist-dashboard",
+      auth.vai_tro === "patient" ? "/dashboard" : auth.vai_tro === "admin" ? "/admin" : "/pharmacist-dashboard",
     );
   }
 

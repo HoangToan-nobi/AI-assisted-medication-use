@@ -1,17 +1,37 @@
 import hashlib
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from src.api.deps import get_current_user, require_role
 from src.config import get_settings
-from src.db.models import AuthEvent, AuthIdentity, RefreshSession, User
+from src.db.models import (
+    AuthEvent,
+    AuthIdentity,
+    DiseaseInteraction,
+    FeedbackReport,
+    FoodInteraction,
+    Interaction,
+    Medication,
+    Product,
+    RefreshSession,
+    User,
+)
 from src.db.session import get_db
 from src.models.schemas import (
+    AdminAccountStatusRequest,
+    AdminDrugDataResponse,
+    AdminDrugItem,
+    AdminOverview,
+    AdminUserInfo,
+    AdminUsersResponse,
     AuthResponse,
     EmailRequest,
+    FeedbackInfo,
+    FeedbackUpdateRequest,
     GoogleCredentialRequest,
     GoogleLinkRequest,
     GoogleRegistrationRequest,
@@ -365,3 +385,164 @@ async def reject_pharmacist(user_id: str, payload: RejectPharmacistRequest, back
     db.commit()
     background.add_task(send_pharmacist_decision_email, user.email, False, user.ly_do_tu_choi)
     return MessageResponse(message="Đã từ chối vai trò dược sĩ; tài khoản chuyển thành người dùng", account_status="active")
+
+
+@admin_router.get("/overview", response_model=AdminOverview)
+async def admin_overview(_: User = Depends(require_role("admin")), db: Session = Depends(get_db)) -> AdminOverview:
+    role_counts = dict(db.query(User.vai_tro, func.count(User.id)).group_by(User.vai_tro).all())
+    return AdminOverview(
+        total_users=db.query(func.count(User.id)).scalar() or 0,
+        patients=role_counts.get("patient", 0),
+        pharmacists=role_counts.get("pharmacist", 0),
+        locked_users=db.query(func.count(User.id)).filter(User.account_status == "locked").scalar() or 0,
+        pending_pharmacists=db.query(func.count(User.id)).filter(User.account_status == "pending_pharmacist").scalar() or 0,
+        medications=db.query(func.count(Medication.id)).scalar() or 0,
+        products=db.query(func.count(Product.id)).scalar() or 0,
+        drug_interactions=db.query(func.count(Interaction.id)).scalar() or 0,
+        food_interactions=db.query(func.count(FoodInteraction.id)).scalar() or 0,
+        disease_interactions=db.query(func.count(DiseaseInteraction.id)).scalar() or 0,
+        open_feedback=db.query(func.count(FeedbackReport.id)).filter(FeedbackReport.status != "resolved").scalar() or 0,
+    )
+
+
+@admin_router.get("/users", response_model=AdminUsersResponse)
+async def admin_users(
+    q: str = Query(default="", max_length=255),
+    role: str | None = Query(default=None),
+    account_status: str | None = Query(default=None),
+    _: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> AdminUsersResponse:
+    query = db.query(User).filter(User.vai_tro.in_(("patient", "pharmacist")))
+    if q.strip():
+        pattern = f"%{q.strip()}%"
+        query = query.filter(or_(User.ho_ten.ilike(pattern), User.email.ilike(pattern)))
+    if role in {"patient", "pharmacist"}:
+        query = query.filter(User.vai_tro == role)
+    if account_status:
+        query = query.filter(User.account_status == account_status)
+    total = query.count()
+    users = query.order_by(User.ngay_tao.desc()).limit(200).all()
+    return AdminUsersResponse(
+        total=total,
+        items=[
+            AdminUserInfo(
+                user_id=user.id,
+                ho_ten=user.ho_ten,
+                email=user.email,
+                vai_tro=user.vai_tro,
+                account_status=user.account_status,
+                email_verified=user.email_verified_at is not None,
+                ngay_tao=user.ngay_tao,
+            )
+            for user in users
+        ],
+    )
+
+
+@admin_router.post("/users/{user_id}/status", response_model=MessageResponse)
+async def update_user_status(
+    user_id: str,
+    payload: AdminAccountStatusRequest,
+    admin: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> MessageResponse:
+    user = db.get(User, user_id)
+    if user is None or user.vai_tro == "admin":
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài khoản có thể quản lý")
+    if user.id == admin.id:
+        raise HTTPException(status_code=400, detail="Không thể thay đổi trạng thái tài khoản đang đăng nhập")
+    if user.account_status not in {"active", "locked"}:
+        raise HTTPException(status_code=409, detail="Tài khoản đang trong quy trình xác minh hoặc xét duyệt")
+    user.account_status = payload.account_status
+    if payload.account_status == "locked":
+        db.query(RefreshSession).filter(
+            RefreshSession.user_id == user.id,
+            RefreshSession.revoked_at.is_(None),
+        ).update({RefreshSession.revoked_at: datetime.utcnow()}, synchronize_session=False)
+    db.commit()
+    action = "khóa" if payload.account_status == "locked" else "mở khóa"
+    return MessageResponse(message=f"Đã {action} tài khoản", account_status=payload.account_status)
+
+
+@admin_router.get("/drug-data", response_model=AdminDrugDataResponse)
+async def admin_drug_data(
+    q: str = Query(default="", max_length=255),
+    kind: str = Query(default="medication"),
+    _: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> AdminDrugDataResponse:
+    pattern = f"%{q.strip()}%"
+    if kind == "product":
+        query = db.query(Product)
+        if q.strip():
+            query = query.filter(Product.ten_thuoc.ilike(pattern))
+        total = query.count()
+        rows = query.order_by(Product.ten_thuoc).limit(100).all()
+        items = [AdminDrugItem(id=row.id, name=row.ten_thuoc, detail=row.loai, source=row.nguon_du_lieu) for row in rows]
+    else:
+        query = db.query(Medication)
+        if q.strip():
+            query = query.filter(or_(Medication.ten_chuan_hoa.ilike(pattern), Medication.hoat_chat.ilike(pattern)))
+        total = query.count()
+        rows = query.order_by(Medication.ten_chuan_hoa).limit(100).all()
+        items = [AdminDrugItem(id=row.id, name=row.ten_chuan_hoa, detail=row.hoat_chat, source=row.nguon_du_lieu) for row in rows]
+    return AdminDrugDataResponse(items=items, total=total)
+
+
+@admin_router.get("/feedback", response_model=list[FeedbackInfo])
+async def admin_feedback(
+    feedback_status: str | None = Query(default=None, alias="status"),
+    _: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> list[FeedbackInfo]:
+    query = db.query(FeedbackReport, User).join(User, User.id == FeedbackReport.user_id)
+    if feedback_status:
+        query = query.filter(FeedbackReport.status == feedback_status)
+    rows = query.order_by(FeedbackReport.ngay_tao.desc()).limit(200).all()
+    return [
+        FeedbackInfo(
+            id=feedback.id,
+            user_id=user.id,
+            user_name=user.ho_ten,
+            user_email=user.email,
+            category=feedback.category,
+            title=feedback.title,
+            description=feedback.description,
+            status=feedback.status,
+            resolution_note=feedback.resolution_note,
+            ngay_tao=feedback.ngay_tao,
+            ngay_cap_nhat=feedback.ngay_cap_nhat,
+        )
+        for feedback, user in rows
+    ]
+
+
+@admin_router.patch("/feedback/{feedback_id}", response_model=FeedbackInfo)
+async def update_feedback(
+    feedback_id: str,
+    payload: FeedbackUpdateRequest,
+    _: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> FeedbackInfo:
+    feedback = db.get(FeedbackReport, feedback_id)
+    if feedback is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy phản hồi")
+    feedback.status = payload.status
+    feedback.resolution_note = payload.resolution_note.strip() if payload.resolution_note else None
+    feedback.ngay_cap_nhat = datetime.utcnow()
+    db.commit()
+    user = db.get(User, feedback.user_id)
+    return FeedbackInfo(
+        id=feedback.id,
+        user_id=feedback.user_id,
+        user_name=user.ho_ten if user else "Người dùng",
+        user_email=user.email if user else "",
+        category=feedback.category,
+        title=feedback.title,
+        description=feedback.description,
+        status=feedback.status,
+        resolution_note=feedback.resolution_note,
+        ngay_tao=feedback.ngay_tao,
+        ngay_cap_nhat=feedback.ngay_cap_nhat,
+    )
