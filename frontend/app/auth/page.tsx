@@ -522,6 +522,7 @@ export default function AuthPage() {
           align-items: center;
           justify-content: center;
           gap: 10px;
+          width: 100%;
           min-height: 44px;
           margin-top: 10px;
           padding: 8px;
