@@ -31,6 +31,6 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD python -c "import os, urllib.request; urllib.request.urlopen(f'http://localhost:{os.environ.get(\"PORT\", 8000)}/health')" || exit 1
 
-# Validate production auth settings, migrate the database idempotently, seed
-# explicitly-enabled demo accounts, then replace the process with Uvicorn.
-CMD python scripts/start_server.py
+# Shell form (khong phai JSON array) de ${PORT} duoc expand - can cho Render/Fly/
+# Railway (tu gan bien PORT dong), fallback 8000 khi chay Docker thuong (vd docker-compose).
+CMD uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000}

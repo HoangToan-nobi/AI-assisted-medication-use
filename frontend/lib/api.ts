@@ -1,8 +1,4 @@
-// Vercel values are occasionally pasted with a trailing newline. Normalize at
-// build time so every request targets a valid origin and never `host\n/path`.
-const API_URL = (
-  process.env.NEXT_PUBLIC_API_URL?.trim() || "http://localhost:8000"
-).replace(/\/+$/, "");
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 let csrfCache: string | undefined;
 
 export type Severity = "nhe" | "trung_binh" | "nang" | "chua_phan_loai";

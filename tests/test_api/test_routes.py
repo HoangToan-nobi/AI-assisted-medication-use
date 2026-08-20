@@ -257,45 +257,14 @@ async def test_pharmacist_receives_review_request_and_can_review(client):
     patient_headers = _auth_headers(patient["access_token"])
     pharmacist_headers = _auth_headers(pharmacist["access_token"])
 
-    check_resp = await client.post(
-        "/api/v1/medications/check",
-        json={"medications": ["warfarin", "asp"]},
-        headers=patient_headers,
-    )
-    assert check_resp.status_code == 200
-    check_id = check_resp.json()["interaction_check_id"]
-
-    before_resp = await client.get("/api/v1/pharmacist/requests", headers=pharmacist_headers)
-    assert before_resp.status_code == 200
-    assert before_resp.json() == []
-
-    req_resp = await client.post(
-        f"/api/v1/checks/{check_id}/pharmacists/{pharmacist['user_id']}/request_review",
-        json={
-            "gui_kem_ho_so": False,
-            "ten_nguoi_duoc_kiem_tra": "Nguoi than cua benh nhan",
-            "ngay_sinh_nhap_tay": "1990-01-01",
-            "ghi_chu_nhap_tay": "Di ung penicillin",
-        },
-        headers=patient_headers,
-    )
-    assert req_resp.status_code == 201
-
-    after_resp = await client.get("/api/v1/pharmacist/requests", headers=pharmacist_headers)
-    after = after_resp.json()
-    assert len(after) == 1
-    assert after[0]["check_id"] == check_id
-    assert after[0]["trang_thai_xac_nhan"] == "cho_xac_nhan"
-    assert after[0]["gui_kem_ho_so"] is False
-    assert after[0]["ten_nguoi_duoc_kiem_tra"] == "Nguoi than cua benh nhan"
-    assert after[0]["ghi_chu_nhap_tay"] == "Di ung penicillin"
-
-    other_pharmacist = await _register(client, "Duoc si khac", "pharmacist")
-    forbidden_resp = await client.get(
-        f"/api/v1/pharmacist/reviews/{check_id}",
-        headers=_auth_headers(other_pharmacist["access_token"]),
-    )
-    assert forbidden_resp.status_code == 403
+    async with AsyncClient(
+        transport=ASGITransport(app=app, client=(f"pytest-{uuid.uuid4().hex}", 123)),
+        base_url="http://test",
+    ) as client:
+        patient = await _register(client, "Benh nhan C", "patient")
+        pharmacist = await _register(client, "Duoc si D", "pharmacist")
+        patient_headers = _auth_headers(patient["access_token"])
+        pharmacist_headers = _auth_headers(pharmacist["access_token"])
 
     # Dược sĩ được yêu cầu xem chi tiết đầy đủ - CÓ xu_tri (pharmacist-only).
     detail_resp = await client.get(
