@@ -34,8 +34,8 @@ const DRAFT_KEY = "medguard_interaction_draft";
 const RESULT_KEY = "medguard_interaction_result";
 // Ảnh chụp danh sách đơn thuốc (đã lọc rỗng) TẠI THỜI ĐIỂM chạy check tạo ra
 // RESULT_KEY - phải dùng đúng danh sách này (không phải state `prescriptions` đang
-// sống, có thể đã bị sửa tiếp) để dựng đồ thị, vì chỉ số đơn trong đó khớp với
-// don_a_index/don_b_index mà backend trả về trong result.prescription_explanations.
+// sống, có thể đã bị sửa tiếp) để dựng lại đúng đồ thị/origins phía client (xem
+// drugOrigins trong lib/prescription.ts), khớp với dữ liệu lúc chạy check.
 const RESULT_PRESCRIPTIONS_KEY = "medguard_interaction_result_prescriptions";
 
 function renumberDefaultPrescriptions(prescriptions: Prescription[]): Prescription[] {

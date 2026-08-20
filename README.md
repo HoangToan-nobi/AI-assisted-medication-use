@@ -52,15 +52,11 @@ git clone <repo-url>
 cd P-005
 ```
 
-### 2. Database — Postgres chung (Neon), không cần tải file `app.db` nữa
+### 2. Đặt file dữ liệu `app.db`
 
-Database đã chuyển từ file SQLite local (`data/app.db`, ~375MB, quá nặng để đưa vào git) sang **Postgres host chung trên Neon** — cả team dùng chung 1 database qua mạng, không ai phải tải/gửi file nữa.
+File `data/app.db` (~280MB, đã seed sẵn 1503 thuốc + 15140 cặp tương tác DDInter 2.0) quá nặng nên không nằm trong git — nhận qua kênh riêng, copy vào đúng đường dẫn `data/app.db` (cùng cấp với `Dockerfile`).
 
-Xin connection string nhánh **`dev`** từ leader/thành viên đã setup Neon (dạng `postgresql://user:pass@...neon.tech/neondb?sslmode=require`), điền vào biến `DATABASE_URL` trong `.env` ở bước 3.
-
-- Nhánh `dev`: team dùng chung để code/test hàng ngày.
-- Nhánh `main`: dữ liệu sạch, chỉ dùng khi deploy production — connection string riêng, không chia sẻ rộng.
-- Vẫn hỗ trợ SQLite local (`DATABASE_URL=sqlite:///./data/app.db`) nếu muốn dev offline không cần mạng, nhưng sẽ không đồng bộ dữ liệu với team.
+Không có file này, backend vẫn khởi động được nhưng mọi tra cứu thuốc sẽ trả "không có dữ liệu".
 
 ### 3. Tạo file cấu hình `.env`
 
@@ -101,13 +97,28 @@ Chỉ liệt kê tên biến — giá trị thật nằm trong `.env` (không co
 | `DEEPSEEK_API_KEY` | ✅ | API key DeepSeek (free tại [platform.deepseek.com](https://platform.deepseek.com)). Không có key này, các cặp thuốc mức nhẹ/trung bình/nặng sẽ không sinh được giải thích (agent cần gọi LLM thật). |
 | `DEEPSEEK_BASE_URL` | — | Mặc định `https://api.deepseek.com`, không cần đổi. |
 | `MODEL_NAME` | — | Mặc định `deepseek-chat`. |
-| `DATABASE_URL` | ✅ | Connection string Neon (nhánh `dev`) — xin từ leader/team, xem bước 2. Mặc định trong `.env.example` là `sqlite:///./data/app.db` (chỉ dùng khi dev offline). |
+| `DATABASE_URL` | — | Mặc định `sqlite:///./data/app.db`, khớp với file ở bước 2. |
 | `SECRET_KEY` | ✅ (khi deploy thật) | Secret ký JWT (`src/services/auth.py`). Có giá trị dev mặc định, **phải đổi trước khi deploy public**. |
 | `APP_ENV` | — | `development` / `production` / `test`. |
 | `APP_PORT`, `APP_HOST` | — | Mặc định `8000` / `0.0.0.0`. |
 | `CORS_ORIGINS` | — | Domain frontend được phép gọi API. |
+| `FRONTEND_URL` | ✅ | URL frontend dùng trong liên kết xác minh email/đặt lại mật khẩu. |
+| `GOOGLE_CLIENT_ID`, `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | ✅ | Web Client ID của Google Identity Services; hai phía phải dùng cùng giá trị. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | ✅ | SMTP gửi email xác minh và đặt lại mật khẩu. |
+| `COOKIE_SECURE`, `COOKIE_SAMESITE`, `COOKIE_DOMAIN` | ✅ production | Chính sách cookie phiên; dùng `Secure=true`, và `SameSite=none` nếu frontend/API khác site. |
+| `ENABLE_DEMO_ACCOUNTS` | — | Chỉ bật ở môi trường demo; mặc định tắt. |
 | `LOG_LEVEL` | — | `DEBUG` / `INFO` / `WARNING` / `ERROR`. |
 | `AI_LOG_SERVER`, `AI_LOG_API_KEY` | ✅ (BTC cấp) | Server chấm điểm AI Usage Logging — key riêng từ link mời BTC, không dùng giá trị mẫu trong `.env.example`. |
+
+### Thiết lập xác thực production
+
+1. Tạo OAuth Client loại **Web application** trong Google Cloud, cấu hình consent screen và thêm `http://localhost:3000` cùng domain production vào **Authorized JavaScript origins**.
+2. Điền Google Client ID và SMTP trong `.env`; không cần Google Client Secret cho luồng Sign in with Google bằng ID token.
+3. Sao lưu/tạo nhánh Neon rồi chạy `python scripts/migrate_auth.py`. Migration chuẩn hóa email, giữ nguyên dữ liệu liên quan và khóa tài khoản cũ không phải demo.
+4. Tạo quản trị viên đầu tiên bằng `python scripts/create_admin.py --email admin@example.com --name "Admin"`.
+5. Production phải chạy HTTPS, dùng `SECRET_KEY` ngẫu nhiên mạnh, `COOKIE_SECURE=true`, và CORS chỉ chứa domain frontend chính xác.
+
+Frontend không lưu credential trong `localStorage`; access/refresh session nằm trong cookie HttpOnly. Tài khoản email phải bấm link xác minh, còn tài khoản dược sĩ chỉ được cấp quyền sau khi admin duyệt số CCHN và nơi công tác.
 
 ## Sample Queries
 
@@ -183,6 +194,18 @@ Danh sách endpoint đầy đủ + request/response schema: [http://localhost:80
 | Lê Thị Linh | Data, designer, frontend | 2A202601441
 | Hoàng Sỹ Toàn (Leader) | Data, PM, OCR | 2A202601273
 | Đàm Lê Minh Quân | Data, Backend, AI agent | 2A202601451
+
+## Demo (MVP)
+
+Xem video giới thiệu và quy trình hoạt động các luồng tra cứu (3 phút) trên YouTube:
+
+[![MediCheck MVP Demo](https://img.youtube.com/vi/mrw6JcRn0yU/maxresdefault.jpg)](https://www.youtube.com/watch?v=mrw6JcRn0yU)
+
+> ⏱️ **Nội dung video:**
+> - `00:00` - Giới thiệu tổng quan
+> - `00:10` - Luồng Bệnh nhân chính
+> - `01:35` - Luồng Dược sĩ chính
+> - `02:30` - Tính năng bổ trợ
 
 ## Live URL
 

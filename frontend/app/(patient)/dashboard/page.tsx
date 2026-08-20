@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Disclaimer from "@/components/Disclaimer";
@@ -8,15 +8,11 @@ import MaterialIcon from "@/components/MaterialIcon";
 import {
   ApiError,
   checkProducts,
-  listPatientChecks,
-  listPatientNotifications,
-  listPatientPrescriptions,
   markNotificationRead,
   removePatientMedication,
-  type InteractionCheckSummary,
   type NotificationItem,
-  type PatientPrescription,
 } from "@/lib/api";
+import { usePatientChecks, usePatientNotifications, usePatientPrescriptions } from "@/lib/hooks";
 import { getSession } from "@/lib/auth";
 import { formatVietnameseDateTime } from "@/lib/datetime";
 import MediFox from "@/components/MediFox";
@@ -26,30 +22,38 @@ export default function PatientDashboardPage() {
   const router = useRouter();
   const { confirm } = useMediAlert();
   const session = getSession();
-  const [prescriptions, setPrescriptions] = useState<PatientPrescription[]>([]);
-  const [history, setHistory] = useState<InteractionCheckSummary[]>([]);
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  // Cache qua SWR (frontend/lib/hooks.ts) - quay lại trang này sau khi ghé trang
+  // khác hiện NGAY dữ liệu đã tải trước đó thay vì phải đợi gọi API lại từ đầu.
+  const {
+    data: prescriptions = [],
+    isLoading: prescriptionsLoading,
+    mutate: mutatePrescriptions,
+  } = usePatientPrescriptions(session?.userId, session?.accessToken);
+  const { data: history = [], isLoading: historyLoading } = usePatientChecks(
+    session?.userId,
+    session?.accessToken
+  );
+  const {
+    data: notifications = [],
+    isLoading: notificationsLoading,
+    mutate: mutateNotifications,
+  } = usePatientNotifications(session?.userId, session?.accessToken, { refreshInterval: 30000 });
+
+  const loading = prescriptionsLoading || historyLoading || notificationsLoading;
   const [checking, setChecking] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!session) return;
-    Promise.all([
-      listPatientPrescriptions(session.userId, session.accessToken),
-      listPatientChecks(session.userId, session.accessToken),
-      listPatientNotifications(session.userId, session.accessToken),
-    ])
-      .then(([saved, checks, notifs]) => { setPrescriptions(saved); setHistory(checks); setNotifications(notifs); })
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Không tải được dữ liệu"))
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   async function handleOpenNotification(n: NotificationItem) {
     if (!session) return;
-    try { await markNotificationRead(session.userId, n.id, session.accessToken); } catch { /* điều hướng dù lỗi mark-read, không chặn người dùng */ }
+    try {
+      await markNotificationRead(session.userId, n.id, session.accessToken);
+      mutateNotifications(
+        (prev) => prev?.map((item) => (item.id === n.id ? { ...item, da_doc: true } : item)),
+        { revalidate: false }
+      );
+    } catch { /* điều hướng dù lỗi mark-read, không chặn người dùng */ }
     if (n.interaction_check_id) router.push(`/check-result?checkId=${n.interaction_check_id}`);
   }
 
@@ -64,7 +68,8 @@ export default function PatientDashboardPage() {
         prescriptions
           .filter((p) => p.medications.length > 0)
           .map((p) => ({ label: p.label, products: p.medications.map((m) => m.ten_thuoc) })),
-        session.accessToken
+        session.accessToken,
+        { personalized: true }
       );
       window.sessionStorage.setItem("medguard_last_check", JSON.stringify(result));
       router.push("/check-result");
@@ -77,20 +82,28 @@ export default function PatientDashboardPage() {
     setDeletingId(medicationId); setError(null);
     try {
       await removePatientMedication(session.userId, medicationId, session.accessToken);
-      setPrescriptions((prev) => prev.map((p) => (p.id === prescriptionId ? { ...p, medications: p.medications.filter((m) => m.id !== medicationId) } : p)));
+      mutatePrescriptions(
+        (prev) =>
+          prev?.map((p) =>
+            p.id === prescriptionId
+              ? { ...p, medications: p.medications.filter((m) => m.id !== medicationId) }
+              : p
+          ),
+        { revalidate: false }
+      );
     } catch (err) { setError(err instanceof ApiError ? err.message : "Không xóa được thuốc"); }
     finally { setDeletingId(null); }
   }
 
   if (!session) return null;
   const unresolvedSevere = history.filter((h) => h.co_canh_bao_nang && h.trang_thai_xac_nhan !== "da_xac_nhan").length;
-  const firstName = session.hoTen.split(" ").pop() || session.hoTen;
+  const fullName = session.hoTen.trim() || "bạn";
 
   return (
     <main className="dashboard-page">
       <section className="dashboard-hero dashboard-hero--patient">
         <div>
-          <h1 className="dashboard-title" style={{ margin: 0, fontSize: "28px" }}>Xin chào, {firstName}</h1>
+          <h1 className="dashboard-title" style={{ margin: 0, fontSize: "28px" }}>Xin chào, {fullName}</h1>
           <p className="dashboard-subtitle">Hãy dành vài phút kiểm tra đơn thuốc để dùng thuốc an toàn và yên tâm hơn mỗi ngày.</p>
         </div>
         <MediFox variant="welcome" className="dashboard-hero__mascot" alt="Cáo Medi đồng hành cùng bạn" />

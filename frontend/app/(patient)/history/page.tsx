@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import MaterialIcon from "@/components/MaterialIcon";
-import { ApiError, listPatientChecks, deletePatientCheck, deleteAllPatientChecks, type InteractionCheckSummary } from "@/lib/api";
+import { ApiError, deletePatientCheck, deleteAllPatientChecks } from "@/lib/api";
+import { usePatientChecks } from "@/lib/hooks";
 import { getSession } from "@/lib/auth";
 import { formatVietnameseDateTime } from "@/lib/datetime";
 import MediFox from "@/components/MediFox";
@@ -27,21 +28,20 @@ export default function HistoryPage() {
   const router = useRouter();
   const { confirm, notify } = useMediAlert();
   const session = getSession();
-  const [checks, setChecks] = useState<InteractionCheckSummary[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>("all");
 
-  const fetchChecks = () => {
-    if (!session) return;
-    listPatientChecks(session.userId, session.accessToken)
-      .then(setChecks)
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Không tải được lịch sử kiểm tra"));
-  };
-
-  useEffect(() => {
-    fetchChecks();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // usePatientChecks() dùng chung cache SWR với dashboard - quay lại trang này hiện
+  // ngay dữ liệu đã tải trước đó. `isLoading` chỉ true ở lần tải ĐẦU TIÊN (chưa có
+  // gì trong cache) - dùng để tránh hiện "Chưa có lịch sử" trước khi biết chắc thật
+  // sự trống hay chỉ đang chờ API trả lời (bug cũ: state ban đầu là mảng rỗng nên
+  // luôn hiện "Chưa có lịch sử" trong lúc chờ, dù sau đó có data thật).
+  const {
+    data: checks = [],
+    isLoading,
+    error: fetchError,
+    mutate,
+  } = usePatientChecks(session?.userId, session?.accessToken);
+  const error = fetchError ? "Không tải được lịch sử kiểm tra" : null;
 
   // Sắp mới -> cũ (backend đã sort sẵn, sort lại phía client cho chắc), rồi lọc
   // theo nhãn trạng thái xác nhận đang chọn.
@@ -57,7 +57,7 @@ export default function HistoryPage() {
     if (!(await confirm({ title: "Xóa toàn bộ lịch sử?", message: "Bạn có chắc chắn muốn xóa tất cả lịch sử tra cứu?", confirmLabel: "Xóa tất cả", tone: "danger" }))) return;
     try {
       await deleteAllPatientChecks(session.userId, session.accessToken);
-      fetchChecks();
+      mutate();
     } catch (err) {
       await notify({ title: "Không thể xóa lịch sử", message: err instanceof ApiError ? err.message : "Lỗi khi xóa tất cả lịch sử", tone: "danger" });
     }
@@ -69,7 +69,7 @@ export default function HistoryPage() {
     if (!(await confirm({ title: "Xóa lịch sử tra cứu?", message: "Bạn có chắc chắn muốn xóa lịch sử này?", confirmLabel: "Xóa lịch sử", tone: "danger" }))) return;
     try {
       await deletePatientCheck(session.userId, checkId, session.accessToken);
-      fetchChecks();
+      mutate();
     } catch (err) {
       await notify({ title: "Không thể xóa lịch sử", message: err instanceof ApiError ? err.message : "Lỗi khi xóa lịch sử", tone: "danger" });
     }
@@ -90,6 +90,7 @@ export default function HistoryPage() {
           </button>
         )}
       </section>
+      {isLoading && <div className="loading-row"><span className="spinner" /> Đang tải lịch sử...</div>}
       {error && <p className="error-text" role="alert">{error}</p>}
 
       {checks.length > 0 && (
@@ -103,7 +104,7 @@ export default function HistoryPage() {
         </div>
       )}
 
-      {checks.length === 0 && !error && (
+      {!isLoading && checks.length === 0 && !error && (
         <div className="empty-state">
           <MediFox variant="empty" className="empty-state__mascot" />
           <strong>Chưa có lịch sử kiểm tra</strong>

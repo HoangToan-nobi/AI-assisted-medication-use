@@ -26,7 +26,7 @@ export default function SearchBar({
           {label}
         </label>
       )}
-      <div className="search-bar__field">
+      <div className="search-bar__field icon-input-spacing">
         <MaterialIcon name={icon} size={20} className="search-bar__icon" />
         <input
           id={id}

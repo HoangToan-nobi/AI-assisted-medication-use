@@ -123,7 +123,7 @@ export default function PrescriptionPanel({ label, drugs, search, onAdd, onRemov
         </button>
       </div>
 
-      <div className="interaction-search__input">
+      <div className="interaction-search__input icon-input-spacing">
         <MaterialIcon name="search" size={19} />
         <input
           id={inputId}

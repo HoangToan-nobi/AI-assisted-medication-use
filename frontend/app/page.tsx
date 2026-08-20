@@ -2,7 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import {
   checkGuestProducts,
   checkProducts,
@@ -60,9 +65,9 @@ function Header() {
         />
       </Link>
       <nav className="mc-nav" aria-label="Điều hướng chính">
+        <ThemeModeToggle />
         <a href="#features">Tính năng</a>
         <a href="#about">Về MediCheck</a>
-        <ThemeModeToggle />
         <Link href="/auth" className="mc-login">
           Đăng nhập
         </Link>
@@ -77,6 +82,8 @@ type LandingCheck = {
   session: Session | null;
 };
 
+const LANDING_SEARCH_PLACEHOLDER = "Nhập tên thuốc, có thể thêm tối đa 3 thuốc";
+
 function HeroDrugSearch({
   onComplete,
 }: {
@@ -89,6 +96,41 @@ function HeroDrugSearch({
   const [showLoginToast, setShowLoginToast] = useState(false);
   const [toastLeaving, setToastLeaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [animatedPlaceholder, setAnimatedPlaceholder] = useState("");
+
+  useEffect(() => {
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (reducedMotion.matches) {
+      setAnimatedPlaceholder(LANDING_SEARCH_PLACEHOLDER);
+      return;
+    }
+
+    let visibleCharacters = 0;
+    let deleting = false;
+    let timer: number;
+
+    function typeNextFrame() {
+      setAnimatedPlaceholder(
+        LANDING_SEARCH_PLACEHOLDER.slice(0, visibleCharacters),
+      );
+
+      let delay = deleting ? 32 : 62;
+      if (!deleting && visibleCharacters === LANDING_SEARCH_PLACEHOLDER.length) {
+        deleting = true;
+        delay = 1500;
+      } else if (deleting && visibleCharacters === 0) {
+        deleting = false;
+        delay = 450;
+      } else {
+        visibleCharacters += deleting ? -1 : 1;
+      }
+
+      timer = window.setTimeout(typeNextFrame, delay);
+    }
+
+    typeNextFrame();
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const keyword = query.trim();
@@ -222,7 +264,7 @@ function HeroDrugSearch({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             aria-label="Nhập tên thuốc"
-            placeholder="Nhập tên thuốc, có thể thêm tối đa 3 thuốc"
+            placeholder={animatedPlaceholder}
           />
           <button type="submit">
             Tra cứu ngay <span aria-hidden="true">→</span>
@@ -318,7 +360,8 @@ function HeroSection({
         alt="Viên nang minh họa MediCheck"
         fill
         priority
-        sizes="(max-width: 800px) 50vw,800px"
+        quality={95}
+        sizes="(max-width: 760px) 145vw, 125vw"
       />
       <div className="mc-hero__overlay" />
       <div className="mc-hero__caption">
@@ -415,7 +458,7 @@ function MissionSection() {
 
 function AudienceSection() {
   return (
-    <section className="mc-shell mc-audience">
+    <section id="audience" className="mc-shell mc-audience">
       <div className="mc-audience__intro">
         <span className="mc-kicker">03 / FOR </span>
         <h2>
@@ -461,6 +504,49 @@ function CTASection() {
         Đăng ký ngay <span aria-hidden="true">↗</span>
       </Link>
     </section>
+  );
+}
+
+function LandingFooter() {
+  return (
+    <footer className="mc-footer">
+      <div className="mc-shell mc-footer__inner">
+        <div className="mc-footer__top">
+          <div className="mc-footer__brand">
+            <Link href="/" className="mc-footer__logo" aria-label="MediCheck - Trang chủ">
+              <Image src={asset("2-cropped.png")} alt="MediCheck" fill sizes="190px" />
+            </Link>
+            <p>
+              Tra cứu tương tác thuốc rõ ràng, có nguồn dữ liệu và luôn đặt an
+              toàn của người dùng lên trước.
+            </p>
+          </div>
+
+          <nav className="mc-footer__nav" aria-label="Điều hướng cuối trang">
+            <div>
+              <strong>Khám phá</strong>
+              <a href="#features">Tính năng</a>
+              <a href="#about">Về MediCheck</a>
+              <a href="#audience">Dành cho ai</a>
+            </div>
+            <div>
+              <strong>Sử dụng</strong>
+              <Link href="/interaction">Kiểm tra tương tác</Link>
+              <Link href="/auth">Đăng nhập</Link>
+              <Link href="/auth">Tạo tài khoản</Link>
+            </div>
+          </nav>
+        </div>
+
+        <div className="mc-footer__bottom">
+          <span>© 2026 MediCheck. Dữ liệu tham chiếu DDInter 2.0.</span>
+          <span>
+            Thông tin chỉ mang tính tham khảo, không thay thế tư vấn của bác sĩ
+            hoặc dược sĩ.
+          </span>
+        </div>
+      </div>
+    </footer>
   );
 }
 
@@ -811,6 +897,104 @@ export default function LandingPage() {
           background: #fff;
           color: #162d57;
         }
+        .mc-footer {
+          margin-top: 38px;
+          border-top: 1px solid #c7d8ef;
+          background:
+            radial-gradient(circle at 12% 0%, #aacbff4d, transparent 300px),
+            linear-gradient(180deg, #f3f8ff, #eaf2fd);
+        }
+        .mc-footer__inner {
+          padding: 52px 0 28px;
+        }
+        .mc-footer__top {
+          display: grid;
+          grid-template-columns: minmax(260px, 1.35fr) minmax(360px, 1fr);
+          gap: 72px;
+          align-items: start;
+        }
+        .mc-footer__logo {
+          position: relative;
+          display: block;
+          width: 190px;
+          height: 58px;
+        }
+        .mc-footer__logo img {
+          object-fit: contain;
+          object-position: left center;
+        }
+        .mc-footer__brand p {
+          max-width: 460px;
+          margin: 18px 0 0;
+          color: #5d6f88;
+          font-size: 14px;
+          line-height: 1.7;
+        }
+        .mc-footer__nav {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(140px, 1fr));
+          gap: 36px;
+        }
+        .mc-footer__nav > div {
+          display: grid;
+          align-content: start;
+          gap: 12px;
+        }
+        .mc-footer__nav strong {
+          margin-bottom: 4px;
+          color: #132a4d;
+          font-size: 12px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+        }
+        .mc-footer__nav a {
+          width: fit-content;
+          color: #5d6f88;
+          font-size: 14px;
+          text-decoration: none;
+          transition: color 0.18s ease, transform 0.18s ease;
+        }
+        .mc-footer__nav a:hover,
+        .mc-footer__nav a:focus-visible {
+          color: #315da1;
+          transform: translateX(3px);
+        }
+        .mc-footer__bottom {
+          display: flex;
+          justify-content: space-between;
+          gap: 30px;
+          margin-top: 42px;
+          padding-top: 22px;
+          border-top: 1px solid #c7d8ef;
+          color: #667892;
+          font-size: 12px;
+          line-height: 1.55;
+        }
+        .mc-footer__bottom span:last-child {
+          max-width: 520px;
+          text-align: right;
+        }
+        html[data-theme="dark"] .mc-footer {
+          border-top-color: #334b6a;
+          background:
+            radial-gradient(circle at 12% 0%, #4167b21f, transparent 300px),
+            linear-gradient(180deg, #0b1629, #070d18);
+        }
+        html[data-theme="dark"] .mc-footer__brand p,
+        html[data-theme="dark"] .mc-footer__nav a {
+          color: #a8b5cc;
+        }
+        html[data-theme="dark"] .mc-footer__nav strong {
+          color: #f5f8ff;
+        }
+        html[data-theme="dark"] .mc-footer__nav a:hover,
+        html[data-theme="dark"] .mc-footer__nav a:focus-visible {
+          color: #82adff;
+        }
+        html[data-theme="dark"] .mc-footer__bottom {
+          border-top-color: #263a57;
+          color: #899ab4;
+        }
         @media (max-width: 760px) {
           .mc-shell {
             width: min(100% - 24px, 1240px);
@@ -885,6 +1069,32 @@ export default function LandingPage() {
           }
           .mc-cta .mc-button {
             margin-top: 26px;
+          }
+          .mc-footer {
+            margin-top: 24px;
+          }
+          .mc-footer__inner {
+            padding: 38px 0 24px;
+          }
+          .mc-footer__top {
+            grid-template-columns: 1fr;
+            gap: 34px;
+          }
+          .mc-footer__logo {
+            width: 164px;
+            height: 50px;
+          }
+          .mc-footer__nav {
+            gap: 24px;
+          }
+          .mc-footer__bottom {
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 34px;
+          }
+          .mc-footer__bottom span:last-child {
+            text-align: left;
           }
         }
         .mc-logo {
@@ -1428,8 +1638,8 @@ export default function LandingPage() {
         }
         .mc-header { background: rgba(255, 255, 255, 0.2); }
         .mc-nav {
-          gap: 4px;
-          padding: 5px;
+          gap: 2px;
+          padding: 5px 5px 5px 17px;
           border: 1px solid rgba(255, 255, 255, 0.38);
           border-radius: 999px;
           background: rgba(255, 255, 255, 0.18);
@@ -1442,7 +1652,7 @@ export default function LandingPage() {
           display: inline-flex;
           align-items: center;
           min-height: 38px;
-          padding: 8px 16px;
+          padding: 8px 12px;
           border-radius: 999px;
           color: #536887;
           font-size: 14px;
@@ -1920,7 +2130,7 @@ export default function LandingPage() {
         .mc-login-toast {
           position: fixed;
           z-index: 2000;
-          top: 24px;
+          top: 100px;
           right: 24px;
           width: min(390px, calc(100vw - 32px));
           padding: 25px 28px;
@@ -1982,7 +2192,7 @@ export default function LandingPage() {
             font-size: 18px;
           }
           .mc-login-toast {
-            top: 14px;
+            top: 84px;
             right: 16px;
           }
         }
@@ -2004,8 +2214,12 @@ export default function LandingPage() {
         /* Living capsule: subtle floating motion keeps the hero active without
            competing with the search interaction. */
         .mc-hero__capsule {
-          animation: mc-capsule-float 8s ease-in-out infinite;
-          will-change: transform;
+          animation:
+            mc-capsule-float 7s ease-in-out infinite,
+            mc-capsule-glow 4.5s ease-in-out infinite;
+          backface-visibility: hidden;
+          image-rendering: auto;
+          will-change: transform, filter;
         }
 
         @keyframes mc-capsule-float {
@@ -2013,14 +2227,24 @@ export default function LandingPage() {
             transform: translate3d(18vw, 0, 0) rotate(-2deg) scale(1.78);
           }
           50% {
-            transform: translate3d(18vw, -14px, 0) rotate(0deg) scale(1.82);
+            transform: translate3d(calc(18vw + 8px), -18px, 0) rotate(1deg) scale(1.82);
+          }
+        }
+
+        @keyframes mc-capsule-glow {
+          0%, 100% {
+            filter: drop-shadow(0 18px 24px rgba(39, 96, 183, 0.16));
+          }
+          50% {
+            filter: drop-shadow(0 26px 34px rgba(39, 96, 183, 0.28));
           }
         }
 
         @media (max-width: 760px) {
           .mc-hero__capsule {
-            animation-name: mc-capsule-float-mobile;
-            animation-duration: 7s;
+            animation:
+              mc-capsule-float-mobile 6.5s ease-in-out infinite,
+              mc-capsule-glow 4.5s ease-in-out infinite;
           }
 
           @keyframes mc-capsule-float-mobile {
@@ -2028,7 +2252,7 @@ export default function LandingPage() {
               transform: translate3d(0, 0, 0) rotate(-4deg) scale(1.5);
             }
             50% {
-              transform: translate3d(0, -8px, 0) rotate(-2deg) scale(1.53);
+              transform: translate3d(5px, -10px, 0) rotate(-1deg) scale(1.53);
             }
           }
         }
@@ -2201,6 +2425,7 @@ export default function LandingPage() {
           <CTASection />
         </>
       )}
+      <LandingFooter />
     </main>
   );
 }

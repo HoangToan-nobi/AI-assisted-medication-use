@@ -1,9 +1,16 @@
+from functools import lru_cache
+
 from langchain_openai import ChatOpenAI
 
 from src.config import get_settings
 
 
+@lru_cache
 def get_llm() -> ChatOpenAI:
+    """Cache 1 instance duy nhất - trước đây tạo ChatOpenAI mới mỗi lệnh gọi, mất
+    khả năng tái dùng connection pool (mỗi lệnh gọi phải bắt tay TCP+TLS lại từ đầu
+    với DeepSeek). An toàn khi nhiều coroutine cùng gọi ainvoke() đồng thời qua
+    asyncio.gather - đó chính là mục đích của connection pooling."""
     settings = get_settings()
     return ChatOpenAI(
         model=settings.model_name,
