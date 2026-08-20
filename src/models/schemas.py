@@ -100,6 +100,79 @@ class RejectPharmacistRequest(BaseModel):
     ly_do: str = Field(..., min_length=3, max_length=1000)
 
 
+class AdminOverview(BaseModel):
+    total_users: int
+    patients: int
+    pharmacists: int
+    locked_users: int
+    pending_pharmacists: int
+    medications: int
+    products: int
+    drug_interactions: int
+    food_interactions: int
+    disease_interactions: int
+    open_feedback: int
+
+
+class AdminUserInfo(BaseModel):
+    user_id: str
+    ho_ten: str
+    email: str
+    vai_tro: str
+    account_status: str
+    email_verified: bool
+    ngay_tao: datetime | None = None
+
+
+class AdminUsersResponse(BaseModel):
+    items: list[AdminUserInfo]
+    total: int
+
+
+class AdminAccountStatusRequest(BaseModel):
+    account_status: Literal["active", "locked"]
+
+
+class AdminDrugItem(BaseModel):
+    id: str
+    name: str
+    detail: str | None = None
+    source: str | None = None
+
+
+class AdminDrugDataResponse(BaseModel):
+    items: list[AdminDrugItem]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+class FeedbackCreateRequest(BaseModel):
+    category: Literal["wrong_result", "technical", "account", "other"] = "other"
+    title: str = Field(..., min_length=3, max_length=255)
+    description: str = Field(..., min_length=5, max_length=5000)
+
+
+class FeedbackUpdateRequest(BaseModel):
+    status: Literal["new", "in_progress", "resolved"]
+    resolution_note: str | None = Field(default=None, max_length=2000)
+
+
+class FeedbackInfo(BaseModel):
+    id: str
+    user_id: str
+    user_name: str
+    user_email: str
+    category: str
+    title: str
+    description: str
+    status: str
+    resolution_note: str | None = None
+    ngay_tao: datetime
+    ngay_cap_nhat: datetime
+
+
 # ---- Medications (hồ sơ thuốc bệnh nhân) ----
 
 
