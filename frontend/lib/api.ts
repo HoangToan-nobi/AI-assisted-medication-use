@@ -172,7 +172,7 @@ export type AuthResponse = {
   account_status: string;
 };
 
-export type AuthMessage = { message: string; account_status?: string | null; email?: string | null };
+export type AuthMessage = { message: string; code?: string | null; account_status?: string | null; email?: string | null };
 export type GoogleAuthResult = AuthResponse | {
   code: "REGISTRATION_REQUIRED" | "ACCOUNT_LINK_REQUIRED" | "PHARMACIST_APPROVAL_PENDING" | "EMAIL_VERIFICATION_REQUIRED";
   message?: string;
@@ -350,6 +350,81 @@ export type PendingPharmacist = { user_id: string; ho_ten: string; email: string
 export const listPendingPharmacists = () => request<PendingPharmacist[]>("/api/v1/admin/pharmacists/pending");
 export const approvePharmacist = (userId: string) => request<AuthMessage>(`/api/v1/admin/pharmacists/${userId}/approve`, { method: "POST" });
 export const rejectPharmacist = (userId: string, reason: string) => request<AuthMessage>(`/api/v1/admin/pharmacists/${userId}/reject`, { method: "POST", body: JSON.stringify({ ly_do: reason }) });
+
+export type AdminOverview = {
+  total_users: number;
+  patients: number;
+  pharmacists: number;
+  locked_users: number;
+  pending_pharmacists: number;
+  medications: number;
+  products: number;
+  drug_interactions: number;
+  food_interactions: number;
+  disease_interactions: number;
+  open_feedback: number;
+};
+
+export type AdminUser = {
+  user_id: string;
+  ho_ten: string;
+  email: string;
+  vai_tro: "patient" | "pharmacist";
+  account_status: string;
+  email_verified: boolean;
+  ngay_tao: string | null;
+};
+
+export type AdminUsersResponse = { items: AdminUser[]; total: number };
+export type AdminDrugItem = { id: string; name: string; detail: string | null; source: string | null };
+export type AdminDrugDataResponse = {
+  items: AdminDrugItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+};
+export type AdminFeedback = {
+  id: string;
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  category: string;
+  title: string;
+  description: string;
+  status: "new" | "in_progress" | "resolved";
+  resolution_note: string | null;
+  ngay_tao: string;
+  ngay_cap_nhat: string;
+};
+
+export const getAdminOverview = () => request<AdminOverview>("/api/v1/admin/overview");
+export const listAdminUsers = (params: { q?: string; role?: string; status?: string } = {}) => {
+  const query = new URLSearchParams();
+  if (params.q) query.set("q", params.q);
+  if (params.role) query.set("role", params.role);
+  if (params.status) query.set("account_status", params.status);
+  return request<AdminUsersResponse>(`/api/v1/admin/users?${query}`);
+};
+export const updateAdminUserStatus = (userId: string, accountStatus: "active" | "locked") =>
+  request<AuthMessage>(`/api/v1/admin/users/${userId}/status`, {
+    method: "POST",
+    body: JSON.stringify({ account_status: accountStatus }),
+  });
+export const listAdminDrugData = (q = "", kind: "medication" | "product" = "medication", page = 1, pageSize = 24) => {
+  const query = new URLSearchParams({ q, kind, page: String(page), page_size: String(pageSize) });
+  return request<AdminDrugDataResponse>(`/api/v1/admin/drug-data?${query}`);
+};
+export const listAdminFeedback = (status = "") =>
+  request<AdminFeedback[]>(`/api/v1/admin/feedback${status ? `?status=${encodeURIComponent(status)}` : ""}`);
+export const updateAdminFeedback = (
+  feedbackId: string,
+  status: AdminFeedback["status"],
+  resolutionNote?: string,
+) => request<AdminFeedback>(`/api/v1/admin/feedback/${feedbackId}`, {
+  method: "PATCH",
+  body: JSON.stringify({ status, resolution_note: resolutionNote || null }),
+});
 
 // ---- Tra cứu / hồ sơ thuốc ----
 

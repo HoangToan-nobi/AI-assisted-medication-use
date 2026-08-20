@@ -35,6 +35,9 @@ class User(Base):
     mat_khau_hash = Column(String(255), nullable=True)
     vai_tro = Column(String(20), nullable=False)  # patient | pharmacist | admin
     account_status = Column(String(30), nullable=False, default="pending_email")
+    # legacy_migration: tài khoản cũ được phép phục hồi khi liên kết Google.
+    # admin/security: không được tự mở khóa qua bất kỳ luồng đăng nhập nào.
+    lock_source = Column(String(30), nullable=True)
     so_chung_chi_hanh_nghe = Column(String(100), nullable=True)
     ly_do_tu_choi = Column(Text, nullable=True)
     noi_cong_tac = Column(String(255), nullable=True)
@@ -86,6 +89,19 @@ class AuthEvent(Base):
     succeeded = Column(Boolean, default=False, nullable=False)
     ngay_tao = Column(DateTime, default=datetime.utcnow, nullable=False)
     __table_args__ = (Index("idx_auth_events_action_key_time", "action", "key_hash", "ngay_tao"),)
+
+
+class FeedbackReport(Base):
+    __tablename__ = "feedback_reports"
+    id = Column(String, primary_key=True, default=_uuid)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    category = Column(String(30), nullable=False, default="other")
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=False)
+    status = Column(String(30), nullable=False, default="new")
+    resolution_note = Column(Text, nullable=True)
+    ngay_tao = Column(DateTime, default=datetime.utcnow, nullable=False)
+    ngay_cap_nhat = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class PatientProfile(Base):

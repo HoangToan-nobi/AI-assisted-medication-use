@@ -105,8 +105,10 @@ Chỉ liệt kê tên biến — giá trị thật nằm trong `.env` (không co
 | `FRONTEND_URL` | ✅ | URL frontend dùng trong liên kết xác minh email/đặt lại mật khẩu. |
 | `GOOGLE_CLIENT_ID`, `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | ✅ | Web Client ID của Google Identity Services; hai phía phải dùng cùng giá trị. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | ✅ | SMTP gửi email xác minh và đặt lại mật khẩu. |
+| `SMTP_STARTTLS`, `SMTP_SSL` | — | Chỉ bật một chế độ: STARTTLS thường dùng cổng 587, SSL trực tiếp thường dùng cổng 465. |
+| `SMTP_TIMEOUT_SECONDS`, `SMTP_MAX_RETRIES`, `SMTP_RETRY_DELAY_SECONDS` | — | Timeout và retry gửi email; mặc định 15 giây, 3 lần, delay 1 giây. |
 | `COOKIE_SECURE`, `COOKIE_SAMESITE`, `COOKIE_DOMAIN` | ✅ production | Chính sách cookie phiên; dùng `Secure=true`, và `SameSite=none` nếu frontend/API khác site. |
-| `ENABLE_DEMO_ACCOUNTS` | — | Chỉ bật ở môi trường demo; mặc định tắt. |
+| `ENABLE_DEMO_ACCOUNTS` | — | Hai nút demo luôn hiển thị; đặt `true` để backend cho phép đăng nhập các tài khoản demo. |
 | `LOG_LEVEL` | — | `DEBUG` / `INFO` / `WARNING` / `ERROR`. |
 | `AI_LOG_SERVER`, `AI_LOG_API_KEY` | ✅ (BTC cấp) | Server chấm điểm AI Usage Logging — key riêng từ link mời BTC, không dùng giá trị mẫu trong `.env.example`. |
 
@@ -119,6 +121,21 @@ Chỉ liệt kê tên biến — giá trị thật nằm trong `.env` (không co
 5. Production phải chạy HTTPS, dùng `SECRET_KEY` ngẫu nhiên mạnh, `COOKIE_SECURE=true`, và CORS chỉ chứa domain frontend chính xác.
 
 Frontend không lưu credential trong `localStorage`; access/refresh session nằm trong cookie HttpOnly. Tài khoản email phải bấm link xác minh, còn tài khoản dược sĩ chỉ được cấp quyền sau khi admin duyệt số CCHN và nơi công tác.
+
+### Smoke test auth trên staging
+
+Sau khi deploy backend, migrate database và tạo một tài khoản staging đang hoạt động, đặt các biến môi trường cục bộ rồi chạy:
+
+```powershell
+$env:STAGING_API_URL="https://api-staging.example.com"
+$env:STAGING_FRONTEND_URL="https://staging.example.com"
+$env:SMOKE_AUTH_EMAIL="staging-user@example.com"
+$env:SMOKE_AUTH_PASSWORD="<password>"
+$env:SMOKE_CROSS_SITE="true"
+python scripts/smoke_auth_staging.py
+```
+
+Script kiểm tra health, CORS, CSRF, cookie `HttpOnly/Secure/SameSite`, đăng nhập, `/me`, xoay refresh token, chống dùng lại refresh cũ và logout. Google popup và email thật vẫn cần kiểm tra thủ công trên HTTPS: đăng ký một email mới, mở link xác minh nhận qua SMTP, đăng nhập Google thật và xác nhận đúng trang đích theo vai trò.
 
 ## Sample Queries
 
