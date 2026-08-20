@@ -1,7 +1,15 @@
+import re
 from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
+
+
+def _valid_email(value: str) -> str:
+    value = value.strip()
+    if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value):
+        raise ValueError("Email không hợp lệ")
+    return value
 
 
 class ChatRequest(BaseModel):
@@ -19,20 +27,77 @@ class ChatResponse(BaseModel):
 class RegisterRequest(BaseModel):
     ho_ten: str = Field(..., min_length=1, max_length=255)
     email: str = Field(..., min_length=3, max_length=255)
-    mat_khau: str = Field(..., min_length=6, max_length=255)
+    mat_khau: str = Field(..., min_length=8, max_length=128)
     vai_tro: Literal["patient", "pharmacist"]
+    so_chung_chi_hanh_nghe: str | None = Field(default=None, max_length=100)
+    noi_cong_tac: str | None = Field(default=None, max_length=255)
+
+    _validate_email = field_validator("email")(_valid_email)
 
 
 class LoginRequest(BaseModel):
     email: str = Field(..., min_length=3, max_length=255)
     mat_khau: str = Field(..., min_length=1, max_length=255)
 
+    _validate_email = field_validator("email")(_valid_email)
+
 
 class AuthResponse(BaseModel):
-    access_token: str
+    # Chỉ được điền ngoài production để các client/test Bearer cũ có thời gian
+    # chuyển đổi. Giao diện mới xác thực hoàn toàn bằng HttpOnly cookie.
+    access_token: str | None = None
     vai_tro: str
     user_id: str
     ho_ten: str
+    email: str
+    account_status: str
+
+
+class EmailRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=255)
+
+    _validate_email = field_validator("email")(_valid_email)
+
+
+class TokenRequest(BaseModel):
+    token: str = Field(..., min_length=20, max_length=512)
+
+
+class ResetPasswordRequest(TokenRequest):
+    mat_khau_moi: str = Field(..., min_length=8, max_length=128)
+
+
+class GoogleCredentialRequest(BaseModel):
+    credential: str = Field(..., min_length=20, max_length=10000)
+
+
+class GoogleRegistrationRequest(GoogleCredentialRequest):
+    vai_tro: Literal["patient", "pharmacist"]
+    so_chung_chi_hanh_nghe: str | None = Field(default=None, max_length=100)
+    noi_cong_tac: str | None = Field(default=None, max_length=255)
+
+
+class GoogleLinkRequest(GoogleCredentialRequest):
+    mat_khau: str = Field(..., min_length=1, max_length=128)
+
+
+class MessageResponse(BaseModel):
+    message: str
+    account_status: str | None = None
+    email: str | None = None
+
+
+class PendingPharmacistInfo(BaseModel):
+    user_id: str
+    ho_ten: str
+    email: str
+    so_chung_chi_hanh_nghe: str
+    noi_cong_tac: str
+    ngay_tao: datetime
+
+
+class RejectPharmacistRequest(BaseModel):
+    ly_do: str = Field(..., min_length=3, max_length=1000)
 
 
 # ---- Medications (hồ sơ thuốc bệnh nhân) ----
@@ -98,7 +163,8 @@ class UpdatePatientConditionsRequest(BaseModel):
 class PrescriptionInput(BaseModel):
     """1 đơn thuốc gửi lên từ frontend - "đơn thuốc" chỉ là khái niệm ở phía người
     dùng nhập liệu, backend dùng label + danh sách thuốc này để tự tính cạnh cấp
-    thuốc/cấp đơn thuốc và sinh giải thích tương ứng (rollup_explain.py)."""
+    thuốc và sinh giải thích tương ứng (rollup_explain.py), cùng lọc tương tác GIỮA
+    các đơn khi so từ 2 đơn trở lên."""
 
     label: str = Field(..., min_length=1, max_length=100)
     products: list[str] = Field(..., min_length=1)
@@ -147,18 +213,14 @@ class MedicationCheckResponse(BaseModel):
     # sĩ review, thay vì suy ra danh sách thuốc từ các cặp trong explanations (sẽ
     # thiếu thuốc không có cặp tương tác nào).
     checked_products: list[str] = Field(default_factory=list)
-    # Đúng cấu trúc đơn thuốc gốc đã gửi lên (label + danh sách thuốc mỗi đơn), theo
-    # đúng thứ tự khớp với don_a_index/don_b_index của prescription_explanations -
-    # để xem lại lịch sử/dược sĩ review vẫn dựng được đúng "bàn cân" nhiều đơn như
-    # lúc kiểm tra, thay vì gộp hết thuốc vào 1 đơn ảo duy nhất (mất khả năng lọc
-    # tương tác GIỮA các đơn). Rỗng ở dữ liệu lịch sử cũ lưu trước khi field này tồn tại.
+    # Đúng cấu trúc đơn thuốc gốc đã gửi lên (label + danh sách thuốc mỗi đơn) - để
+    # xem lại lịch sử/dược sĩ review vẫn dựng được đúng "bàn cân" nhiều đơn như lúc
+    # kiểm tra, thay vì gộp hết thuốc vào 1 đơn ảo duy nhất (mất khả năng lọc tương
+    # tác GIỮA các đơn). Rỗng ở dữ liệu lịch sử cũ lưu trước khi field này tồn tại.
     prescriptions: list[PrescriptionInput] = Field(default_factory=list)
-    # Giải thích riêng cấp thuốc (thuốc-với-thuốc) và cấp đơn thuốc (đơn-với-đơn),
-    # chỉ nhắc tên ở đúng cấp đó - KHÔNG lấy nguyên văn giải thích cấp hoạt chất
-    # trong `explanations` như trước. prescription_explanations chỉ khác rỗng ở
-    # luồng dược sĩ (pharmacist/products/check) khi request có từ 2 đơn trở lên.
+    # Giải thích riêng cấp thuốc (thuốc-với-thuốc), chỉ nhắc tên thuốc - KHÔNG lấy
+    # nguyên văn giải thích cấp hoạt chất trong `explanations` như trước.
     product_explanations: list[dict] = Field(default_factory=list)
-    prescription_explanations: list[dict] = Field(default_factory=list)
     # Tóm tắt tổng quan toàn bộ lần phân tích - sinh cho cả luồng bệnh nhân và dược
     # sĩ, khác nhau ở giọng điệu (xem build_overview_explanation).
     overview: dict | None = None
@@ -172,9 +234,9 @@ class MedicationCheckResponse(BaseModel):
     disease_interaction_scope: Literal["personalized", "general_fallback", "general"] = "general"
     # Snapshot condition tại thời điểm kiểm tra để lịch sử không đổi nghĩa khi hồ sơ được sửa sau đó.
     patient_conditions_snapshot: list[DiseaseInfo] = Field(default_factory=list)
-    # Câu liệt kê cố định (không qua LLM) tên thực phẩm/bệnh nền cần lưu ý, ghép thêm
-    # vào bảng tóm tắt tổng quan sau đoạn overview.giai_thich do LLM sinh.
-    canh_bao_thuc_pham_benh_nen: str | None = None
+    # Danh sách 1-3 câu liệt kê cố định (không qua LLM) tên thực phẩm/bệnh nền cần
+    # lưu ý, hiện thành các đoạn riêng sau đoạn overview.giai_thich do LLM sinh.
+    canh_bao_thuc_pham_benh_nen: list[str] | None = None
     # Ghi chú dược sĩ để lại khi xác nhận lần kiểm tra này (PharmacistReview.ghi_chu)
     # - chỉ có ở GET /patients/{id}/checks/{check_id} khi đã có dược sĩ xác nhận,
     # None ở mọi trường hợp khác (lần kiểm tra mới chạy, guest, chưa ai xác nhận).

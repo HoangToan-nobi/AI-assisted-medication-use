@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import MaterialIcon from "@/components/MaterialIcon";
 import MediFox from "@/components/MediFox";
 import PatientPrescriptionPanel from "@/components/PatientPrescriptionPanel";
+import SelectField from "@/components/SelectField";
 import InteractionResultView from "@/components/graph/InteractionResultView";
 import {
   ApiError,
@@ -542,16 +543,17 @@ function ProfilePageContent() {
                     )}
                   </div>
                   <div className="field">
-                    <label>Giới tính</label>
-                    <select
+                    <label htmlFor="gender">Giới tính</label>
+                    <SelectField
+                      id="gender"
                       value={gioiTinh}
-                      onChange={(e) => setGioiTinh(e.target.value)}
-                    >
-                      <option value="">Chọn...</option>
-                      <option value="Nam">Nam</option>
-                      <option value="Nữ">Nữ</option>
-                      <option value="Khác">Khác</option>
-                    </select>
+                      onChange={setGioiTinh}
+                      options={[
+                        { value: "Nam", label: "Nam" },
+                        { value: "Nữ", label: "Nữ" },
+                        { value: "Khác", label: "Khác" },
+                      ]}
+                    />
                   </div>
                 </div>
 

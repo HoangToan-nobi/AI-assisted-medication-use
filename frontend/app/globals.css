@@ -52,12 +52,22 @@
   --space-container: 24px;
   --touch-min: 48px;
 
+  /* Shared leading-icon input spacing, sourced from the /auth control. */
+  --icon-input-gap: 20px;
+  --icon-input-padding-inline: 13px;
+
   --shadow-overlay: 0 4px 20px rgba(0, 0, 0, 0.05);
   --shadow-sm: 0 1px 2px rgba(9, 30, 42, 0.06);
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Use only on single-line input wrappers with a leading icon. */
+.icon-input-spacing {
+  gap: var(--icon-input-gap);
+  padding-inline: var(--icon-input-padding-inline);
 }
 
 html {
@@ -693,19 +703,149 @@ select:hover {
   border-color: var(--primary);
 }
 
+/* Accessible custom single-select. Native select remains available for special controls. */
+.select-field {
+  position: relative;
+  width: 100%;
+}
+
+.select-field--open {
+  z-index: 30;
+}
+
+button.select-field__trigger {
+  width: 100%;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 15px;
+  border: 1px solid #cbd9ef;
+  border-radius: 12px;
+  background: #fff;
+  color: #1a3357;
+  cursor: pointer;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 22px;
+  text-align: left;
+  box-shadow: inset 0 1px 2px rgba(46, 76, 125, 0.03);
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+button.select-field__trigger:hover:not(:disabled) {
+  border-color: #9eb6e2;
+  background: #fbfdff;
+}
+
+.select-field--open button.select-field__trigger,
+button.select-field__trigger:focus-visible {
+  border-color: #557bc6;
+  outline: 0;
+  box-shadow: 0 0 0 4px rgba(85, 123, 198, 0.13);
+}
+
+button.select-field__trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.select-field__trigger > .material-symbols-outlined {
+  flex: 0 0 22px;
+  color: #5875aa;
+  transition: transform 160ms ease;
+}
+
+.select-field__placeholder {
+  color: #8493aa;
+}
+
+.select-field__menu {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 6px;
+  overflow: hidden;
+  border: 1px solid #c9d8ed;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 42px rgba(38, 68, 113, 0.2), 0 4px 12px rgba(38, 68, 113, 0.08);
+  backdrop-filter: blur(16px);
+}
+
+.select-field__option {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  color: #344d70;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+
+.select-field__option--active {
+  background: #edf4ff;
+  color: #294f91;
+}
+
+.select-field__option--selected {
+  background: #e4eeff;
+  color: #244b8d;
+  font-weight: 750;
+}
+
+.select-field__option > .material-symbols-outlined {
+  color: #4167b2;
+}
+
+html[data-theme="dark"] button.select-field__trigger {
+  border-color: #405b80;
+  background: rgba(15, 29, 48, 0.9);
+  color: #edf4ff;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.05);
+}
+
+html[data-theme="dark"] .select-field__menu {
+  border-color: #405b80;
+  background: rgba(16, 30, 49, 0.98);
+  box-shadow: 0 20px 46px rgba(0, 0, 0, 0.42);
+}
+
+html[data-theme="dark"] .select-field__option {
+  color: #cfddf2;
+}
+
+html[data-theme="dark"] .select-field__option--active,
+html[data-theme="dark"] .select-field__option--selected {
+  background: #263e61;
+  color: #f1f6ff;
+}
+
 .search-bar__field {
   position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .search-bar__field input {
-  padding-left: 44px;
+  padding-left: 0;
 }
 
 .search-bar__icon {
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  transform: translateY(-50%);
+  flex: 0 0 20px;
   color: var(--outline);
   pointer-events: none;
 }
@@ -1173,7 +1313,49 @@ button.primary:hover,
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  margin-bottom: 10px;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+/* Tab "Dữ liệu tương tác gốc"/"Cách xử lý gốc" bung ra - trượt nhẹ xuống + mờ
+   dần vào thay vì bật ra đột ngột. */
+.alert-detail-box--reveal {
+  animation: alert-card-reveal 0.18s ease;
+}
+
+@keyframes alert-card-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Nút "Xem thêm"/"Thu gọn" nội tuyến cuối đoạn text bị rút gọn (ExpandableText) -
+   in đậm + xanh primary, cùng ngôn ngữ thị giác với .overview-highlight để nhất
+   quán "đây là điểm bấm được" trong toàn bộ khu vực kết quả tương tác. */
+.expandable-text__toggle {
+  /* Rule .btn/button dùng chung toàn app ép display:inline-flex + padding lớn +
+     min-height + box-shadow (xem "---- Buttons ----" phía trên) - reset sạch
+     bằng all:unset trước rồi mới khai lại đúng những gì cần, thay vì liệt kê
+     từng thuộc tính (dễ sót, dễ tái diễn lỗi nút to/có bóng như 1 nút thật). */
+  all: unset;
+  display: inline;
+  font-weight: 700;
+  color: var(--primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* all:unset ở trên xoá luôn outline focus mặc định - thêm lại tường minh để vẫn
+   thấy focus khi điều hướng bàn phím (giống .overview-highlight--clickable). */
+.expandable-text__toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 .alert-icon-wrap {
@@ -1310,6 +1492,25 @@ button.primary:hover,
 .severity-none .alert-icon-wrap {
   background: var(--surface-variant);
   color: var(--on-surface-variant);
+}
+
+/* Cụm từ AI tự nhấn mạnh trong đoạn tóm tắt tổng quan (interaction-overview__summary)
+   - in đậm + màu xanh primary, không tô nền, xem renderOverviewText trong
+   InteractionOverview.tsx. Reset nền vàng mặc định của <mark>. */
+.overview-highlight {
+  background: none;
+  font-weight: 700;
+  color: var(--primary);
+}
+/* Bấm được: cuộn xuống đúng thẻ giải thích tương ứng bên dưới (scrollToPairCard,
+   xem InteractionOverview.tsx/InteractionGraphView.tsx). */
+.overview-highlight--clickable {
+  cursor: pointer;
+}
+.overview-highlight--clickable:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 /* ---- Banners ---- */
@@ -3085,9 +3286,7 @@ html[data-theme="dark"] .bottom-nav.sidebar {
 .interaction-search__input {
   display: flex;
   align-items: center;
-  gap: 10px;
   min-height: 52px;
-  padding: 0 14px;
   border: 1px solid #c7d0df;
   border-radius: 7px;
   background: #f8fbff;
@@ -4084,9 +4283,9 @@ html[data-theme="dark"] .bottom-nav.sidebar {
 .profile-add-form__input {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--icon-input-gap);
   min-height: 50px;
-  padding-left: 13px;
+  padding-left: var(--icon-input-padding-inline);
   border: 1px solid var(--outline-variant);
   border-radius: 10px;
 }
@@ -7664,6 +7863,10 @@ html[data-theme="dark"] .empty-state {
   .mc-audience-card,
   button {
     transition: none !important;
+  }
+
+  .alert-detail-box--reveal {
+    animation: none !important;
   }
 }
 

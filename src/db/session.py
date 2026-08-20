@@ -1,5 +1,5 @@
 """DB session — dùng lại get_settings() có sẵn trong src/config.py."""
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from src.config import get_settings
@@ -77,6 +77,11 @@ def init_db() -> None:
     _ensure_column("patient_medications", "prescription_id", "TEXT REFERENCES patient_prescriptions(id)")
     _ensure_column("users", "mo_ta_ngan", "TEXT")
     _ensure_column("users", "noi_cong_tac", "VARCHAR(255)")
+    _ensure_column("users", "email_normalized", "VARCHAR(255)")
+    _ensure_column("users", "email_verified_at", "DATETIME")
+    _ensure_column("users", "account_status", "VARCHAR(30) DEFAULT 'locked'")
+    _ensure_column("users", "so_chung_chi_hanh_nghe", "VARCHAR(100)")
+    _ensure_column("users", "ly_do_tu_choi", "TEXT")
     _ensure_column("pharmacist_reviews", "gui_kem_ho_so", "BOOLEAN DEFAULT 0")
     _ensure_column("pharmacist_reviews", "ten_nguoi_duoc_kiem_tra", "TEXT")
     _ensure_column("pharmacist_reviews", "ngay_sinh_nhap_tay", "DATE")
@@ -101,6 +106,16 @@ def init_db() -> None:
     _ensure_index("pharmacist_reviews", "interaction_check_id", "idx_pharmacist_reviews_check_id")
     _ensure_index("pharmacist_reviews", "pharmacist_id", "idx_pharmacist_reviews_pharmacist_id")
     _ensure_index("notifications", "patient_id", "idx_notifications_patient_id")
+
+
+def assert_auth_schema_ready() -> None:
+    """Fail with an actionable message instead of serving partially migrated auth."""
+    columns = {column["name"]: column for column in inspect(engine).get_columns("users")}
+    required = {"email_normalized", "email_verified_at", "account_status", "so_chung_chi_hanh_nghe", "ly_do_tu_choi"}
+    if missing := required - columns.keys():
+        raise RuntimeError(f"Auth schema chua migrate ({sorted(missing)}); chay python scripts/migrate_auth.py")
+    if not columns["mat_khau_hash"]["nullable"]:
+        raise RuntimeError("Auth schema cu van bat buoc mat_khau_hash; chay python scripts/migrate_auth.py")
 
 
 def get_db() -> Session:

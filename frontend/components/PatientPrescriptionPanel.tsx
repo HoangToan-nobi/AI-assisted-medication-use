@@ -116,7 +116,7 @@ export default function PatientPrescriptionPanel({
         </div>
       </div>
 
-      <div className="interaction-search__input">
+      <div className="interaction-search__input icon-input-spacing">
         <MaterialIcon name="search" size={19} />
         <input
           id={inputId}

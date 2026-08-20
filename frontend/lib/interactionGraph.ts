@@ -23,16 +23,6 @@ export type PrescriptionEdge = {
   productEdges: ProductEdge[];
 };
 
-// Cạnh giữa 2 HOẠT CHẤT thuộc đúng 2 thuốc đang xem chi tiết (cấp đáy, không rollup thêm).
-export type IngredientEdge = {
-  ingredientA: string;
-  ingredientB: string;
-  drugOfA: string;
-  drugOfB: string;
-  muc_do?: Severity;
-  pairs: InteractionExplanation[];
-};
-
 export type GraphGroup = { id: string; label: string; color: string };
 
 // Bảng màu nền node cố định, chủ ý khác biệt hoàn toàn với 4 màu severity dùng cho
@@ -141,63 +131,6 @@ export function buildPrescriptionGraph(productEdges: ProductEdge[], origins: Map
 
   for (const edge of edges.values()) edge.productEdges.sort((a, b) => severityRank(b.muc_do) - severityRank(a.muc_do));
   return [...edges.values()].sort((a, b) => a.prescriptionAIndex - b.prescriptionAIndex || a.prescriptionBIndex - b.prescriptionBIndex);
-}
-
-// Lọc ProductEdge[] toàn cục, chỉ giữ cạnh thuốc nằm GIỮA đúng 2 đơn đang xem chi
-// tiết (rxAIndex, rxBIndex). Kiểm tra cả 2 chiều vì productA/productB không đảm
-// bảo thứ tự theo đơn thuốc.
-export function drugEdgesBetweenPrescriptions(
-  productEdges: ProductEdge[],
-  rxAIndex: number,
-  rxBIndex: number,
-  origins: Map<string, Set<number>>
-): ProductEdge[] {
-  return productEdges.filter((pe) => {
-    const setA = origins.get(pe.productA.toLowerCase());
-    const setB = origins.get(pe.productB.toLowerCase());
-    if (!setA || !setB) return false;
-    return (setA.has(rxAIndex) && setB.has(rxBIndex)) || (setA.has(rxBIndex) && setB.has(rxAIndex));
-  });
-}
-
-// Cấp đáy: rescan trực tiếp explanations gốc cho đúng 2 thuốc drugA/drugB đang xem
-// chi tiết (KHÔNG dùng ProductEdge.pairs, vì san_pham_a/b của các exp gộp vào 1
-// cạnh thuốc không đảm bảo cùng chiều). Kiểm tra cả 2 chiều để gán đúng
-// ingredientA/B - drugOfA/B.
-export function buildIngredientGraph(drugA: string, drugB: string, explanations: InteractionExplanation[]): IngredientEdge[] {
-  const drugALower = drugA.toLowerCase();
-  const drugBLower = drugB.toLowerCase();
-  const edges: IngredientEdge[] = [];
-
-  for (const exp of explanations) {
-    const prodsA = exp.san_pham_a?.length ? exp.san_pham_a : exp.thuoc_a ? [exp.thuoc_a] : [];
-    const prodsB = exp.san_pham_b?.length ? exp.san_pham_b : exp.thuoc_b ? [exp.thuoc_b] : [];
-    const aHasDrugA = prodsA.some((p) => p.toLowerCase() === drugALower);
-    const aHasDrugB = prodsA.some((p) => p.toLowerCase() === drugBLower);
-    const bHasDrugA = prodsB.some((p) => p.toLowerCase() === drugALower);
-    const bHasDrugB = prodsB.some((p) => p.toLowerCase() === drugBLower);
-
-    let drugOfA: string | undefined;
-    let drugOfB: string | undefined;
-    if (aHasDrugA && bHasDrugB) { drugOfA = drugA; drugOfB = drugB; }
-    else if (aHasDrugB && bHasDrugA) { drugOfA = drugB; drugOfB = drugA; }
-    else continue;
-
-    const ingredientA = exp.hoat_chat_a ?? exp.thuoc_a;
-    const ingredientB = exp.hoat_chat_b ?? exp.thuoc_b;
-    if (!ingredientA || !ingredientB) continue;
-    if (ingredientA.toLowerCase() === ingredientB.toLowerCase()) continue;
-
-    edges.push({ ingredientA, ingredientB, drugOfA, drugOfB, muc_do: exp.muc_do, pairs: [exp] });
-  }
-
-  return edges.sort((a, b) => severityRank(b.muc_do) - severityRank(a.muc_do));
-}
-
-// Lấy giải thích đại diện (nặng nhất, do pairs đã được các hàm build*Graph sort
-// giảm dần theo severity) để hiển thị làm nội dung thẻ AlertCard ở cấp rollup.
-export function representativeExplanation(pairs: InteractionExplanation[]): InteractionExplanation | undefined {
-  return pairs[0];
 }
 
 // Gán màu nền cố định cho từng nhóm theo palette, giữ nguyên nhãn truyền vào. Khi

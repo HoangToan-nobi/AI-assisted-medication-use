@@ -75,7 +75,7 @@ flowchart TB
 - **Mục đích:** Cung cấp giao diện web cho bệnh nhân và dược sĩ.
 - **Các màn hình chính:** landing page, đăng ký/đăng nhập, dashboard bệnh nhân, hồ sơ thuốc, kiểm tra tương tác, dashboard dược sĩ, tra cứu và review.
 - **Giao tiếp backend:** gọi REST API qua `frontend/lib/api.ts`.
-- **Session:** lưu access token và thông tin vai trò ở phía client qua `frontend/lib/auth.ts`.
+- **Session:** access/refresh token nằm trong cookie HttpOnly; frontend chỉ cache thông tin hiển thị không nhạy cảm và đồng bộ lại qua `/auth/me`.
 - **Chạy local:** container frontend chạy Next.js development server tại cổng `3000`.
 
 ### 3.2 Backend — FastAPI
@@ -84,7 +84,7 @@ flowchart TB
 - **Entry point:** `src/main.py`.
 - **Routes:** `src/api/routes.py`.
 - **Prefix API:** `/api/v1`.
-- **Xác thực:** Bearer JWT; role gồm `patient` và `pharmacist`.
+- **Xác thực:** cookie access/refresh có xoay vòng, CSRF; đăng nhập mật khẩu đã xác minh email hoặc Google Identity Services; role gồm `patient`, `pharmacist`, `admin`.
 - **Validation:** Pydantic schemas trong `src/models/schemas.py`.
 - **Database dependency:** SQLAlchemy session trong `src/db/session.py`.
 
