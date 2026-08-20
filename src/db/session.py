@@ -80,6 +80,7 @@ def init_db() -> None:
     _ensure_column("users", "email_normalized", "VARCHAR(255)")
     _ensure_column("users", "email_verified_at", "DATETIME")
     _ensure_column("users", "account_status", "VARCHAR(30) DEFAULT 'locked'")
+    _ensure_column("users", "lock_source", "VARCHAR(30)")
     _ensure_column("users", "so_chung_chi_hanh_nghe", "VARCHAR(100)")
     _ensure_column("users", "ly_do_tu_choi", "TEXT")
     _ensure_column("pharmacist_reviews", "gui_kem_ho_so", "BOOLEAN DEFAULT 0")
@@ -111,11 +112,20 @@ def init_db() -> None:
 def assert_auth_schema_ready() -> None:
     """Fail with an actionable message instead of serving partially migrated auth."""
     columns = {column["name"]: column for column in inspect(engine).get_columns("users")}
-    required = {"email_normalized", "email_verified_at", "account_status", "so_chung_chi_hanh_nghe", "ly_do_tu_choi"}
+    required = {"email_normalized", "email_verified_at", "account_status", "lock_source", "so_chung_chi_hanh_nghe", "ly_do_tu_choi"}
     if missing := required - columns.keys():
         raise RuntimeError(f"Auth schema chua migrate ({sorted(missing)}); chay python scripts/migrate_auth.py")
     if not columns["mat_khau_hash"]["nullable"]:
         raise RuntimeError("Auth schema cu van bat buoc mat_khau_hash; chay python scripts/migrate_auth.py")
+    with engine.connect() as conn:
+        unclassified_locks = conn.execute(text(
+            "SELECT count(*) FROM users WHERE account_status = 'locked' AND lock_source IS NULL"
+        )).scalar_one()
+    if unclassified_locks:
+        raise RuntimeError(
+            f"Co {unclassified_locks} tai khoan khoa chua co nguon khoa; "
+            "chay python scripts/migrate_auth.py"
+        )
 
 
 def get_db() -> Session:

@@ -71,6 +71,18 @@ ACCESS_COOKIE = "medguard_access"
 REFRESH_COOKIE = "medguard_refresh"
 CSRF_COOKIE = "medguard_csrf"
 ADMIN_OVERVIEW_CACHE_TTL_SECONDS = 30
+PASSWORD_RECOVERY_SENT_MESSAGE = (
+    "Email đã được gửi.\n"
+    "Vui lòng kiểm tra Hộp thư đến (Inbox) và Thư rác (Spam)."
+)
+PASSWORD_RECOVERY_UNKNOWN_EMAIL_MESSAGE = (
+    "Email chưa được đăng ký.\n"
+    "Vui lòng đăng ký tài khoản hoặc kiểm tra lại địa chỉ email."
+)
+VERIFICATION_EMAIL_SENT_MESSAGE = (
+    "Email xác minh đã được gửi.\n"
+    "Vui lòng kiểm tra Hộp thư đến (Inbox) và Thư rác (Spam)."
+)
 _admin_overview_cache: tuple[float, AdminOverview] | None = None
 
 
@@ -141,7 +153,11 @@ def _validate_pharmacist_fields(role: str, license_number: str | None, workplace
 
 def _status_response(user: User) -> JSONResponse:
     if user.account_status == "pending_email":
-        return JSONResponse(status_code=202, content={"code": "EMAIL_VERIFICATION_REQUIRED", "account_status": user.account_status, "message": "Vui lòng xác minh email"})
+        return JSONResponse(status_code=202, content={
+            "code": "EMAIL_VERIFICATION_REQUIRED",
+            "account_status": user.account_status,
+            "message": "Email chưa được xác minh.\nVui lòng xác minh email trước khi đăng nhập.",
+        })
     if user.account_status == "pending_pharmacist":
         return JSONResponse(status_code=202, content={"code": "PHARMACIST_APPROVAL_PENDING", "account_status": user.account_status, "message": "Hồ sơ dược sĩ đang chờ duyệt"})
     if user.account_status == "locked":
@@ -163,7 +179,10 @@ async def register(payload: RegisterRequest, background: BackgroundTasks, reques
     _enforce_rate_limit(db, "register", rate_key, 10, 60)
     _validate_pharmacist_fields(payload.vai_tro, payload.so_chung_chi_hanh_nghe, payload.noi_cong_tac)
     if db.query(User).filter_by(email_normalized=email).first() is not None:
-        raise HTTPException(status_code=409, detail="Email đã được sử dụng")
+        raise HTTPException(
+            status_code=409,
+            detail="Email đã được đăng ký.\nVui lòng đăng nhập hoặc chọn Quên mật khẩu.",
+        )
     user = User(
         ho_ten=payload.ho_ten.strip(), email=email, email_normalized=email,
         mat_khau_hash=hash_password(payload.mat_khau), vai_tro=payload.vai_tro,
@@ -176,7 +195,11 @@ async def register(payload: RegisterRequest, background: BackgroundTasks, reques
     token = issue_action_token(db, user.id, "verify_email", 24 * 60)
     _record_event(db, "register", rate_key, True)
     background.add_task(send_verification_email, user.email, token)
-    return MessageResponse(message="Hãy kiểm tra email để kích hoạt tài khoản", account_status=user.account_status)
+    return MessageResponse(
+        message=VERIFICATION_EMAIL_SENT_MESSAGE,
+        code="VERIFICATION_EMAIL_SENT",
+        account_status=user.account_status,
+    )
 
 
 @router.post("/verify-email", response_model=MessageResponse)
@@ -195,11 +218,25 @@ async def resend_verification(payload: EmailRequest, background: BackgroundTasks
     email = normalize_email(payload.email)
     _enforce_rate_limit(db, "resend", email, 3, 60)
     user = db.query(User).filter_by(email_normalized=email).first()
-    if user and user.account_status == "pending_email":
-        token = issue_action_token(db, user.id, "verify_email", 24 * 60)
-        background.add_task(send_verification_email, user.email, token)
+    if user is None:
+        _record_event(db, "resend", email)
+        return MessageResponse(
+            message=PASSWORD_RECOVERY_UNKNOWN_EMAIL_MESSAGE,
+            code="EMAIL_NOT_REGISTERED",
+        )
+    if user.account_status != "pending_email":
+        _record_event(db, "resend", email)
+        return MessageResponse(
+            message="Email đã được xác minh. Bạn có thể đăng nhập vào MediCheck.",
+            code="EMAIL_ALREADY_VERIFIED",
+        )
+    token = issue_action_token(db, user.id, "verify_email", 24 * 60)
+    background.add_task(send_verification_email, user.email, token)
     _record_event(db, "resend", email)
-    return MessageResponse(message="Nếu tài khoản phù hợp tồn tại, email xác minh đã được gửi")
+    return MessageResponse(
+        message=VERIFICATION_EMAIL_SENT_MESSAGE,
+        code="VERIFICATION_EMAIL_SENT",
+    )
 
 
 @router.post("/login", response_model=AuthResponse, responses={202: {"model": MessageResponse}})
@@ -252,8 +289,16 @@ async def google_complete_registration(payload: GoogleRegistrationRequest, respo
     claims = _verified_google(payload.credential)
     _validate_pharmacist_fields(payload.vai_tro, payload.so_chung_chi_hanh_nghe, payload.noi_cong_tac)
     email = normalize_email(claims["email"])
-    if db.query(AuthIdentity).filter_by(provider="google", subject=claims["sub"]).first() or db.query(User).filter_by(email_normalized=email).first():
-        raise HTTPException(status_code=409, detail="Tài khoản đã tồn tại; hãy đăng nhập hoặc liên kết")
+    if db.query(AuthIdentity).filter_by(provider="google", subject=claims["sub"]).first():
+        raise HTTPException(
+            status_code=409,
+            detail="Tài khoản Google này đã được đăng ký.\nVui lòng đăng nhập.",
+        )
+    if db.query(User).filter_by(email_normalized=email).first():
+        raise HTTPException(
+            status_code=409,
+            detail="Email Google này đã được đăng ký bằng mật khẩu.\nVui lòng đăng nhập để liên kết Google.",
+        )
     user = User(
         ho_ten=(claims.get("name") or email.split("@", 1)[0])[:255], email=email,
         email_normalized=email, email_verified_at=datetime.utcnow(), mat_khau_hash=None,
@@ -279,17 +324,20 @@ async def google_link(payload: GoogleLinkRequest, response: Response, request: R
     key = f"{request.client.host if request.client else 'unknown'}:{email}"
     _enforce_rate_limit(db, "google_link_failed", key, 5, 15)
     if db.query(AuthIdentity).filter_by(provider="google", subject=claims["sub"]).first():
-        raise HTTPException(status_code=409, detail="Google đã được liên kết")
+        raise HTTPException(status_code=409, detail="Tài khoản Google này đã được liên kết.")
     user = db.query(User).filter_by(email_normalized=email).first()
     if user is None or not verify_password(payload.mat_khau, user.mat_khau_hash):
         _record_event(db, "google_link_failed", key)
         raise HTTPException(status_code=401, detail="Mật khẩu hiện tại không đúng")
+    if user.account_status == "locked" and user.lock_source != "legacy_migration":
+        return _status_response(user)
     if password_needs_rehash(user.mat_khau_hash):
         user.mat_khau_hash = hash_password(payload.mat_khau)
     db.add(AuthIdentity(user_id=user.id, provider="google", subject=claims["sub"]))
     user.email_verified_at = user.email_verified_at or datetime.utcnow()
     if user.account_status in {"locked", "pending_email"}:
         user.account_status = "pending_pharmacist" if user.vai_tro == "pharmacist" else "active"
+        user.lock_source = None
     db.commit()
     if user.account_status != "active":
         return _status_response(user)
@@ -304,23 +352,14 @@ async def forgot_password(payload: EmailRequest, background: BackgroundTasks, db
     user = db.query(User).filter_by(email_normalized=email).first()
     if user is None:
         _record_event(db, "forgot", email)
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                "Không tìm thấy tài khoản với email này.\n"
-                "Email này chưa được đăng ký trên MediCheck. Vui lòng kiểm tra lại địa chỉ email hoặc đăng ký tài khoản mới."
-            ),
+        return MessageResponse(
+            message=PASSWORD_RECOVERY_UNKNOWN_EMAIL_MESSAGE,
+            code="EMAIL_NOT_REGISTERED",
         )
     token = issue_action_token(db, user.id, "reset_password", 30)
     background.add_task(send_password_reset_email, user.email, token)
     _record_event(db, "forgot", email)
-    return MessageResponse(
-        message=(
-            "Email đặt lại mật khẩu đã được gửi.\n"
-            "Vui lòng kiểm tra Gmail, bao gồm Hộp thư đến (Inbox) và Thư rác (Spam), "
-            "để tìm email từ MediCheck và làm theo hướng dẫn đặt lại mật khẩu."
-        )
-    )
+    return MessageResponse(message=PASSWORD_RECOVERY_SENT_MESSAGE, code="PASSWORD_RESET_EMAIL_SENT")
 
 
 @router.post("/reset-password", response_model=MessageResponse)
@@ -492,10 +531,13 @@ async def update_user_status(
         raise HTTPException(status_code=409, detail="Tài khoản đang trong quy trình xác minh hoặc xét duyệt")
     user.account_status = payload.account_status
     if payload.account_status == "locked":
+        user.lock_source = "admin"
         db.query(RefreshSession).filter(
             RefreshSession.user_id == user.id,
             RefreshSession.revoked_at.is_(None),
         ).update({RefreshSession.revoked_at: func.now()}, synchronize_session=False)
+    else:
+        user.lock_source = None
     db.commit()
     _invalidate_admin_overview_cache()
     action = "khóa" if payload.account_status == "locked" else "mở khóa"

@@ -31,18 +31,34 @@
 .inputWrap > :global(.material-symbols-outlined) { flex: 0 0 20px; width: 20px; overflow: hidden; color: #5979af; }
 .inputWrap input, .inputWrap input:focus { flex: 1 1 0; width: 0; height: 100%; min-width: 0; min-height: 0; margin: 0; padding: 10px 0; border: 0 !important; border-radius: 0; outline: 0 !important; background: transparent !important; color: #1a3357; font: inherit; font-size: 14px; line-height: 1.5; box-shadow: none !important; }
 .inputWrap input::placeholder { color: #8293ad; opacity: 1; }
+.inputWrap input:-webkit-autofill,
+.inputWrap input:-webkit-autofill:hover,
+.inputWrap input:-webkit-autofill:focus,
+.inputWrap input:-webkit-autofill:active {
+  border: 0 !important;
+  -webkit-text-fill-color: #1a3357 !important;
+  caret-color: #1a3357;
+  -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
+  box-shadow: 0 0 0 1000px #fff inset !important;
+  background-color: #fff !important;
+  background-clip: padding-box;
+}
+.inputWrap input:autofill {
+  color: #1a3357 !important;
+  background-color: #fff !important;
+  box-shadow: 0 0 0 1000px #fff inset !important;
+}
 .iconButton { display: grid; flex: 0 0 32px; place-items: center; width: 32px; height: 32px; margin-right: -5px; padding: 0; border: 0; border-radius: 9px; background: transparent; color: #5574a9; cursor: pointer; }
 .iconButton:hover { background: #edf4ff; }
 .primaryButton { min-height: 46px; display: flex; align-items: center; justify-content: center; gap: 9px; margin-top: 2px; padding: 0 20px; border: 0; border-radius: 999px; background: linear-gradient(100deg, #7d9ce4, #4167b2); color: #fff; cursor: pointer; font: inherit; font-size: 14px; font-weight: 800; box-shadow: 0 10px 22px #4167b238; transition: transform 160ms ease, box-shadow 160ms ease; }
 .primaryButton:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 14px 28px #4167b246; }
 .primaryButton:disabled { opacity: .62; cursor: not-allowed; }
 .spinner { width: 20px; height: 20px; border: 2px solid #ffffff66; border-top-color: #fff; border-radius: 50%; animation: spin .75s linear infinite; }
-.notice { display: flex; align-items: flex-start; gap: 9px; margin-top: 17px; padding: 12px 13px; border: 1px solid; border-radius: 12px; font-size: 12px; font-weight: 650; line-height: 1.5; white-space: pre-line; }
-.notice > :global(.material-symbols-outlined) { flex: 0 0 20px; margin-top: 1px; }
-.info { border-color: #c7d8ef; background: #f1f6fd; color: #3e5f91; }
-.success { border-color: #b9dfcf; background: #eefaf5; color: #26705a; }
-.error { border-color: #efc4ca; background: #fff3f4; color: #a23c4d; }
-.pending { border-color: #ead8ac; background: #fff9eb; color: #886619; }
+.notice { margin: 2px 0 0; padding: 0; font-size: 12px; font-weight: 700; line-height: 1.5; white-space: pre-line; }
+.info { color: #4167b2; }
+.success { color: #26705a; }
+.error { color: #b74151; }
+.pending { color: #886619; }
 .footer { margin: 23px 0 0; text-align: center; }
 .footer a { justify-content: center; }
 .secureNote { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 24px; padding-top: 18px; border-top: 1px solid #e0e9f5; color: #7a8ba4; font-size: 11px; font-weight: 650; }
@@ -61,6 +77,11 @@
   .inputWrap input { font-size: 19px; }
   .primaryButton { min-height: 74px; font-size: 19px; }
 }
+
+:global(html[data-theme="dark"]) .info { color: #91b5f2; }
+:global(html[data-theme="dark"]) .success { color: #74d6ad; }
+:global(html[data-theme="dark"]) .error { color: #ff9eaa; }
+:global(html[data-theme="dark"]) .pending { color: #e8c875; }
 @media (max-width: 560px) {
   .shell { width: 100%; }
   .layout { min-height: 0; align-items: start; padding: 22px 16px 28px; border-radius: 20px; }

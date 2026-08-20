@@ -35,6 +35,9 @@ class User(Base):
     mat_khau_hash = Column(String(255), nullable=True)
     vai_tro = Column(String(20), nullable=False)  # patient | pharmacist | admin
     account_status = Column(String(30), nullable=False, default="pending_email")
+    # legacy_migration: tài khoản cũ được phép phục hồi khi liên kết Google.
+    # admin/security: không được tự mở khóa qua bất kỳ luồng đăng nhập nào.
+    lock_source = Column(String(30), nullable=True)
     so_chung_chi_hanh_nghe = Column(String(100), nullable=True)
     ly_do_tu_choi = Column(Text, nullable=True)
     noi_cong_tac = Column(String(255), nullable=True)
