@@ -6,6 +6,7 @@ pydantic-settings>=2.7.0
 python-dotenv>=1.0.0
 argon2-cffi>=23.1.0
 google-auth>=2.35.0
+python-multipart>=0.0.9   # bắt buộc để FastAPI nhận UploadFile (proxy OCR đơn thuốc)
 
 # AI / LangChain
 langchain>=0.3.0

@@ -185,6 +185,46 @@ class AddProductRequest(BaseModel):
     prescription_id: str | None = None
 
 
+# ---- Quét đơn thuốc bằng OCR (proxy sang ocr-service) ----
+
+
+class ScannedDrug(BaseModel):
+    row_number: int | None = None
+    ocr_text: str  # nguyên văn OCR đọc được - luôn hiển thị cho người dùng đối chiếu
+    suggested_name: str | None = None  # khớp products.ten_thuoc, hoặc None nếu không có ứng viên
+    alternatives: list[str] = Field(default_factory=list)  # 2-3 ứng viên kế tiếp
+    known: bool  # ten_thuoc đề xuất có đạt ngưỡng tin cậy hay không
+    score: float
+
+
+class DiseaseCandidate(BaseModel):
+    """Một bệnh trong CSDL, kèm id để ghi thẳng vào hồ sơ bệnh nền."""
+
+    id: int
+    ten_benh: str
+
+
+class ScannedDisease(BaseModel):
+    # Nguyên văn in trên đơn (sau nhãn "Chẩn đoán"/"Bệnh kèm theo") - luôn hiển thị
+    # để người dùng đối chiếu, không bao giờ bị ghi đè bởi tên trong CSDL.
+    ocr_text: str
+    # Mã ICD in kèm trên đơn (I10, E11...) nếu có - bằng chứng mạnh nhất, hiển thị
+    # để người dùng xác nhận nhanh mà không cần đọc lại tên dài.
+    icd_code: str | None = None
+    suggested: DiseaseCandidate | None = None  # ứng viên khớp nhất trong CSDL
+    alternatives: list[DiseaseCandidate] = []  # ứng viên kế tiếp
+
+
+class ScanPrescriptionResponse(BaseModel):
+    document_type: str  # prescription | medicine_package | unknown
+    drugs: list[ScannedDrug]
+    # Bệnh nền đọc được từ đơn. Chỉ lấy chữ in cạnh nhãn "Chẩn đoán"/"Bệnh kèm
+    # theo" - KHÔNG suy ra bệnh từ tên thuốc (suy diễn kiểu đó không kiểm chứng
+    # được và người dùng không có cách nào biết nó sai).
+    diseases: list[ScannedDisease] = []
+    requires_confirmation: bool = True  # luôn True - OCR chỉ đề xuất, không tự thêm
+
+
 # ---- Kiểm tra tương tác ----
 
 

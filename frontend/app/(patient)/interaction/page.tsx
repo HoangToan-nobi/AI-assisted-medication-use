@@ -345,6 +345,7 @@ function InteractionPageContent() {
                   : undefined
               }
               inputId={`prescription-search-${p.id}`}
+              token={session?.accessToken}
             />
           ))}
           <button

@@ -167,6 +167,19 @@ function ProfilePageContent() {
     setProfileSaved(false);
   }
 
+  // Bệnh nền đọc được từ OCR đơn thuốc. Khác addCondition (chỉ sửa state, chờ người
+  // dùng bấm "Lưu" ở tab hồ sơ): người dùng đang đứng ở tab "Đơn thuốc" nên nếu chỉ
+  // đổi state, thay đổi sẽ mất khi họ rời trang - vì vậy ghi thẳng qua API.
+  // PUT thay toàn bộ danh sách, nên phải gộp với bệnh nền đang có thay vì ghi đè.
+  async function handleAddConditionsFromScan(diseaseIds: number[]) {
+    if (!session) return;
+    const mergedIds = Array.from(
+      new Set([...selectedConditions.map((condition) => condition.id), ...diseaseIds]),
+    );
+    const saved = await updatePatientConditions(session.userId, mergedIds, session.accessToken);
+    setSelectedConditions(saved);
+  }
+
   function validateProfile() {
     const errors: Partial<Record<ProfileField, string>> = {};
     if (ngaySinh) {
@@ -806,6 +819,8 @@ function ProfilePageContent() {
                   onRename={(label) => handleRename(p.id, label)}
                   onRemovePanel={() => handleRemovePanel(p.id)}
                   inputId={`patient-prescription-search-${p.id}`}
+                  token={accessToken}
+                  onAddConditions={handleAddConditionsFromScan}
                 />
               ))}
               <button

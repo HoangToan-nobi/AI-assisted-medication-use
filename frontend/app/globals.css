@@ -5067,6 +5067,409 @@ html[data-theme="dark"] .bottom-nav.sidebar {
 .prescription-panel__remove:hover {
   color: #b5362f;
 }
+
+/* ---- Quét đơn thuốc bằng OCR ---- */
+.ocr-scan-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 18px 16px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-lg);
+  background: var(--surface-container-low);
+  color: var(--on-surface-variant);
+  text-align: center;
+}
+.ocr-scan-loading__fox {
+  width: 72px;
+  height: 62px;
+  animation: medi-fox-breathe 1.7s ease-in-out infinite;
+}
+.ocr-scan-loading strong {
+  color: var(--on-surface);
+  font-size: 14px;
+}
+.ocr-scan-loading span {
+  font-size: 12px;
+}
+.ocr-scan-backdrop {
+  position: fixed;
+  z-index: 4900;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(21, 32, 52, 0.58);
+  backdrop-filter: blur(3px);
+  animation: medi-alert-fade-in 0.2s ease-out;
+}
+.ocr-scan-modal {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  gap: 16px;
+  width: min(680px, calc(100vw - 40px));
+  max-height: min(720px, calc(100vh - 40px));
+  padding: 26px 28px 22px;
+  border-radius: var(--radius-xl);
+  background: var(--surface-container-lowest);
+  color: var(--on-surface);
+  box-shadow: 0 28px 70px rgba(4, 13, 29, 0.34);
+  animation: medi-alert-pop-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  overflow: hidden;
+}
+.ocr-scan-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ocr-scan-modal__header h2 {
+  margin: 4px 0 6px;
+  font-size: 19px;
+}
+.ocr-scan-modal__header p {
+  margin: 0;
+  color: var(--on-surface-variant);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.ocr-scan-modal__eyebrow {
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.ocr-scan-modal__close {
+  flex-shrink: 0;
+  min-height: unset;
+  padding: 6px;
+  color: var(--on-surface-variant);
+  background: transparent;
+  box-shadow: none;
+}
+.ocr-scan-modal__close:hover {
+  color: var(--on-surface);
+}
+.ocr-scan-modal__empty {
+  padding: 20px;
+  color: var(--on-surface-variant);
+  text-align: center;
+}
+.ocr-scan-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+  padding: 2px 2px 2px 0;
+  list-style: none;
+}
+.ocr-scan-row {
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-container-low);
+}
+.ocr-scan-row__ocr {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.ocr-scan-row__number {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  background: var(--surface-container-high);
+  color: var(--on-surface-variant);
+  font-size: 11px;
+  font-weight: 700;
+}
+.ocr-scan-row__label {
+  display: block;
+  color: var(--on-surface-variant);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.ocr-scan-row__ocr {
+  min-width: 0;
+}
+.ocr-scan-row__ocr p {
+  margin: 2px 0 0;
+  color: var(--on-surface);
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.ocr-scan-row__options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.ocr-scan-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--surface-container-lowest);
+  cursor: pointer;
+}
+/* Thuốc dùng radio (mỗi dòng đúng một thuốc), chẩn đoán dùng checkbox (một dòng có
+   thể chứa nhiều bệnh) - cả hai cần cùng kích thước và canh lề. */
+.ocr-scan-option input[type="radio"],
+.ocr-scan-option input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--primary);
+}
+.ocr-scan-option__name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.ocr-scan-option__tag {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--surface-container-high);
+  color: var(--on-surface-variant);
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.ocr-scan-option__tag--top {
+  background: var(--primary-fixed);
+  color: var(--primary);
+}
+
+/* Chẩn đoán / bệnh nền đọc được từ đơn - dùng lại .ocr-scan-row của phần thuốc để
+   hai khối đọc giống nhau; chỉ phần nhãn tiêu đề là riêng. */
+.ocr-scan-diseases {
+  min-width: 0;
+  margin-bottom: 4px;
+}
+.ocr-scan-diseases__label {
+  margin: 0 0 8px;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--primary);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.ocr-scan-diseases__label span {
+  font-weight: 600;
+  color: var(--on-surface-variant);
+  text-transform: none;
+  letter-spacing: 0;
+}
+/* Nơi không có quyền ghi hồ sơ: cùng khung với lựa chọn có radio, bỏ con trỏ và
+   ô radio để không gợi ý một hành động không tồn tại. */
+.ocr-scan-option--readonly {
+  cursor: default;
+}
+
+.ocr-scan-option--selected {
+  border-color: var(--primary);
+  background: var(--primary-fixed);
+}
+.ocr-scan-option--manual {
+  flex-wrap: wrap;
+}
+.ocr-scan-option--manual input[type="text"] {
+  flex: 1;
+  min-width: 140px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-sm);
+  background: var(--surface-container-lowest);
+  color: var(--on-surface);
+  font: inherit;
+  font-size: 13px;
+}
+.ocr-scan-option--skip .ocr-scan-option__name {
+  color: var(--on-surface-variant);
+  font-weight: 500;
+}
+.ocr-scan-row__unmatched {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 8px 0 0;
+  color: #6d7785;
+  font-size: 12px;
+}
+.ocr-scan-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border-subtle);
+}
+.ocr-scan-modal__cancel {
+  color: var(--on-surface-variant);
+  background: transparent;
+  border: 1px solid var(--outline-variant);
+}
+.ocr-scan-modal__confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--on-primary);
+  background: var(--primary);
+  border: 1px solid var(--primary);
+}
+.ocr-scan-modal__confirm:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* OCR content layout with image preview */
+/* Vùng cuộn DUY NHẤT của modal. Trước đây .ocr-scan-rows tự cuộn riêng, nên khi
+   thêm khối chẩn đoán ở trên nó, khối đó nằm ngoài vùng cuộn và đứng im trong khi
+   danh sách thuốc trượt bên dưới. Giữ mọi thứ cuộn chung một mạch ở đây. */
+.ocr-scan-content {
+  display: flex;
+  gap: 16px;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+.ocr-scan-lists {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+/* Ảnh gốc dính lại khi cuộn: cần nhìn nó để đối chiếu từng dòng bên phải, mà danh
+   sách thì dài hơn ảnh nhiều. */
+.ocr-scan-preview {
+  position: sticky;
+  top: 0;
+}
+.ocr-scan-rows {
+  min-width: 0;
+}
+.ocr-scan-preview {
+  flex: 0 0 auto;
+  width: 160px;
+  height: 200px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-m);
+  overflow: hidden;
+  background: var(--surface);
+}
+.ocr-scan-preview__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: pointer;
+}
+.ocr-scan-preview__zoom-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  color: white;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+.ocr-scan-preview:hover .ocr-scan-preview__zoom-hint {
+  opacity: 1;
+}
+
+/* Web-style image zoom modal */
+.ocr-scan-zoom-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+}
+.ocr-scan-zoom-modal {
+  position: relative;
+  background: white;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  max-width: min(800px, 90vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+.ocr-scan-zoom-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+.ocr-scan-zoom-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 40px;
+  height: 40px;
+  min-height: unset;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+.ocr-scan-zoom-close:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+html[data-theme="dark"] .ocr-scan-modal,
+html[data-theme="dark"] .ocr-scan-row,
+html[data-theme="dark"] .ocr-scan-option {
+  background: #172235;
+  border-color: #39516f;
+}
+html[data-theme="dark"] .ocr-scan-option--manual input[type="text"] {
+  background: #111c2e;
+  color: #edf4ff;
+  border-color: #405a7d;
+}
+html[data-theme="dark"] .ocr-scan-option--selected {
+  background: #223552;
+  border-color: var(--primary);
+}
+html[data-theme="dark"] .ocr-scan-row__unmatched {
+  color: #9fb0c7;
+}
 .prescription-panel__list {
   margin-top: 6px;
 }
