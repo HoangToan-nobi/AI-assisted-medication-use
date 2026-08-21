@@ -41,17 +41,14 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const pendingCredentials = sessionStorage.getItem("medicheck-reset-credentials");
-    if (!pendingCredentials) return;
+    const resetSucceeded = sessionStorage.getItem("medicheck-password-reset-success") === "1";
+    // Remove credentials written by older builds without reading or restoring
+    // the plaintext password they may contain.
     sessionStorage.removeItem("medicheck-reset-credentials");
-    try {
-      const credentials = JSON.parse(pendingCredentials) as { email?: string; password?: string };
+    sessionStorage.removeItem("medicheck-password-reset-success");
+    if (resetSucceeded) {
       setMode("login");
-      setEmail(credentials.email || "");
-      setMatKhau(credentials.password || "");
       setNotice("Mật khẩu đã được cập nhật. Bạn có thể đăng nhập ngay.");
-    } catch {
-      // Ignore malformed one-time autofill data.
     }
   }, []);
 
@@ -71,7 +68,7 @@ export default function AuthPage() {
       message: wasRegistration ? `Chào mừng ${auth.ho_ten} đến với MediCheck.` : `Chào mừng ${auth.ho_ten} quay lại MediCheck.`,
     });
     router.replace(
-      auth.vai_tro === "patient" ? "/dashboard" : auth.vai_tro === "admin" ? "/admin/pharmacists" : "/pharmacist-dashboard",
+      auth.vai_tro === "patient" ? "/dashboard" : auth.vai_tro === "admin" ? "/admin" : "/pharmacist-dashboard",
     );
   }
 
@@ -84,6 +81,7 @@ export default function AuthPage() {
   async function demo(emailDemo: string) {
     setLoading(true);
     setError(null);
+    setNotice(null);
     try {
       await handleAuthResult(await login(emailDemo, "demo1234"));
     } catch (err) {
@@ -101,6 +99,7 @@ export default function AuthPage() {
     event.preventDefault();
     setLoading(true);
     setError(null);
+    setNotice(null);
     try {
       if (linkRequired && googleCredential) {
         await handleAuthResult(await linkGoogle(googleCredential, matKhau));
@@ -538,6 +537,16 @@ export default function AuthPage() {
           color: #b74151;
           font-size: 12px;
           font-weight: 700;
+          line-height: 1.5;
+          white-space: pre-line;
+        }
+        .mc-auth__notice {
+          margin: 0;
+          color: #4167b2;
+          font-size: 12px;
+          font-weight: 700;
+          line-height: 1.5;
+          white-space: pre-line;
         }
         .mc-auth__submit {
           display: flex;
@@ -962,8 +971,8 @@ export default function AuthPage() {
                   {error}
                 </p>
               )}
-              {notice && <p className="mc-auth__subtitle" role="status">{notice}</p>}
-              {canResend && email && <button type="button" className="mc-auth__tab" onClick={() => void resendVerification(email).then((result) => setNotice(result.message)).catch((err) => setError(err instanceof ApiError ? err.message : "Không thể gửi lại email."))}>Gửi lại email xác minh</button>}
+              {notice && <p className="mc-auth__notice" role="status" aria-live="polite">{notice}</p>}
+              {canResend && email && <button type="button" className="mc-auth__tab" onClick={() => void resendVerification(email).then((result) => { if (result.code === "EMAIL_NOT_REGISTERED") { setNotice(null); setError(result.message); return; } setError(null); setNotice(result.message); }).catch((err) => { setNotice(null); setError(err instanceof ApiError ? err.message : "Không thể gửi lại email."); })}>Gửi lại email xác minh</button>}
               <button
                 type="submit"
                 className="mc-auth__submit"

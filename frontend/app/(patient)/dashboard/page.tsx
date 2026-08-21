@@ -3,11 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Disclaimer from "@/components/Disclaimer";
 import MaterialIcon from "@/components/MaterialIcon";
 import {
   ApiError,
-  checkProducts,
   markNotificationRead,
   removePatientMedication,
   type NotificationItem,
@@ -41,7 +39,6 @@ export default function PatientDashboardPage() {
   } = usePatientNotifications(session?.userId, session?.accessToken, { refreshInterval: 30000 });
 
   const loading = prescriptionsLoading || historyLoading || notificationsLoading;
-  const [checking, setChecking] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,24 +55,6 @@ export default function PatientDashboardPage() {
   }
 
   const totalMedications = prescriptions.reduce((sum, p) => sum + p.medications.length, 0);
-
-  async function handleCheck() {
-    if (!session) return;
-    if (totalMedications < 2) { setError("Cần ít nhất 2 loại thuốc trong hồ sơ để kiểm tra tương tác."); return; }
-    setChecking(true); setError(null);
-    try {
-      const result = await checkProducts(
-        prescriptions
-          .filter((p) => p.medications.length > 0)
-          .map((p) => ({ label: p.label, products: p.medications.map((m) => m.ten_thuoc) })),
-        session.accessToken,
-        { personalized: true }
-      );
-      window.sessionStorage.setItem("medguard_last_check", JSON.stringify(result));
-      router.push("/check-result");
-    } catch (err) { setError(err instanceof ApiError ? err.message : "Kiểm tra tương tác thất bại"); }
-    finally { setChecking(false); }
-  }
 
   async function handleDelete(prescriptionId: string, medicationId: string) {
     if (!session || !(await confirm({ title: "Xóa thuốc khỏi hồ sơ?", message: "Thuốc này sẽ bị xóa khỏi đơn đang lưu.", confirmLabel: "Xóa thuốc", tone: "danger" }))) return;
@@ -133,6 +112,8 @@ export default function PatientDashboardPage() {
         </section>
       )}
 
+      <section className="dashboard-summary-row"><div><span className="dashboard-summary-number">{totalMedications}</span><span> thuốc đang theo dõi</span></div><div><span className="dashboard-summary-number">{unresolvedSevere}</span><span> cảnh báo chưa xử lý</span></div></section>
+
       <section className="dashboard-section">
         <div className="dashboard-section__header"><h2 className="section-heading-icon"><MaterialIcon name="medication" size={21} />Đơn thuốc của tôi</h2><Link href="/profile?tab=prescriptions">Xem tất cả <MaterialIcon name="arrow_forward" size={17} /></Link></div>
         {!loading && totalMedications === 0 && <div className="empty-state"><MediFox variant="empty" className="empty-state__mascot" /><strong>Chưa có thuốc trong hồ sơ</strong><span>Thêm thuốc để bắt đầu kiểm tra tương tác.</span></div>}
@@ -160,15 +141,12 @@ export default function PatientDashboardPage() {
         )}
       </section>
 
-      <section className="dashboard-summary-row"><div><span className="dashboard-summary-number">{totalMedications}</span><span> thuốc đang theo dõi</span></div><div><span className="dashboard-summary-number">{unresolvedSevere}</span><span> cảnh báo chưa xử lý</span></div></section>
-      <Disclaimer />
-
       {history.length > 0 && <section className="dashboard-history"><div className="dashboard-section__header"><h2 className="section-heading-icon"><MaterialIcon name="history" size={21} />Lịch sử kiểm tra gần đây</h2><Link href="/history">Xem tất cả <MaterialIcon name="arrow_forward" size={17} /></Link></div>{history.slice(0, 3).map((h) => <button className="history-card" key={h.id} onClick={() => router.push(`/check-result?checkId=${h.id}`)}><span>{formatVietnameseDateTime(h.thoi_gian_kiem_tra)}</span><strong>{h.co_canh_bao_nang ? "Có cảnh báo cần chú ý" : "Chưa phát hiện cảnh báo nghiêm trọng"}</strong><MaterialIcon name="chevron_right" size={20} /></button>)}</section>}
 
       {!loading && totalMedications >= 2 && (
-        <button className="interaction-run" type="button" onClick={() => void handleCheck()} disabled={checking} style={{ marginTop: "16px" }}>
-          <MaterialIcon name="analytics" size={19} />{checking ? "Đang phân tích..." : "Kiểm tra tương tác"}
-        </button>
+        <Link className="btn interaction-run" href="/interaction" style={{ marginTop: "16px" }}>
+          <MaterialIcon name="analytics" size={19} />Tra cứu tương tác
+        </Link>
       )}
     </main>
   );

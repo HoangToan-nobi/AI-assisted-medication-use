@@ -58,6 +58,7 @@ async def test_email_verification_cookie_rotation_logout_and_csrf(auth_env):
         raw = issue_action_token(db, token.user_id, "verify_email", 60)
     verified = await client.post("/api/v1/auth/verify-email", json={"token": raw})
     assert verified.status_code == 200
+    assert (await client.post("/api/v1/auth/verify-email", json={"token": raw})).status_code == 400
 
     logged_in = await client.post("/api/v1/auth/login", json={"email": email, "mat_khau": "a-strong-password"})
     assert logged_in.status_code == 200
@@ -103,6 +104,59 @@ async def test_google_registration_invalid_token_and_password_link(auth_env):
 
 
 @pytest.mark.asyncio
+async def test_google_link_only_reactivates_legacy_migration_locks(auth_env):
+    client, factory, transport = auth_env
+    password = "existing-password"
+    with factory() as db:
+        db.add_all([
+                User(
+                    ho_ten="Legacy Locked",
+                    email="google-legacyuser@gmail.com",
+                    email_normalized="google-legacyuser@gmail.com",
+                mat_khau_hash=hash_password(password),
+                vai_tro="patient",
+                account_status="locked",
+                lock_source="legacy_migration",
+            ),
+            User(
+                ho_ten="Admin Locked",
+                email="google-adminlocked@gmail.com",
+                email_normalized="google-adminlocked@gmail.com",
+                email_verified_at=datetime.utcnow(),
+                mat_khau_hash=hash_password(password),
+                vai_tro="patient",
+                account_status="locked",
+                lock_source="admin",
+            ),
+        ])
+        db.commit()
+
+    async with AsyncClient(transport=transport, base_url="http://test") as legacy_client:
+        response = await legacy_client.post(
+            "/api/v1/auth/google/link",
+            json={"credential": "valid-google-legacyuser", "mat_khau": password},
+        )
+        assert response.status_code == 200
+
+    async with AsyncClient(transport=transport, base_url="http://test") as locked_client:
+        response = await locked_client.post(
+            "/api/v1/auth/google/link",
+            json={"credential": "valid-google-adminlocked", "mat_khau": password},
+        )
+        assert response.status_code == 423
+
+    with factory() as db:
+        legacy = db.query(User).filter_by(email_normalized="google-legacyuser@gmail.com").one()
+        admin_locked = db.query(User).filter_by(email_normalized="google-adminlocked@gmail.com").one()
+        assert legacy.account_status == "active"
+        assert legacy.lock_source is None
+        assert db.query(AuthIdentity).filter_by(user_id=legacy.id, provider="google").count() == 1
+        assert admin_locked.account_status == "locked"
+        assert admin_locked.lock_source == "admin"
+        assert db.query(AuthIdentity).filter_by(user_id=admin_locked.id, provider="google").count() == 0
+
+
+@pytest.mark.asyncio
 async def test_pharmacist_waits_for_admin_approval(auth_env):
     client, factory, transport = auth_env
     pending = await client.post("/api/v1/auth/google/complete-registration", json={"credential": "valid-google-pharmacist", "vai_tro": "pharmacist", "so_chung_chi_hanh_nghe": "CCHN-123", "noi_cong_tac": "Bệnh viện A"})
@@ -120,12 +174,19 @@ async def test_pharmacist_waits_for_admin_approval(auth_env):
         listed = await admin.get("/api/v1/admin/pharmacists/pending")
         assert [item["user_id"] for item in listed.json()] == [pharmacist_id]
         assert (await admin.post(f"/api/v1/admin/pharmacists/{pharmacist_id}/approve", headers={"X-CSRF-Token": csrf})).status_code == 200
+        assert (await admin.post(
+            f"/api/v1/admin/users/{pharmacist_id}/status",
+            headers={"X-CSRF-Token": csrf},
+            json={"account_status": "locked"},
+        )).status_code == 200
     with factory() as db:
-        assert db.get(User, pharmacist_id).account_status == "active"
+        pharmacist = db.get(User, pharmacist_id)
+        assert pharmacist.account_status == "locked"
+        assert pharmacist.lock_source == "admin"
 
 
 @pytest.mark.asyncio
-async def test_forgot_password_distinguishes_registered_and_unknown_email(auth_env):
+async def test_forgot_password_reports_registered_and_unknown_email(auth_env):
     client, factory, _ = auth_env
     email = "forgot@example.com"
     with factory() as db:
@@ -143,20 +204,21 @@ async def test_forgot_password_distinguishes_registered_and_unknown_email(auth_e
     sent = await client.post("/api/v1/auth/forgot-password", json={"email": email})
     assert sent.status_code == 200
     assert sent.json()["message"] == (
-        "Email đặt lại mật khẩu đã được gửi.\n"
-        "Vui lòng kiểm tra Gmail, bao gồm Hộp thư đến (Inbox) và Thư rác (Spam), "
-        "để tìm email từ MediCheck và làm theo hướng dẫn đặt lại mật khẩu."
+        "Email đã được gửi.\nVui lòng kiểm tra Hộp thư đến (Inbox) và Thư rác (Spam)."
     )
+    assert sent.json()["code"] == "PASSWORD_RESET_EMAIL_SENT"
     with factory() as db:
         user = db.query(User).filter_by(email_normalized=email).one()
         assert db.query(AuthActionToken).filter_by(user_id=user.id, purpose="reset_password").count() == 1
 
     missing = await client.post("/api/v1/auth/forgot-password", json={"email": "missing@example.com"})
-    assert missing.status_code == 404
-    assert missing.json()["detail"] == (
-        "Không tìm thấy tài khoản với email này.\n"
-        "Email này chưa được đăng ký trên MediCheck. Vui lòng kiểm tra lại địa chỉ email hoặc đăng ký tài khoản mới."
+    assert missing.status_code == 200
+    assert missing.json()["message"] == (
+        "Email chưa được đăng ký.\nVui lòng đăng ký tài khoản hoặc kiểm tra lại địa chỉ email."
     )
+    assert missing.json()["code"] == "EMAIL_NOT_REGISTERED"
+    with factory() as db:
+        assert db.query(AuthActionToken).filter_by(purpose="reset_password").count() == 1
 
 
 @pytest.mark.asyncio

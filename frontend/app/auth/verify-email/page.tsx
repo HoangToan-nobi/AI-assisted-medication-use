@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApiError, verifyEmail } from "@/lib/api";
 import { AuthNotice, AuthPageFooter, AuthSupportShell } from "../AuthSupport";
 
@@ -10,8 +10,14 @@ type VerificationState = { tone: "info" | "success" | "error" | "pending"; messa
 export default function VerifyEmailPage() {
   const token = useSearchParams().get("token");
   const [state, setState] = useState<VerificationState>({ tone: "info", message: "Đang xác minh địa chỉ email của bạn..." });
+  const verificationStarted = useRef(false);
 
   useEffect(() => {
+    // React Strict Mode invokes effects twice in development. Verification
+    // tokens are single-use, so only the first invocation may call the API.
+    if (verificationStarted.current) return;
+    verificationStarted.current = true;
+
     if (!token) {
       setState({ tone: "error", message: "Liên kết xác minh không hợp lệ hoặc bị thiếu token." });
       return;

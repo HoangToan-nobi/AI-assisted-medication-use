@@ -125,9 +125,22 @@ def consume_action_token(db: Session, raw: str, purpose: str) -> User | None:
     token = db.query(AuthActionToken).filter_by(token_hash=hash_token(raw), purpose=purpose).first()
     if token is None or token.used_at is not None or token.expires_at <= now:
         return None
-    token.used_at = now
+
+    # The condition is repeated in the UPDATE so two requests that read the
+    # same unused token cannot both claim it. The caller commits this claim
+    # together with the protected account change (verify/reset password).
+    claimed = db.query(AuthActionToken).filter(
+        AuthActionToken.id == token.id,
+        AuthActionToken.used_at.is_(None),
+        AuthActionToken.expires_at > now,
+    ).update({AuthActionToken.used_at: now}, synchronize_session=False)
+    if claimed != 1:
+        db.rollback()
+        return None
     user = db.get(User, token.user_id)
-    db.commit()
+    if user is None:
+        db.rollback()
+        return None
     return user
 
 
@@ -145,10 +158,31 @@ def rotate_refresh_session(db: Session, raw: str) -> tuple[str, RefreshSession] 
     old = db.query(RefreshSession).filter_by(token_hash=hash_token(raw)).first()
     if old is None or old.revoked_at is not None or old.expires_at <= now:
         return None
-    new_raw, new = issue_refresh_session(db, old.user_id)
-    old.revoked_at = now
-    old.replaced_by_id = new.id
+
+    # Claim the old session with a conditional write. Even when concurrent
+    # transactions both observed it as active, only one UPDATE can affect it.
+    claimed = db.query(RefreshSession).filter(
+        RefreshSession.id == old.id,
+        RefreshSession.revoked_at.is_(None),
+        RefreshSession.expires_at > now,
+    ).update({RefreshSession.revoked_at: now}, synchronize_session=False)
+    if claimed != 1:
+        db.rollback()
+        return None
+
+    new_raw = secrets.token_urlsafe(48)
+    new = RefreshSession(
+        user_id=old.user_id,
+        token_hash=hash_token(new_raw),
+        expires_at=now + timedelta(days=get_settings().refresh_token_expire_days),
+    )
+    db.add(new)
+    db.flush()
+    db.query(RefreshSession).filter(RefreshSession.id == old.id).update(
+        {RefreshSession.replaced_by_id: new.id}, synchronize_session=False
+    )
     db.commit()
+    db.refresh(new)
     return new_raw, new
 
 

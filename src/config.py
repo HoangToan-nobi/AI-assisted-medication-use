@@ -1,5 +1,6 @@
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import urlparse
 
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -41,8 +42,8 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     enable_demo_accounts: bool = False
 
-    # Transactional email. In development/test, missing SMTP settings cause the
-    # verification URL to be logged instead of silently activating the account.
+    # Transactional email. In development/test, missing SMTP settings emit a
+    # warning without logging one-time verification/reset credentials.
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_username: str = ""
@@ -56,6 +57,10 @@ class Settings(BaseSettings):
         default=True,
         validation_alias=AliasChoices("SMTP_STARTTLS", "SMTP_USE_TLS"),
     )
+    smtp_ssl: bool = False
+    smtp_timeout_seconds: int = Field(default=15, ge=1, le=60)
+    smtp_max_retries: int = Field(default=3, ge=1, le=5)
+    smtp_retry_delay_seconds: float = Field(default=1.0, ge=0, le=10)
 
     # Vector Store
     chroma_persist_dir: str = "./data/chroma"
@@ -84,5 +89,24 @@ def validate_production_auth_settings(settings: Settings) -> None:
         problems.append("GOOGLE_CLIENT_ID chua duoc cau hinh")
     if not settings.smtp_host or not settings.smtp_from:
         problems.append("SMTP_HOST/SMTP_FROM chua duoc cau hinh")
+    if settings.smtp_username and not settings.smtp_password:
+        problems.append("SMTP_PASSWORD bat buoc khi co SMTP_USERNAME")
+    if settings.smtp_starttls and settings.smtp_ssl:
+        problems.append("Chi duoc bat mot trong SMTP_STARTTLS hoac SMTP_SSL")
+
+    frontend = urlparse(settings.frontend_url)
+    if frontend.scheme != "https" or not frontend.netloc:
+        problems.append("FRONTEND_URL phai la URL HTTPS hop le trong production")
+
+    origins = [origin.strip().rstrip("/") for origin in settings.cors_origins.split(",") if origin.strip()]
+    if not origins:
+        problems.append("CORS_ORIGINS khong duoc de trong")
+    for origin in origins:
+        parsed = urlparse(origin)
+        if origin == "*" or parsed.scheme != "https" or not parsed.netloc or parsed.path not in {"", "/"}:
+            problems.append(f"CORS origin khong hop le cho production: {origin}")
+    frontend_origin = f"{frontend.scheme}://{frontend.netloc}" if frontend.scheme and frontend.netloc else ""
+    if frontend_origin and frontend_origin not in origins:
+        problems.append("CORS_ORIGINS phai chua origin cua FRONTEND_URL")
     if problems:
         raise RuntimeError("Cau hinh auth production khong hop le: " + "; ".join(problems))
