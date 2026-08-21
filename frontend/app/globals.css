@@ -2490,13 +2490,14 @@ button,
 }
 .dashboard-summary-row {
   display: flex;
-  gap: 10px;
-  margin: 5px 0 18px;
+  gap: 20px;
+  margin: 5px 0 12px;
   color: var(--on-surface-variant);
   font-size: 13px;
 }
 .dashboard-summary-row > div {
-  padding: 10px 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--outline-variant);
   background: var(--surface-container-low);
   border-radius: 8px;
 }
@@ -7665,6 +7666,19 @@ body {
 .profile-interaction-result,
 .pharmacist-review-section {
   margin-top: 30px;
+}
+
+/* Keep the prescription section close to the summary cards above it. */
+.dashboard-page > .dashboard-summary-row + .dashboard-section {
+  margin-top: 10px !important;
+}
+
+.dashboard-page > .dashboard-section {
+  margin-bottom: 12px;
+}
+
+.dashboard-page > .dashboard-section + .dashboard-history {
+  margin-top: 0 !important;
 }
 
 .dashboard-section__header,
