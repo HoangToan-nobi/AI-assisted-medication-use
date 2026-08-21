@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
 import MaterialIcon from "@/components/MaterialIcon";
 import MediFox from "@/components/MediFox";
+import ThemeModeToggle from "@/components/ThemeModeToggle";
 import styles from "./auth-support.module.css";
 
 const asset = (name: string) => encodeURI("/Bộ nhận diện y tế/" + name);
@@ -17,7 +18,10 @@ export function AuthSupportShell({ eyebrow, title, description, icon, children }
           <Link href="/" className={styles.logo} aria-label="MediCheck - Trang chủ">
             <Image src={asset("2-cropped.png")} alt="MediCheck" fill sizes="142px" priority />
           </Link>
-          <Link href="/auth" className={styles.backLink}><MaterialIcon name="arrow_back" size={18} />Quay lại đăng nhập</Link>
+          <div className={styles.headerActions}>
+            <ThemeModeToggle />
+            <Link href="/auth" className={styles.backLink}><MaterialIcon name="arrow_back" size={18} />Quay lại đăng nhập</Link>
+          </div>
         </header>
         <section className={styles.layout}>
           <div className={styles.intro}>
