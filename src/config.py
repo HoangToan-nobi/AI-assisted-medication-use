@@ -62,6 +62,14 @@ class Settings(BaseSettings):
     smtp_max_retries: int = Field(default=3, ge=1, le=5)
     smtp_retry_delay_seconds: float = Field(default=1.0, ge=0, le=10)
 
+    # Gmail API (OAuth) - alternate transport for transactional email, used
+    # instead of SMTP on hosts (e.g. Render) that block outbound SMTP at the
+    # network level. When gmail_oauth_refresh_token is set, src/services/email.py
+    # sends via the Gmail API over HTTPS instead of smtplib.
+    gmail_oauth_client_id: str = ""
+    gmail_oauth_client_secret: str = ""
+    gmail_oauth_refresh_token: str = ""
+
     # Vector Store
     chroma_persist_dir: str = "./data/chroma"
 
@@ -81,12 +89,19 @@ def validate_production_auth_settings(settings: Settings) -> None:
         problems.append("COOKIE_SECURE phai bat trong production")
     if not settings.google_client_id:
         problems.append("GOOGLE_CLIENT_ID chua duoc cau hinh")
-    if not settings.smtp_host or not settings.smtp_from:
-        problems.append("SMTP_HOST/SMTP_FROM chua duoc cau hinh")
-    if settings.smtp_username and not settings.smtp_password:
-        problems.append("SMTP_PASSWORD bat buoc khi co SMTP_USERNAME")
-    if settings.smtp_starttls and settings.smtp_ssl:
-        problems.append("Chi duoc bat mot trong SMTP_STARTTLS hoac SMTP_SSL")
+    has_gmail_api = bool(
+        settings.gmail_oauth_client_id
+        and settings.gmail_oauth_client_secret
+        and settings.gmail_oauth_refresh_token
+    )
+    has_smtp = bool(settings.smtp_host and settings.smtp_from)
+    if not has_gmail_api and not has_smtp:
+        problems.append("Can cau hinh SMTP_HOST/SMTP_FROM hoac GMAIL_OAUTH_* de gui duoc email")
+    if not has_gmail_api:
+        if settings.smtp_username and not settings.smtp_password:
+            problems.append("SMTP_PASSWORD bat buoc khi co SMTP_USERNAME")
+        if settings.smtp_starttls and settings.smtp_ssl:
+            problems.append("Chi duoc bat mot trong SMTP_STARTTLS hoac SMTP_SSL")
 
     frontend = urlparse(settings.frontend_url)
     if frontend.scheme != "https" or not frontend.netloc:
