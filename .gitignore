@@ -28,8 +28,12 @@ env/
 .DS_Store
 Thumbs.db
 
-# Data (never commit large data)
-data/
+# Data (never commit large data) - neo vào gốc repo (/data/), không phải "data/"
+# trần: dạng trần khớp MỌI thư mục tên "data" ở bất kỳ độ sâu nào, vô tình nuốt cả
+# ocr-service/app/data/ (drugs.csv - file mẫu nhỏ CẦN track) và ocr-service/tests/data/
+# (fixture test) - hai thư mục đó có .gitignore riêng của ocr-service/, không cần
+# và không nên bị luật của MediCheck ở đây chi phối.
+/data/
 *.db
 *.sqlite3
 

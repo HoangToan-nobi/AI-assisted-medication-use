@@ -255,11 +255,15 @@ async function request<T>(
   if (!["GET", "HEAD", "OPTIONS"].includes(method) && path !== "/api/v1/auth/csrf") {
     csrfToken = await ensureCsrfToken();
   }
+  // Upload ảnh (quét đơn thuốc) gửi FormData: phải để trình duyệt tự đặt
+  // Content-Type kèm boundary của multipart. Tự đặt "application/json" ở đây sẽ
+  // làm hỏng body và backend không đọc được file.
+  const isFormData = typeof FormData !== "undefined" && rest.body instanceof FormData;
   const res = await fetch(`${API_URL}${path}`, {
     ...rest,
     credentials: "include",
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
       ...headers,
     },
@@ -550,6 +554,52 @@ export async function deletePatientPrescription(
   return request<void>(`/api/v1/patients/${patientId}/prescriptions/${prescriptionId}`, {
     method: "DELETE",
     token,
+  });
+}
+
+// ---- Quét đơn thuốc bằng OCR ----
+
+export type ScannedDrug = {
+  row_number: number | null;
+  ocr_text: string; // nguyên văn OCR đọc được - luôn hiển thị để đối chiếu với tờ đơn
+  suggested_name: string | null;
+  alternatives: string[]; // 2-3 ứng viên kế tiếp - đáp án đúng thường nằm ở đây
+  known: boolean;
+  score: number;
+};
+
+export type DiseaseCandidate = {
+  id: number;
+  ten_benh: string;
+};
+
+export type ScannedDisease = {
+  ocr_text: string; // nguyên văn in sau nhãn "Chẩn đoán"/"Bệnh kèm theo"
+  icd_code: string | null; // mã ICD in kèm (I10, E11...) nếu đơn có ghi
+  suggested: DiseaseCandidate | null;
+  alternatives: DiseaseCandidate[];
+};
+
+export type ScanPrescriptionResponse = {
+  document_type: string;
+  drugs: ScannedDrug[];
+  diseases: ScannedDisease[];
+  requires_confirmation: boolean;
+};
+
+// Phải đi qua request<T>() như mọi lệnh gọi khác: phiên đăng nhập nằm ở cookie
+// (medguard_access, hết hạn sau ACCESS_TOKEN_EXPIRE_MINUTES=15 phút), và chỉ
+// request<T>() mới gắn cookie, gắn X-CSRF-Token, và tự gọi /auth/refresh rồi thử
+// lại khi gặp 401. Bản trước gọi fetch thẳng với Bearer từ localStorage nên quét
+// ảnh báo "Token khong hop le hoac het han" sau 15 phút trong khi mọi màn hình
+// khác vẫn chạy bình thường.
+// Tham số token chỉ còn để nơi gọi biết đã đăng nhập hay chưa (khóa nút quét).
+export async function scanPrescription(file: File, _token?: string): Promise<ScanPrescriptionResponse> {
+  const formData = new FormData();
+  formData.append("image", file);
+  return request<ScanPrescriptionResponse>("/api/v1/prescriptions/scan", {
+    method: "POST",
+    body: formData,
   });
 }
 
