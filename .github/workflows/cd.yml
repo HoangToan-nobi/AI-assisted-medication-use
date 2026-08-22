@@ -58,12 +58,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Chay tu repo root (KHONG working-directory: frontend) - project Vercel da
+      # cau hinh san rootDirectory: "frontend", chay CLI tu trong frontend/ se bi
+      # cong don thanh frontend/frontend va khong tim thay package.json.
+      #
+      # Dung remote build (`vercel deploy --prod`) thay vi build local roi
+      # `--prebuilt` nhu truoc - NEXT_PUBLIC_API_URL duoc danh dau "Sensitive" tren
+      # Vercel nen CLI local/CI KHONG doc duoc gia tri that (build local se loi
+      # "Invalid rewrite found" vi rewrite destination rong). Bien Sensitive chi
+      # duoc resolve dung trong ha tang build cua chinh Vercel khi deploy remote.
       - name: Deploy to Vercel
-        working-directory: frontend
         run: |
           npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-          npx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-          npx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+          npx vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
