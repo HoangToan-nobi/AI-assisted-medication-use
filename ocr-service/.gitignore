@@ -1,0 +1,31 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.env
+*.log
+
+# PaddleOCR / PaddleX downloaded model cache
+.paddlex/
+paddlex/
+*.pdmodel
+*.pdiparams
+
+# VietOCR weights: ~150 MB, fetched by scripts/fetch_models.sh, baked into the
+# Docker image at build time. Never committed.
+models/
+*.pth
+
+# Uploaded or scratch images must never be committed
+*.jpg
+*.jpeg
+*.png
+*.webp
+!docs/**/*.png
+# ...except the synthetic images used for manual API testing
+!samples/*.png
+!samples/*.jpg

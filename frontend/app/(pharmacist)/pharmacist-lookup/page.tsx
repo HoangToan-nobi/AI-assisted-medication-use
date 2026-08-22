@@ -110,7 +110,8 @@ export default function PharmacistLookupPage() {
               onRemoveDrug={(name) => removeDrugFrom(p.id, name)}
               onRemovePanel={boardMode ? () => removePrescription(p.id) : undefined}
               onRename={(newLabel) => renamePrescription(p.id, newLabel)}
-              inputId={`pharmacist-prescription-search-${p.id}`} />
+              inputId={`pharmacist-prescription-search-${p.id}`}
+              token={session.accessToken} audience="pharmacist" />
           ))}
           <button type="button" className="prescription-board__add" onClick={addPrescription}>
             <MaterialIcon name="add_circle" size={26} /><span>Thêm đơn thuốc</span>

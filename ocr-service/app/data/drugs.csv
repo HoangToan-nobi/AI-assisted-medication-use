@@ -1,0 +1,31 @@
+id,drug_name,active_ingredient,strength,dosage_form,manufacturer,registration_number
+1,Hapacol 650,Paracetamol,650 mg,Tablet,DHG Pharma,VD-24537-16
+2,Hapacol 250,Paracetamol,250 mg,Powder,DHG Pharma,VD-27789-17
+3,Hapacol 150,Paracetamol,150 mg,Powder,DHG Pharma,VD-27788-17
+4,Panadol Extra,Paracetamol + Caffeine,500 mg + 65 mg,Tablet,GSK,VN-18657-15
+5,Efferalgan 500,Paracetamol,500 mg,Effervescent tablet,UPSA,VN-17627-14
+6,Augmentin 625,Amoxicillin + Clavulanic acid,500 mg + 125 mg,Tablet,GSK,VN-20326-17
+7,Augmentin 1g,Amoxicillin + Clavulanic acid,875 mg + 125 mg,Tablet,GSK,VN-20327-17
+8,Augmentin 250,Amoxicillin + Clavulanic acid,250 mg + 62.5 mg,Powder,GSK,VN-18120-14
+9,Amoxicillin 500,Amoxicillin,500 mg,Capsule,Mekophar,VD-30101-18
+10,Klacid 500,Clarithromycin,500 mg,Tablet,Abbott,VN-19214-15
+11,Zinnat 500,Cefuroxime,500 mg,Tablet,GSK,VN-17456-13
+12,Aspirin 81,Acetylsalicylic acid,81 mg,Tablet,Traphaco,VD-21563-14
+13,Plavix 75,Clopidogrel,75 mg,Tablet,Sanofi,VN-18992-15
+14,Lipitor 20,Atorvastatin,20 mg,Tablet,Pfizer,VN-20115-16
+15,Crestor 10,Rosuvastatin,10 mg,Tablet,AstraZeneca,VN-19883-16
+16,Concor 5,Bisoprolol,5 mg,Tablet,Merck,VN-18334-14
+17,Amlor 5,Amlodipine,5 mg,Capsule,Pfizer,VN-17999-14
+18,Coversyl 5,Perindopril,5 mg,Tablet,Servier,VN-20450-17
+19,Glucophage 850,Metformin,850 mg,Tablet,Merck,VN-18771-15
+20,Diamicron MR 30,Gliclazide,30 mg,Modified-release tablet,Servier,VN-17222-13
+21,Nexium 40,Esomeprazole,40 mg,Enteric-coated tablet,AstraZeneca,VN-20777-17
+22,Omeprazol 20,Omeprazole,20 mg,Capsule,Domesco,VD-25612-16
+23,Motilium-M 10,Domperidone,10 mg,Tablet,Janssen,VN-18410-14
+24,Telfast BD 60,Fexofenadine,60 mg,Tablet,Sanofi,VN-19005-15
+25,Loratadin 10,Loratadine,10 mg,Tablet,Stada,VD-26140-17
+26,Ventolin Nebules 2.5,Salbutamol,2.5 mg/2.5 ml,Nebuliser solution,GSK,VN-17334-13
+27,Medrol 16,Methylprednisolone,16 mg,Tablet,Pfizer,VN-19765-16
+28,Voltaren 75,Diclofenac,75 mg,Tablet,Novartis,VN-18220-14
+29,Mobic 7.5,Meloxicam,7.5 mg,Tablet,Boehringer Ingelheim,VN-17888-14
+30,Paracetamol Kabi 1000,Paracetamol,1000 mg/100 ml,Infusion,Fresenius Kabi,VD-28001-17

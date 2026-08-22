@@ -1,14 +1,17 @@
 import asyncio
 import logging
+import re
 import time
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import httpx
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from src.agents.graph import agent
 from src.api.deps import get_current_user, require_role
+from src.config import get_settings
 from src.db.models import (
     Disease,
     InteractionCheck,
@@ -30,6 +33,7 @@ from src.models.schemas import (
     ChatRequest,
     ChatResponse,
     CreatePrescriptionRequest,
+    DiseaseCandidate,
     DiseaseInfo,
     InteractionCheckSummary,
     MedicationCheckRequest,
@@ -49,11 +53,14 @@ from src.models.schemas import (
     RenamePrescriptionRequest,
     RequestReviewRequest,
     ReviewRequestSummary,
+    ScannedDisease,
+    ScannedDrug,
+    ScanPrescriptionResponse,
     UpdatePatientConditionsRequest,
     UpdatePatientProfileRequest,
     UpdatePharmacistProfileRequest,
 )
-from src.services.disease_search import rank_disease_matches
+from src.services.disease_search import match_diseases_in_phrase, rank_disease_matches
 from src.services.food_disease_explain import (
     build_disease_interaction_explanations,
     build_food_disease_warning_line,
@@ -680,6 +687,161 @@ async def remove_patient_medication(
 
     db.delete(pm)
     db.commit()
+
+
+# ---- Quét đơn thuốc bằng OCR (proxy sang ocr-service, xem ocr-service/README.md) ----
+
+# Backend là phòng chờ duy nhất cho ảnh đơn thuốc: đọc theo chunk để chặn dung
+# lượng SỚM (không await image.read() thẳng - ảnh 200MB không được đọc hết vào RAM
+# trước khi bị từ chối), chuyển tiếp cho ocr-service qua httpx rồi bỏ bytes ngay -
+# không bao giờ ghi xuống đĩa hay lưu DB (ảnh đơn thuốc lộ tên/tuổi/địa chỉ/chẩn đoán
+# bệnh nhân). ocr-service không có xác thực/CORS/rate-limit nên KHÔNG được để
+# browser gọi thẳng - route này đứng giữa, tái dùng JWT sẵn có của MediCheck.
+_MAX_SCAN_IMAGE_BYTES = 10 * 1024 * 1024
+_IMAGE_MAGIC_BYTES: tuple[tuple[bytes, str], ...] = (
+    (b"\xff\xd8\xff", "JPEG"),
+    (b"\x89PNG\r\n\x1a\n", "PNG"),
+)
+
+
+async def _read_upload_capped(file: UploadFile, limit: int) -> bytes:
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(64 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > limit:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Ảnh vượt quá dung lượng cho phép ({limit // (1024 * 1024)} MB)",
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _looks_like_image(data: bytes) -> bool:
+    # Không tin filename/content_type client gửi - quyết định bằng chữ ký byte thật
+    # của file. Kiểm định đầy đủ (giải mã pixel) do ocr-service tự làm bằng Pillow;
+    # ở đây chỉ cần chặn sớm những request rõ ràng không phải ảnh.
+    if any(data.startswith(magic) for magic, _fmt in _IMAGE_MAGIC_BYTES):
+        return True
+    return data[:4] == b"RIFF" and data[8:12] == b"WEBP"
+
+
+def _scanned_drug_from_medication(item: dict) -> ScannedDrug:
+    candidates = item.get("candidates") or []
+    top = candidates[0] if candidates else None
+    alternatives = [c["drug_name"] for c in candidates[1:3] if c.get("drug_name")]
+    return ScannedDrug(
+        row_number=item.get("row_number"),
+        ocr_text=item.get("ocr_drug_name") or item.get("ocr_text") or "",
+        suggested_name=top.get("drug_name") if top else None,
+        alternatives=alternatives,
+        known=bool(top and top.get("score", 0.0) >= 0.75),
+        score=float(top["score"]) if top and top.get("score") is not None else 0.0,
+    )
+
+
+# Số ứng viên bệnh trả về cho mỗi dòng chẩn đoán (1 đề xuất + phần còn lại là
+# lựa chọn thay thế), giống cách xử lý tên thuốc.
+_MAX_DISEASE_CANDIDATES = 4
+
+# Tên bệnh in trên đơn thường dài và đủ ngữ cảnh ("Bệnh đái tháo đường không phụ
+# thuộc insuline"), trong khi tên trong CSDL ngắn hơn - nên đây chỉ là ngưỡng loại
+# bỏ rác, không phải ngưỡng "đúng". Người dùng vẫn phải tự chọn.
+_ICD_PATTERN = re.compile(r"^[A-Z]\d{1,3}(?:\.\d+)?$")
+
+
+def _scanned_diseases_from_payload(payload: dict, db: Session) -> list[ScannedDisease]:
+    """Khớp chẩn đoán in trên đơn với bảng Disease.
+
+    Nguồn dữ liệu là ``underlying_conditions``/``diagnosis`` do ocr-service tách ra
+    từ đúng nhãn "Chẩn đoán"/"Bệnh kèm theo" - không suy diễn bệnh từ tên thuốc.
+    """
+    condition_texts: list[str] = list(payload.get("underlying_conditions") or [])
+    diagnosis = (payload.get("diagnosis") or "").strip()
+    if diagnosis:
+        condition_texts.append(diagnosis)
+    if not condition_texts:
+        return []
+
+    # Mã ICD đứng riêng một phần tử, không phải tên bệnh để đem đi khớp. Ghép chúng
+    # theo thứ tự vào các dòng chữ để hiển thị kèm ("Tăng huyết áp · I10").
+    icd_codes = [
+        code for code in (payload.get("icd_codes") or []) if _ICD_PATTERN.match(str(code).upper())
+    ]
+
+    all_diseases = db.query(Disease).all()
+    results: list[ScannedDisease] = []
+    seen: set[str] = set()
+    for index, text in enumerate(condition_texts):
+        text = " ".join(text.split()).strip(" ;:,-")
+        # Bỏ dòng quá ngắn (nhiễu OCR) và dòng trùng nhau giữa diagnosis/kèm theo.
+        key = text.casefold()
+        if len(text) < 3 or key in seen:
+            continue
+        seen.add(key)
+
+        ranked = match_diseases_in_phrase(all_diseases, text, _MAX_DISEASE_CANDIDATES)
+        candidates = [
+            DiseaseCandidate(id=disease.id, ten_benh=disease.ten_benh_vi or disease.ten_benh)
+            for disease in ranked
+        ]
+        results.append(
+            ScannedDisease(
+                ocr_text=text,
+                icd_code=icd_codes[index] if index < len(icd_codes) else None,
+                suggested=candidates[0] if candidates else None,
+                alternatives=candidates[1:],
+            )
+        )
+    return results
+
+
+@router.post("/prescriptions/scan", response_model=ScanPrescriptionResponse)
+async def scan_prescription(
+    image: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ScanPrescriptionResponse:
+    settings = get_settings()
+
+    data = await _read_upload_capped(image, _MAX_SCAN_IMAGE_BYTES)
+    if not data or not _looks_like_image(data):
+        raise HTTPException(
+            status_code=400, detail="File tải lên không phải ảnh hợp lệ (jpg, png hoặc webp)"
+        )
+
+    try:
+        async with httpx.AsyncClient(timeout=settings.ocr_timeout_seconds) as http_client:
+            ocr_response = await http_client.post(
+                f"{settings.ocr_service_url}/api/v1/drug/recognize",
+                files={"image": (image.filename or "prescription.jpg", data, image.content_type or "application/octet-stream")},
+            )
+    except httpx.RequestError:
+        logger.exception("Không thể kết nối tới ocr-service")
+        raise HTTPException(
+            status_code=503,
+            detail="Không thể kết nối tới dịch vụ quét đơn thuốc. Vui lòng thử lại sau hoặc nhập tên thuốc thủ công.",
+        )
+
+    if ocr_response.status_code != 200:
+        logger.warning("ocr-service trả lỗi %s: %s", ocr_response.status_code, ocr_response.text[:500])
+        raise HTTPException(
+            status_code=503,
+            detail="Dịch vụ quét đơn thuốc không xử lý được ảnh này. Vui lòng thử lại hoặc nhập tên thuốc thủ công.",
+        )
+
+    payload = ocr_response.json()
+    medications = payload.get("medications") or []
+
+    return ScanPrescriptionResponse(
+        document_type=payload.get("document_type", "unknown"),
+        drugs=[_scanned_drug_from_medication(item) for item in medications],
+        diseases=_scanned_diseases_from_payload(payload, db),
+    )
 
 
 # ---- Đơn thuốc đã lưu trong hồ sơ (tab "Đơn thuốc của tôi") ----
