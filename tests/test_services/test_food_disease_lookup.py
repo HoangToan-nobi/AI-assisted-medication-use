@@ -1,18 +1,25 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from src.db.models import Base, Disease, DiseaseInteraction, Medication
+from src.services import food_disease_lookup
 from src.services.food_disease_lookup import lookup_disease_interactions
 
 
-def test_lookup_disease_interactions_filters_by_disease_ids_and_keeps_fallback():
+def test_lookup_disease_interactions_filters_by_disease_ids_and_keeps_fallback(monkeypatch):
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
     Base.metadata.create_all(bind=engine)
+    # DiseaseInteraction sống trên "facts DB" riêng (CockroachDB) kể từ khi tách DB -
+    # trỏ SessionLocalFacts về cùng engine test để hàm đọc đúng dữ liệu vừa seed,
+    # thay vì gõ vào facts DB thật (xem PLAN_migration_cockroach.md).
+    monkeypatch.setattr(
+        food_disease_lookup, "SessionLocalFacts", sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    )
 
     with Session(engine) as db:
         medication = Medication(id="med-1", ten_chuan_hoa="Example drug")
