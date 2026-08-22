@@ -814,11 +814,19 @@ async def scan_prescription(
             status_code=400, detail="File tải lên không phải ảnh hợp lệ (jpg, png hoặc webp)"
         )
 
+    # Modal-Key/Modal-Secret: bat buoc khi ocr-service chay tren Modal (proxy auth
+    # token cua Modal, xem ocr-service/modal_app.py) - rong/khong gui khi chay
+    # local qua docker-compose (ocr-service khong kiem tra header nay).
+    ocr_headers = {}
+    if settings.modal_key_id and settings.modal_key_secret:
+        ocr_headers = {"Modal-Key": settings.modal_key_id, "Modal-Secret": settings.modal_key_secret}
+
     try:
         async with httpx.AsyncClient(timeout=settings.ocr_timeout_seconds) as http_client:
             ocr_response = await http_client.post(
                 f"{settings.ocr_service_url}/api/v1/drug/recognize",
                 files={"image": (image.filename or "prescription.jpg", data, image.content_type or "application/octet-stream")},
+                headers=ocr_headers,
             )
     except httpx.RequestError:
         logger.exception("Không thể kết nối tới ocr-service")

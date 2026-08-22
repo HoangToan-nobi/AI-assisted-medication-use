@@ -80,9 +80,19 @@ class Settings(BaseSettings):
 
     # OCR service (proxy quét đơn thuốc - xem POST /api/v1/prescriptions/scan).
     # Mặc định localhost:8001 cho chạy tay trên máy (OCR né cổng 8000 của backend
-    # host); docker-compose ghi đè thành http://ocr:8000 (mạng nội bộ container).
+    # host); docker-compose ghi đè thành http://ocr:8000 (mạng nội bộ container);
+    # production trỏ tới URL Modal (xem ocr-service/modal_app.py).
     ocr_service_url: str = "http://localhost:8001"
-    ocr_timeout_seconds: float = 45.0
+    # Modal free tier scale-to-zero sau 60s không dùng (xem modal_app.py) - lần
+    # gọi đầu sau khi "nguội" phải cộng thêm thời gian khởi động container + nạp
+    # model, không chỉ 4-7s xử lý ảnh bình thường. Đặt dư ra để không timeout oan
+    # một request hợp lệ đang cold start.
+    ocr_timeout_seconds: float = 90.0
+    # Proxy Auth Token của Modal (Settings -> Proxy Tokens trên Modal dashboard) -
+    # rỗng thì không gửi header, dùng được cho ocr-service chạy local không có
+    # xác thực (docker-compose).
+    modal_key_id: str = ""
+    modal_key_secret: str = ""
 
 
 @lru_cache
