@@ -31,6 +31,11 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "sqlite:///./data/app.db"
+    # DB "facts" (interactions/food_interactions/disease_interactions) - CockroachDB
+    # tách riêng khỏi DB chính vì đây là 3 bảng chiếm >95% dung lượng và Supabase free
+    # tier chỉ có 0.5GB. Rỗng -> fallback dùng database_url (dev/test không bắt buộc
+    # phải có CockroachDB). Xem PLAN_migration_cockroach.md.
+    database_url_facts: str = ""
 
     # Auth (token HMAC tự ký - xem src/services/auth.py; đổi secret_key khi deploy that)
     secret_key: str = "dev-secret-change-me"
