@@ -1,5 +1,14 @@
-"""Provider-neutral SMTP adapter for MediCheck transactional emails."""
+"""Provider-neutral email adapter for MediCheck transactional emails.
 
+Supports two delivery paths:
+- SMTP (smtplib) - used when no Gmail OAuth refresh token is configured.
+  Works for local dev, but most PaaS hosts (Render included) block outbound
+  SMTP at the network level, so this path is unusable there.
+- Gmail API over HTTPS - used when GMAIL_OAUTH_REFRESH_TOKEN is set. HTTPS
+  egress isn't blocked the way SMTP is, so this is the path production uses.
+"""
+
+import base64
 import logging
 import smtplib
 import ssl
@@ -9,9 +18,14 @@ from email.utils import formataddr
 from html import escape
 from urllib.parse import urlencode
 
+import httpx
+
 from src.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+GMAIL_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
 
 
 def _build_email_html(
@@ -164,6 +178,57 @@ def _build_email_html(
 """
 
 
+def _gmail_access_token(settings) -> str:
+    response = httpx.post(
+        GMAIL_TOKEN_URL,
+        data={
+            "client_id": settings.gmail_oauth_client_id,
+            "client_secret": settings.gmail_oauth_client_secret,
+            "refresh_token": settings.gmail_oauth_refresh_token,
+            "grant_type": "refresh_token",
+        },
+        timeout=settings.smtp_timeout_seconds,
+    )
+    response.raise_for_status()
+    return response.json()["access_token"]
+
+
+def _send_via_gmail_api(settings, message: EmailMessage) -> None:
+    access_token = _gmail_access_token(settings)
+    raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+    response = httpx.post(
+        GMAIL_SEND_URL,
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={"raw": raw},
+        timeout=settings.smtp_timeout_seconds,
+    )
+    response.raise_for_status()
+
+
+def _send_via_smtp(settings, message: EmailMessage) -> None:
+    tls_context = ssl.create_default_context()
+    if settings.smtp_ssl:
+        connection = smtplib.SMTP_SSL(
+            settings.smtp_host,
+            settings.smtp_port,
+            timeout=settings.smtp_timeout_seconds,
+            context=tls_context,
+        )
+    else:
+        connection = smtplib.SMTP(
+            settings.smtp_host,
+            settings.smtp_port,
+            timeout=settings.smtp_timeout_seconds,
+        )
+
+    with connection as smtp:
+        if settings.smtp_starttls:
+            smtp.starttls(context=tls_context)
+        if settings.smtp_username:
+            smtp.login(settings.smtp_username, settings.smtp_password)
+        smtp.send_message(message)
+
+
 def _send(
     to: str,
     subject: str,
@@ -171,8 +236,9 @@ def _send(
     html_body: str | None = None,
 ) -> None:
     settings = get_settings()
+    use_gmail_api = bool(settings.gmail_oauth_refresh_token)
 
-    if not settings.smtp_host or not settings.smtp_from:
+    if not use_gmail_api and (not settings.smtp_host or not settings.smtp_from):
         if settings.app_env == "production":
             raise RuntimeError("SMTP chưa được cấu hình")
 
@@ -196,34 +262,17 @@ def _send(
     if html_body:
         message.add_alternative(html_body, subtype="html")
 
-    tls_context = ssl.create_default_context()
     attempts = settings.smtp_max_retries
     for attempt in range(1, attempts + 1):
         try:
-            if settings.smtp_ssl:
-                connection = smtplib.SMTP_SSL(
-                    settings.smtp_host,
-                    settings.smtp_port,
-                    timeout=settings.smtp_timeout_seconds,
-                    context=tls_context,
-                )
+            if use_gmail_api:
+                _send_via_gmail_api(settings, message)
             else:
-                connection = smtplib.SMTP(
-                    settings.smtp_host,
-                    settings.smtp_port,
-                    timeout=settings.smtp_timeout_seconds,
-                )
-
-            with connection as smtp:
-                if settings.smtp_starttls:
-                    smtp.starttls(context=tls_context)
-                if settings.smtp_username:
-                    smtp.login(settings.smtp_username, settings.smtp_password)
-                smtp.send_message(message)
+                _send_via_smtp(settings, message)
             return
-        except (OSError, smtplib.SMTPException):
+        except (OSError, smtplib.SMTPException, httpx.HTTPError):
             logger.warning(
-                "SMTP delivery attempt %s/%s failed for %s (subject=%s)",
+                "Email delivery attempt %s/%s failed for %s (subject=%s)",
                 attempt,
                 attempts,
                 to,

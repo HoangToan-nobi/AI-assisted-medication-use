@@ -383,8 +383,8 @@ function HeroSection({
           <em>dùng thuốc an toàn</em>
         </h1>
         <p>
-          Sử dụng thuốc an toàn là ưu tiên hàng đầu — tra cứu thông tin thuốc,
-          liều dùng và tương tác chỉ trong vài giây.
+          Tra cứu tương tác thuốc nhanh chóng, đồng hành cùng bạn sử dụng
+          thuốc an toàn.
         </p>
       </div>
       <HeroDrugSearch onComplete={onComplete} />
@@ -646,6 +646,10 @@ export default function LandingPage() {
           position: absolute;
           inset: 0;
           z-index: 1;
+          /* .mc-hero switches to overflow: visible below so .mc-hero__capsule
+             can bleed past the card edge - this fills the same box and needs
+             its own radius or its flat corners show through unclipped. */
+          border-radius: 28px;
           background: linear-gradient(
             90deg,
             #07111acc 0%,

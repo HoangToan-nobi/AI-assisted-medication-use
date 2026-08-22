@@ -16,7 +16,7 @@ type Role = "patient" | "pharmacist";
 
 declare global {
   interface Window {
-    google?: { accounts: { id: { initialize(config: { client_id: string; callback: (response: { credential: string }) => void }): void; renderButton(element: HTMLElement, options: Record<string, unknown>): void } } };
+    google?: { accounts: { id: { initialize(config: { client_id: string; callback: (response: { credential: string }) => void }): void; prompt(): void } } };
   }
 }
 
@@ -39,6 +39,7 @@ export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [googleReady, setGoogleReady] = useState(false);
 
   useEffect(() => {
     const resetSucceeded = sessionStorage.getItem("medicheck-password-reset-success") === "1";
@@ -50,6 +51,14 @@ export default function AuthPage() {
       setMode("login");
       setNotice("Mật khẩu đã được cập nhật. Bạn có thể đăng nhập ngay.");
     }
+  }, []);
+
+  useEffect(() => {
+    // next/script's onLoad only fires the first time the script tag is
+    // injected - on client-side navigation back to this page the script is
+    // already loaded so onLoad never re-fires, and the Google button never
+    // showed up. Cover that case by also checking on mount.
+    if (window.google) initGoogleAuth();
   }, []);
 
   function changeMode(next: Mode) {
@@ -145,18 +154,24 @@ export default function AuthPage() {
     } finally { setLoading(false); }
   }
 
-  function renderGoogleButton() {
+  function initGoogleAuth() {
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    const target = document.getElementById("google-signin-button");
-    if (!clientId || !target || !window.google) return;
-    target.replaceChildren();
+    if (!clientId || !window.google) return;
     window.google.accounts.id.initialize({ client_id: clientId, callback: ({ credential }) => void handleGoogleCredential(credential) });
-    window.google.accounts.id.renderButton(target, { theme: "outline", size: "large", width: Math.min(420, target.clientWidth || 360), text: "continue_with", locale: "vi" });
+    setGoogleReady(true);
+  }
+
+  function handleGoogleClick() {
+    if (!googleReady || !window.google) {
+      setError("Google Sign-In đang tải, vui lòng thử lại sau giây lát.");
+      return;
+    }
+    window.google.accounts.id.prompt();
   }
 
   return (
     <main className="mc-auth" data-mode={mode}>
-      <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onLoad={renderGoogleButton} />
+      <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onLoad={initGoogleAuth} />
       <style jsx global>{`
         .mc-auth {
           height: 100dvh;
@@ -501,14 +516,45 @@ export default function AuthPage() {
           color: #244b8d;
           box-shadow: 0 0 0 3px #7399df1c;
         }
-        .mc-auth__google {
-          min-height: 44px;
+        .mc-auth__google-btn {
           display: flex;
+          align-items: center;
           justify-content: center;
-          margin-bottom: 10px;
+          gap: 10px;
+          width: 100%;
+          min-height: 44px;
+          margin-top: 10px;
+          padding: 8px;
+          border: 1px solid #c5d7f0;
+          border-radius: 12px;
+          background: #f7faff;
+          color: #31578f;
+          cursor: pointer;
+          font: inherit;
+          font-size: 13px;
+          font-weight: 700;
+          box-shadow: 0 4px 12px transparent;
+          transition: transform 180ms ease, border-color 180ms ease,
+            background-color 180ms ease, box-shadow 180ms ease, color 180ms ease;
         }
-        .mc-auth__google:empty {
-          display: none;
+        .mc-auth__google-btn:hover:not(:disabled) {
+          transform: translateY(-3px);
+          border-color: #7ea1df;
+          background: #edf4ff;
+          color: #244b8d;
+          box-shadow: 0 10px 22px #4167b228;
+        }
+        .mc-auth__google-btn:active:not(:disabled) {
+          transform: translateY(0) scale(0.985);
+          box-shadow: 0 4px 10px #4167b21c;
+        }
+        .mc-auth__google-btn:focus-visible {
+          outline: 3px solid #7399df45;
+          outline-offset: 2px;
+        }
+        .mc-auth__google-btn:disabled {
+          opacity: 0.65;
+          cursor: not-allowed;
         }
         .mc-auth__icon {
           display: grid;
@@ -516,10 +562,13 @@ export default function AuthPage() {
           place-items: center;
           width: 30px;
           height: 30px;
+          min-height: 0;
           margin: 0 -5px 0 0;
           padding: 0;
           border: 0;
+          border-radius: 0;
           background: transparent;
+          box-shadow: none;
           color: #5574a9;
           cursor: pointer;
         }
@@ -576,8 +625,12 @@ export default function AuthPage() {
           font-size: 13px;
         }
         .mc-auth__switch button {
+          min-height: 0;
+          padding: 0;
           border: 0;
+          border-radius: 0;
           background: transparent;
+          box-shadow: none;
           color: #4167b2;
           cursor: pointer;
           font: inherit;
@@ -651,8 +704,11 @@ export default function AuthPage() {
             margin-bottom: 36px;
             font-size: 19px;
           }
-          .mc-auth__google {
-            margin-bottom: 18px;
+          .mc-auth__google-btn {
+            min-height: 70px;
+            border-radius: 16px;
+            font-size: 17px;
+            margin-top: 18px;
           }
           .mc-auth__demo {
             gap: 12px;
@@ -722,7 +778,8 @@ export default function AuthPage() {
             margin-bottom: 22px;
           }
           .mc-auth__demo button,
-          .mc-auth__submit {
+          .mc-auth__submit,
+          .mc-auth__google-btn {
             min-height: 56px;
           }
           .mc-auth__input {
@@ -752,11 +809,14 @@ export default function AuthPage() {
           }
         }
         @media (prefers-reduced-motion: reduce) {
-          .mc-auth__demo button {
+          .mc-auth__demo button,
+          .mc-auth__google-btn {
             transition: none;
           }
           .mc-auth__demo button:hover:not(:disabled),
-          .mc-auth__demo button:active:not(:disabled) {
+          .mc-auth__demo button:active:not(:disabled),
+          .mc-auth__google-btn:hover:not(:disabled),
+          .mc-auth__google-btn:active:not(:disabled) {
             transform: none;
           }
         }
@@ -851,7 +911,6 @@ export default function AuthPage() {
                 ? "Nhập thông tin của bạn để tiếp tục."
                 : "Điền thông tin bên dưới để bắt đầu trải nghiệm."}
             </p>
-            <div id="google-signin-button" className="mc-auth__google" />
             {mode === "login" && (
               <div className="mc-auth__demo">
                 <button
@@ -991,6 +1050,20 @@ export default function AuthPage() {
                 )}
               </button>
             </form>
+            <button
+              type="button"
+              className="mc-auth__google-btn"
+              onClick={handleGoogleClick}
+              disabled={loading}
+            >
+              <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+                <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z" />
+                <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.81.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z" />
+                <path fill="#FBBC05" d="M3.97 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.29-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.05l3.01-2.33z" />
+                <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.46 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z" />
+              </svg>
+              Tiếp tục với Google
+            </button>
             <p className="mc-auth__switch">
               {mode === "login" ? (
                 <>

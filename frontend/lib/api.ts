@@ -1,4 +1,8 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Requests stay relative (same-origin) so the auth cookies aren't cross-site -
+// mobile Safari/WebKit silently drops third-party cookies even with
+// SameSite=None, which broke login on phones. next.config.js rewrites
+// /api/:path* to the real backend (NEXT_PUBLIC_API_URL) at the server layer.
+const API_URL = "";
 let csrfCache: string | undefined;
 
 export type Severity = "nhe" | "trung_binh" | "nang" | "chua_phan_loai";
