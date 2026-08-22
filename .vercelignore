@@ -1,0 +1,11 @@
+.venv/
+venv/
+data/
+.git/
+tests/
+scripts/
+docs/
+docs_giai_doan/
+.agents/
+*.pyc
+__pycache__/
