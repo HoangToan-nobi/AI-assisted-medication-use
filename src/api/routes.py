@@ -480,7 +480,7 @@ async def _run_product_check(
     result["disease_interaction_scope"] = disease_interaction_scope
     result["patient_conditions_snapshot"] = patient_conditions_snapshot or []
     result["canh_bao_thuc_pham_benh_nen"] = build_food_disease_warning_line(
-        result["food_interactions"], result["disease_interactions"]
+        result["food_interactions"], result["disease_interactions"], audience=audience
     )
 
     return result, unknown, no_data

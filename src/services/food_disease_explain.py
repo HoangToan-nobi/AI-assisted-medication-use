@@ -325,19 +325,29 @@ async def build_disease_interaction_explanations(
 
 
 def build_food_disease_warning_line(
-    food_explanations: list[dict], disease_explanations: list[dict]
+    food_explanations: list[dict], disease_explanations: list[dict], audience: str = "patient"
 ) -> list[str] | None:
     """Danh sách 1-3 câu CỐ ĐỊNH (không qua LLM) liệt kê tên thực phẩm/bệnh nền cần
     lưu ý, hiện thành các đoạn riêng SAU đoạn LLM sinh về tương tác thuốc-thuốc ở
     tóm tắt tổng quan - không có rủi ro bịa dữ kiện vì chỉ liệt kê thẳng tên đã
     khớp được trong DDInter. Thứ tự: dòng thực phẩm (nếu có) -> dòng bệnh nền (nếu
-    có) -> câu mời trao đổi dược sĩ (nếu có ít nhất 1 trong 2 dòng trên)."""
+    có) -> câu mời trao đổi dược sĩ (nếu có ít nhất 1 trong 2 dòng trên, CHỈ với
+    audience="patient" - dược sĩ đang là người thực hiện tra cứu nên câu mời tự
+    trao đổi với chính mình vô nghĩa, và giọng văn hướng "bạn/bệnh nhân của bạn"
+    thay vì xưng hô như đang nói chuyện trực tiếp với bệnh nhân)."""
     foods = sorted({item["thuc_pham"] for item in food_explanations})
     diseases = sorted({item["ten_benh"] for item in disease_explanations})
     if not foods and not diseases:
         return None
 
     lines = []
+    if audience == "pharmacist":
+        if foods:
+            lines.append(f"Ngoài ra, cần khuyến cáo bệnh nhân tránh dùng chung với: {', '.join(foods)}.")
+        if diseases:
+            lines.append(f"Cũng cần thận trọng nếu bệnh nhân có tiền sử/đang mắc: {', '.join(diseases)}.")
+        return lines
+
     prefix = "Ngoài ra, cần"
     if foods:
         lines.append(f"{prefix} lưu ý tránh dùng chung với: {', '.join(foods)}.")
