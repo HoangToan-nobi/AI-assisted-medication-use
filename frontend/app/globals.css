@@ -6101,13 +6101,22 @@ html[data-theme="dark"] .ocr-scan-row__unmatched {
 }
 .citation-popover__refs {
   margin: 8px 0 0;
-  padding-left: 16px;
+  padding: 0;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
   color: #687b91;
-  font-size: 12px;
+  font-size: 11.5px;
+  font-style: italic;
   line-height: 1.5;
 }
 .citation-popover__refs li + li {
-  margin-top: 6px;
+  margin-top: 7px;
+}
+.citation-popover__refs-num {
+  font-style: normal;
+  font-weight: 700;
+  color: #5b719a;
 }
 .check-result-page .alert-card {
   font-family: var(--font-body);

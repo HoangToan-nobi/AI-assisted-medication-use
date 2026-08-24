@@ -101,25 +101,36 @@ export function buildProductGraph(products: string[], explanations: InteractionE
   return [...edges.values()].sort((a, b) => (order.get(a.productA.toLowerCase()) ?? 0) - (order.get(b.productA.toLowerCase()) ?? 0));
 }
 
-// Lấy N câu ĐẦU TIÊN trọn vẹn (không cắt giữa câu) từ 1 đoạn văn.
-function firstSentences(text: string, count: number): string {
-  const matches = text.match(/[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$/g) ?? [text];
-  return matches.slice(0, count).join(" ").trim();
+// nguon_trich_dan gốc từ DDInter (References_info) là 1 chuỗi các mục đánh số nối
+// bằng dấu phẩy, dạng `[1] "..." Nhà XB, Nơi XB., [2] "..." Tạp chí (năm): trang, ...`
+// - tách tại vị trí NGAY TRƯỚC mỗi "[so]" (chỉ số thuần, không khớp nhầm mốc thời
+// gian kiểu "[2011 Aug 24]" lồng bên trong 1 mục vì đó không phải index]) rồi bỏ số
+// thứ tự gốc + dấu phẩy thừa cuối mục.
+function parseReferenceEntries(raw: string): string[] {
+  return raw
+    .split(/(?=\[\d+\])/)
+    .map((entry) => entry.replace(/^\[\d+\]\s*/, "").replace(/,\s*$/, "").trim())
+    .filter(Boolean);
 }
 
-// Trích dẫn nguồn cho popover "Nguồn trích dẫn" ở AlertCard: mỗi cặp hoạt chất góp
-// phần vào cạnh thuốc-thuốc này đóng góp 1 câu tóm tắt (2 câu nếu chỉ có <=2 cặp),
-// lấy từ mô tả khoa học nguyên văn (mo_ta_dich, dược sĩ mới có) - giữ nguồn đủ ngắn
-// gọn dù cạnh được gộp từ nhiều cặp hoạt chất. Bệnh nhân không thấy mo_ta_dich nên
-// trả về mảng rỗng, popover rơi về hint mặc định.
-export function buildCitationReferences(pairs: InteractionExplanation[]): string[] {
-  const sentencesPerPair = pairs.length <= 2 ? 2 : 1;
+// Trích dẫn thật cho popover "Nguồn trích dẫn" ở AlertCard: lấy vài mục tài liệu
+// tham khảo gốc (không phải toàn bộ, DDInter có thể liệt kê hàng chục mục) từ MỖI
+// cặp hoạt chất góp phần vào cạnh thuốc-thuốc này, bỏ trùng (DDInter hay dùng chung
+// 1 tài liệu cho nhiều cặp), rồi đánh số lại liền mạch 1..N thay vì giữ số gốc rời
+// rạc (vd chỉ còn mục [8], [9] sau khi cắt bớt sẽ trông sai lệch nếu giữ nguyên số).
+export function buildCitationReferences(pairs: InteractionExplanation[], maxTotal = 5): string[] {
+  const perPair = pairs.length <= 2 ? 3 : 2;
+  const seen = new Set<string>();
   const references: string[] = [];
   for (const pair of pairs) {
-    const text = pair.mo_ta_dich ?? pair.mo_ta;
-    if (!text) continue;
-    const excerpt = firstSentences(text, sentencesPerPair);
-    if (excerpt) references.push(excerpt);
+    if (!pair.nguon_trich_dan || references.length >= maxTotal) continue;
+    for (const entry of parseReferenceEntries(pair.nguon_trich_dan).slice(0, perPair)) {
+      const key = entry.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      references.push(entry);
+      if (references.length >= maxTotal) break;
+    }
   }
   return references;
 }

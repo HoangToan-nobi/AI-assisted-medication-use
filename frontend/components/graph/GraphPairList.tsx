@@ -11,9 +11,8 @@ export type GraphPairItem = {
   severity?: Severity;
   description: string;
   source: string;
-  // Trích dẫn ngắn gọn cho popover "Nguồn trích dẫn" - 1-2 câu trọn vẹn mỗi cặp
-  // hoạt chất góp phần vào cạnh này (xem buildCitationReferences). Rỗng với bệnh
-  // nhân (không có mo_ta_dich) - AlertCard tự rơi về hint mặc định.
+  // Vài mục tài liệu tham khảo gốc cho popover "Nguồn trích dẫn" (xem
+  // buildCitationReferences) - có cho cả bệnh nhân lẫn dược sĩ.
   references?: string[];
   hasIncompletePair?: boolean;
   // Gợi ý xử trí dành cho dược sĩ (xu_tri) - chỉ có khi xem qua luồng dược sĩ,
