@@ -80,6 +80,14 @@ export default function PharmacistLookupPage() {
       const data = await checkProductsAsPharmacist(toPrescriptionCheckInput(activePrescriptions), session.accessToken);
       setResult(data);
       setResultPrescriptions(activePrescriptions);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          document.getElementById("pharmacist-interaction-result")?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        });
+      });
     } catch (err) { setError(err instanceof ApiError ? err.message : "Không thể phân tích tương tác lúc này."); }
     finally { setLoading(false); }
   }
@@ -123,7 +131,11 @@ export default function PharmacistLookupPage() {
         {loading && <div className="pharmacist-mascot-loading" role="status"><MediFox variant="loading" className="pharmacist-mascot-loading__image" /><strong>Cáo Medi đang rà soát các tương tác thuốc...</strong></div>}
       </section>
 
-      {result && <InteractionOverview result={result} prescriptions={resultPrescriptions ?? []} session={session} audience="pharmacist" />}
+      {result && (
+        <section id="pharmacist-interaction-result">
+          <InteractionOverview result={result} prescriptions={resultPrescriptions ?? []} session={session} audience="pharmacist" />
+        </section>
+      )}
     </main>
   );
 }

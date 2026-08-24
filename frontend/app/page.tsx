@@ -18,7 +18,6 @@ import {
 import { getSession, type Session } from "@/lib/auth";
 import type { Prescription } from "@/lib/prescription";
 import InteractionResultView from "@/components/graph/InteractionResultView";
-import MediFox from "@/components/MediFox";
 import ThemeModeToggle from "@/components/ThemeModeToggle";
 
 const asset = (name: string) => encodeURI(`/Bộ nhận diện y tế/${name}`);
@@ -388,7 +387,6 @@ function HeroSection({
         </p>
       </div>
       <HeroDrugSearch onComplete={onComplete} />
-      <MediFox variant="search" className="mc-hero__fox" />
     </section>
   );
 }
@@ -1518,7 +1516,7 @@ export default function LandingPage() {
         .mc-hero__capsule {
           width: 65%;
           height: 182%;
-          right: 46%;
+          right: 27.4%;
           top: -39%;
           transform: rotate(-2deg) scale(1.8);
           transform-origin: 62% 50%;
@@ -1567,7 +1565,7 @@ export default function LandingPage() {
           }
         }
         .mc-hero__capsule {
-          transform: translateX(18vw) rotate(-2deg) scale(1.78);
+          transform: rotate(-2deg) scale(1.78);
           transform-origin: 62% 50%;
         }
         .mc-search-panel {
@@ -1771,25 +1769,6 @@ export default function LandingPage() {
           }
           .mc-audience-card p {
             font-size: 14px;
-          }
-        }
-        .mc-hero__fox {
-          position: absolute;
-          z-index: 5;
-          right: 3.5%;
-          bottom: 5%;
-          width: 150px;
-          height: 122px;
-          pointer-events: none;
-          filter: drop-shadow(0 12px 14px #31528420);
-        }
-        @media (max-width: 760px) {
-          .mc-hero__fox {
-            right: 4%;
-            bottom: 3%;
-            width: 96px;
-            height: 78px;
-            opacity: 0.9;
           }
         }
         .mc-search-panel {
@@ -2228,10 +2207,10 @@ export default function LandingPage() {
 
         @keyframes mc-capsule-float {
           0%, 100% {
-            transform: translate3d(18vw, 0, 0) rotate(-2deg) scale(1.78);
+            transform: translate3d(0, 0, 0) rotate(-2deg) scale(1.78);
           }
           50% {
-            transform: translate3d(calc(18vw + 8px), -18px, 0) rotate(1deg) scale(1.82);
+            transform: translate3d(8px, -18px, 0) rotate(1deg) scale(1.82);
           }
         }
 

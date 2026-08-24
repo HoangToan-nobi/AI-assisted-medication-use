@@ -431,12 +431,14 @@ function ProfilePageContent() {
         { personalized: true },
       );
       setPrescriptionCheck(result);
-      window.setTimeout(() => {
-        document.getElementById("saved-prescription-result")?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          document.getElementById("saved-prescription-result")?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
         });
-      }, 0);
+      });
     } catch (err) {
       setPrescriptionsError(
         err instanceof ApiError ? err.message : "Không thể phân tích tương tác lúc này.",
