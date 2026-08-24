@@ -16,6 +16,7 @@ import {
   type PatientPrescription,
 } from "@/lib/api";
 import { getSession } from "@/lib/auth";
+import { scrollBelowStickyHeader } from "@/lib/scroll";
 import {
   createPrescription,
   mergeSavedIntoPrescriptions,
@@ -263,10 +264,7 @@ function InteractionPageContent() {
       );
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          document.getElementById("interaction-result")?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
+          scrollBelowStickyHeader("interaction-result");
         });
       });
     } catch (err) {

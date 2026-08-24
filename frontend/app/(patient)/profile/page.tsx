@@ -29,6 +29,7 @@ import {
 } from "@/lib/api";
 import { getSession, saveSession } from "@/lib/auth";
 import type { Prescription } from "@/lib/prescription";
+import { scrollBelowStickyHeader } from "@/lib/scroll";
 
 type ProfileTab = "personal" | "prescriptions";
 type ProfileField = "ngaySinh" | "canNang" | "chieuCao";
@@ -433,10 +434,7 @@ function ProfilePageContent() {
       setPrescriptionCheck(result);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          document.getElementById("saved-prescription-result")?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
+          scrollBelowStickyHeader("saved-prescription-result");
         });
       });
     } catch (err) {

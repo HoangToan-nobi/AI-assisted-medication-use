@@ -7,6 +7,7 @@ import InteractionOverview from "@/components/graph/InteractionOverview";
 import { ApiError, checkProductsAsPharmacist, searchProducts, type MedicationCheckResponse } from "@/lib/api";
 import { getSession } from "@/lib/auth";
 import { createPrescription, mergedDrugNames, nonEmptyPrescriptions, toPrescriptionCheckInput, type Prescription } from "@/lib/prescription";
+import { scrollBelowStickyHeader } from "@/lib/scroll";
 import MediFox from "@/components/MediFox";
 
 function renumberDefaultPrescriptions(items: Prescription[]) {
@@ -82,10 +83,7 @@ export default function PharmacistLookupPage() {
       setResultPrescriptions(activePrescriptions);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          document.getElementById("pharmacist-interaction-result")?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
+          scrollBelowStickyHeader("pharmacist-interaction-result");
         });
       });
     } catch (err) { setError(err instanceof ApiError ? err.message : "Không thể phân tích tương tác lúc này."); }
