@@ -1565,7 +1565,7 @@ export default function LandingPage() {
           }
         }
         .mc-hero__capsule {
-          transform: rotate(-2deg) scale(1.78);
+          transform: translateX(220px) rotate(-2deg) scale(1.78);
           transform-origin: 62% 50%;
         }
         .mc-search-panel {
@@ -2207,10 +2207,10 @@ export default function LandingPage() {
 
         @keyframes mc-capsule-float {
           0%, 100% {
-            transform: translate3d(0, 0, 0) rotate(-2deg) scale(1.78);
+            transform: translate3d(220px, 0, 0) rotate(-2deg) scale(1.78);
           }
           50% {
-            transform: translate3d(8px, -18px, 0) rotate(1deg) scale(1.82);
+            transform: translate3d(228px, -18px, 0) rotate(1deg) scale(1.82);
           }
         }
 
