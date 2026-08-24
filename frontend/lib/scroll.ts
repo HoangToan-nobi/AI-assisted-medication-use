@@ -1,5 +1,5 @@
 const STICKY_HEADER_SELECTOR = ".patient-header, .pharmacist-nav";
-const EXTRA_GAP_PX = 30;
+const EXTRA_GAP_PX = 28;
 
 // Cuộn mượt tới `elementId`, chừa đúng chiều cao header sticky (đo trực tiếp
 // bằng getBoundingClientRect ngay lúc cuộn) thay vì đoán một con số cố định
