@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import AlertCard from "@/components/AlertCard";
 import type { DiseaseInteractionExplanation, FoodInteractionExplanation, Severity } from "@/lib/api";
+import { buildCitationReferences } from "@/lib/interactionGraph";
 import GraphPairList, { type GraphPairItem } from "./GraphPairList";
 
 type DetailTab = "drug" | "food" | "disease";
@@ -78,6 +79,7 @@ export default function InteractionDetailTabs({ drugPairItems, foodItems, diseas
                 severity={item.muc_do}
                 description={pickText(item, audience)}
                 source={item.nguon_trich_dan}
+                references={buildCitationReferences([item])}
                 management={item.xu_tri_dich}
                 scientificDescription={item.mo_ta_dich}
               />
@@ -96,6 +98,7 @@ export default function InteractionDetailTabs({ drugPairItems, foodItems, diseas
                 severity={item.muc_do}
                 description={pickText(item, audience)}
                 source={item.nguon_trich_dan}
+                references={buildCitationReferences([item])}
                 scientificDescription={item.mo_ta_dich}
               />
             </div>

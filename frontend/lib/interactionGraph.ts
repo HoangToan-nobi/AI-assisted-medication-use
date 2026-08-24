@@ -101,16 +101,22 @@ export function buildProductGraph(products: string[], explanations: InteractionE
   return [...edges.values()].sort((a, b) => (order.get(a.productA.toLowerCase()) ?? 0) - (order.get(b.productA.toLowerCase()) ?? 0));
 }
 
-// nguon_trich_dan gốc từ DDInter (References_info) là 1 chuỗi các mục đánh số nối
-// bằng dấu phẩy, dạng `[1] "..." Nhà XB, Nơi XB., [2] "..." Tạp chí (năm): trang, ...`
-// - tách tại vị trí NGAY TRƯỚC mỗi "[so]" (chỉ số thuần, không khớp nhầm mốc thời
-// gian kiểu "[2011 Aug 24]" lồng bên trong 1 mục vì đó không phải index]) rồi bỏ số
-// thứ tự gốc + dấu phẩy thừa cuối mục.
+// nguon_trich_dan gốc từ DDInter dùng 2 định dạng khác nhau tùy loại tương tác:
+// - Thuốc-thuốc (References_info): đánh số nối bằng dấu phẩy, dạng
+//   `[1] "..." Nhà XB, Nơi XB., [2] "..." Tạp chí (năm): trang, ...` - tách tại vị
+//   trí NGAY TRƯỚC mỗi "[so]" (chỉ số thuần, không khớp nhầm mốc thời gian kiểu
+//   "[2011 Aug 24]" lồng bên trong 1 mục vì đó không phải index]) rồi bỏ số thứ tự
+//   gốc + dấu phẩy thừa cuối mục.
+// - Thuốc-thực phẩm/thuốc-bệnh nền (DFI/DDSI): không đánh số, nối bằng "|". Không
+//   có dấu hiệu nào thì coi cả chuỗi là 1 mục duy nhất (vd chỉ 1 tài liệu).
 function parseReferenceEntries(raw: string): string[] {
-  return raw
-    .split(/(?=\[\d+\])/)
-    .map((entry) => entry.replace(/^\[\d+\]\s*/, "").replace(/,\s*$/, "").trim())
-    .filter(Boolean);
+  if (/\[\d+\]/.test(raw)) {
+    return raw
+      .split(/(?=\[\d+\])/)
+      .map((entry) => entry.replace(/^\[\d+\]\s*/, "").replace(/,\s*$/, "").trim())
+      .filter(Boolean);
+  }
+  return raw.split("|").map((entry) => entry.trim()).filter(Boolean);
 }
 
 // Trích dẫn thật cho popover "Nguồn trích dẫn" ở AlertCard: lấy vài mục tài liệu
@@ -118,7 +124,10 @@ function parseReferenceEntries(raw: string): string[] {
 // cặp hoạt chất góp phần vào cạnh thuốc-thuốc này, bỏ trùng (DDInter hay dùng chung
 // 1 tài liệu cho nhiều cặp), rồi đánh số lại liền mạch 1..N thay vì giữ số gốc rời
 // rạc (vd chỉ còn mục [8], [9] sau khi cắt bớt sẽ trông sai lệch nếu giữ nguyên số).
-export function buildCitationReferences(pairs: InteractionExplanation[], maxTotal = 5): string[] {
+// Nhận kiểu tối giản { nguon_trich_dan } thay vì chỉ InteractionExplanation - dùng
+// được luôn cho FoodInteractionExplanation/DiseaseInteractionExplanation (mỗi thẻ
+// chỉ có đúng 1 "cặp" nên gọi buildCitationReferences([item])).
+export function buildCitationReferences(pairs: { nguon_trich_dan?: string }[], maxTotal = 5): string[] {
   const perPair = pairs.length <= 2 ? 3 : 2;
   const seen = new Set<string>();
   const references: string[] = [];
