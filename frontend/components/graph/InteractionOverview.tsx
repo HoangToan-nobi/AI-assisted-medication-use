@@ -286,7 +286,7 @@ export default function InteractionOverview({ result, prescriptions, session, au
 
   return (
     <>
-      {audience === "pharmacist" && hasAnySevere && (
+      {false && audience === "pharmacist" && hasAnySevere && (
         <aside className="interaction-mascot-note interaction-mascot-note--alert">
           <MediFox variant="alert" className="interaction-mascot-note__image" />
           <div>
@@ -320,9 +320,6 @@ export default function InteractionOverview({ result, prescriptions, session, au
       <section className="interaction-result panel">
       <div className="interaction-result__header">
         <div><p className="eyebrow">ĐỒ THỊ TƯƠNG TÁC</p><h2>{title}</h2></div>
-        <span className={hasAnySevere ? "result-pill result-pill--danger" : result.has_unclassified ? "result-pill result-pill--unknown" : "result-pill"}>
-          {hasAnySevere ? "Cần lưu ý" : result.has_unclassified ? "Chưa cập nhật" : "An toàn"}
-        </span>
       </div>
 
       {boardMode && (

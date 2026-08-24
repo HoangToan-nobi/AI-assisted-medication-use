@@ -1337,21 +1337,22 @@ button.primary:hover,
   margin-bottom: 8px;
 }
 
-/* Tab "Dữ liệu tương tác gốc"/"Cách xử lý gốc" bung ra - trượt nhẹ xuống + mờ
-   dần vào thay vì bật ra đột ngột. */
-.alert-detail-box--reveal {
-  animation: alert-card-reveal 0.18s ease;
+/* Khối "Dữ liệu tương tác gốc"/"Cách xử lý gốc" luôn nằm trong DOM (2 nút bật
+   độc lập, có thể mở cả 2 cùng lúc) - chỉ đổi grid-template-rows 0fr <-> 1fr
+   để cả thẻ giãn/co chiều cao mượt, thay vì khối bật/tắt đột ngột. */
+.alert-detail-box__collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.22s ease;
 }
 
-@keyframes alert-card-reveal {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.alert-detail-box__collapse--open {
+  grid-template-rows: 1fr;
+}
+
+.alert-detail-box__collapse > div {
+  overflow: hidden;
+  min-height: 0;
 }
 
 /* Nút "Xem thêm"/"Thu gọn" nội tuyến cuối đoạn text bị rút gọn (ExpandableText) -
@@ -8455,8 +8456,8 @@ html[data-theme="dark"] .empty-state {
     transition: none !important;
   }
 
-  .alert-detail-box--reveal {
-    animation: none !important;
+  .alert-detail-box__collapse {
+    transition: none !important;
   }
 }
 
