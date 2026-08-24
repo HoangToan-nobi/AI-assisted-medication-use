@@ -2074,6 +2074,15 @@ body {
   box-shadow: 0 1px 0 rgba(37, 85, 119, 0.04);
 }
 
+/* Bu chieu cao header sticky (.patient-header/.pharmacist-nav) khi auto-scroll
+   xuong ket qua sau "Phan tich tuong tac", de khong bi header che mat phan
+   canh bao cua Cao Medi o dau ket qua. */
+#interaction-result,
+#pharmacist-interaction-result,
+#saved-prescription-result {
+  scroll-margin-top: 96px;
+}
+
 .patient-header .brand-logo__mark,
 .pharmacist-nav .brand-logo__mark {
   border-radius: 14px;
