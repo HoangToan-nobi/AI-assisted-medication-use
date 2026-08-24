@@ -1410,25 +1410,7 @@ button.primary:hover,
   margin: 8px 0;
 }
 
-.alert-action-box {
-  background: var(--surface-container-low);
-  border-radius: var(--radius);
-  padding: 12px;
-  margin-top: 10px;
-  font-size: 14px;
-  line-height: 20px;
-}
-
-.alert-action-box strong {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  margin-bottom: 4px;
-  color: var(--on-surface-variant);
-}
-
+.alert-action-box,
 .alert-science-box {
   background: #f1f5fb;
   border: 1px dashed #c3d3e8;
@@ -1440,6 +1422,7 @@ button.primary:hover,
   line-height: 20px;
 }
 
+.alert-action-box strong,
 .alert-science-box strong {
   display: block;
   font-size: 12px;
