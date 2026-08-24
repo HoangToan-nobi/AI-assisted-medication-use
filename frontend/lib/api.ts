@@ -1,4 +1,8 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Requests stay relative (same-origin) so the auth cookies aren't cross-site -
+// mobile Safari/WebKit silently drops third-party cookies even with
+// SameSite=None, which broke login on phones. next.config.js rewrites
+// /api/:path* to the real backend (NEXT_PUBLIC_API_URL) at the server layer.
+const API_URL = "";
 let csrfCache: string | undefined;
 
 export type Severity = "nhe" | "trung_binh" | "nang" | "chua_phan_loai";
@@ -168,7 +172,7 @@ export type AuthResponse = {
   account_status: string;
 };
 
-export type AuthMessage = { message: string; account_status?: string | null; email?: string | null };
+export type AuthMessage = { message: string; code?: string | null; account_status?: string | null; email?: string | null };
 export type GoogleAuthResult = AuthResponse | {
   code: "REGISTRATION_REQUIRED" | "ACCOUNT_LINK_REQUIRED" | "PHARMACIST_APPROVAL_PENDING" | "EMAIL_VERIFICATION_REQUIRED";
   message?: string;
@@ -255,11 +259,15 @@ async function request<T>(
   if (!["GET", "HEAD", "OPTIONS"].includes(method) && path !== "/api/v1/auth/csrf") {
     csrfToken = await ensureCsrfToken();
   }
+  // Upload ảnh (quét đơn thuốc) gửi FormData: phải để trình duyệt tự đặt
+  // Content-Type kèm boundary của multipart. Tự đặt "application/json" ở đây sẽ
+  // làm hỏng body và backend không đọc được file.
+  const isFormData = typeof FormData !== "undefined" && rest.body instanceof FormData;
   const res = await fetch(`${API_URL}${path}`, {
     ...rest,
     credentials: "include",
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
       ...headers,
     },
@@ -346,6 +354,81 @@ export type PendingPharmacist = { user_id: string; ho_ten: string; email: string
 export const listPendingPharmacists = () => request<PendingPharmacist[]>("/api/v1/admin/pharmacists/pending");
 export const approvePharmacist = (userId: string) => request<AuthMessage>(`/api/v1/admin/pharmacists/${userId}/approve`, { method: "POST" });
 export const rejectPharmacist = (userId: string, reason: string) => request<AuthMessage>(`/api/v1/admin/pharmacists/${userId}/reject`, { method: "POST", body: JSON.stringify({ ly_do: reason }) });
+
+export type AdminOverview = {
+  total_users: number;
+  patients: number;
+  pharmacists: number;
+  locked_users: number;
+  pending_pharmacists: number;
+  medications: number;
+  products: number;
+  drug_interactions: number;
+  food_interactions: number;
+  disease_interactions: number;
+  open_feedback: number;
+};
+
+export type AdminUser = {
+  user_id: string;
+  ho_ten: string;
+  email: string;
+  vai_tro: "patient" | "pharmacist";
+  account_status: string;
+  email_verified: boolean;
+  ngay_tao: string | null;
+};
+
+export type AdminUsersResponse = { items: AdminUser[]; total: number };
+export type AdminDrugItem = { id: string; name: string; detail: string | null; source: string | null };
+export type AdminDrugDataResponse = {
+  items: AdminDrugItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+};
+export type AdminFeedback = {
+  id: string;
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  category: string;
+  title: string;
+  description: string;
+  status: "new" | "in_progress" | "resolved";
+  resolution_note: string | null;
+  ngay_tao: string;
+  ngay_cap_nhat: string;
+};
+
+export const getAdminOverview = () => request<AdminOverview>("/api/v1/admin/overview");
+export const listAdminUsers = (params: { q?: string; role?: string; status?: string } = {}) => {
+  const query = new URLSearchParams();
+  if (params.q) query.set("q", params.q);
+  if (params.role) query.set("role", params.role);
+  if (params.status) query.set("account_status", params.status);
+  return request<AdminUsersResponse>(`/api/v1/admin/users?${query}`);
+};
+export const updateAdminUserStatus = (userId: string, accountStatus: "active" | "locked") =>
+  request<AuthMessage>(`/api/v1/admin/users/${userId}/status`, {
+    method: "POST",
+    body: JSON.stringify({ account_status: accountStatus }),
+  });
+export const listAdminDrugData = (q = "", kind: "medication" | "product" = "medication", page = 1, pageSize = 24) => {
+  const query = new URLSearchParams({ q, kind, page: String(page), page_size: String(pageSize) });
+  return request<AdminDrugDataResponse>(`/api/v1/admin/drug-data?${query}`);
+};
+export const listAdminFeedback = (status = "") =>
+  request<AdminFeedback[]>(`/api/v1/admin/feedback${status ? `?status=${encodeURIComponent(status)}` : ""}`);
+export const updateAdminFeedback = (
+  feedbackId: string,
+  status: AdminFeedback["status"],
+  resolutionNote?: string,
+) => request<AdminFeedback>(`/api/v1/admin/feedback/${feedbackId}`, {
+  method: "PATCH",
+  body: JSON.stringify({ status, resolution_note: resolutionNote || null }),
+});
 
 // ---- Tra cứu / hồ sơ thuốc ----
 
@@ -475,6 +558,52 @@ export async function deletePatientPrescription(
   return request<void>(`/api/v1/patients/${patientId}/prescriptions/${prescriptionId}`, {
     method: "DELETE",
     token,
+  });
+}
+
+// ---- Quét đơn thuốc bằng OCR ----
+
+export type ScannedDrug = {
+  row_number: number | null;
+  ocr_text: string; // nguyên văn OCR đọc được - luôn hiển thị để đối chiếu với tờ đơn
+  suggested_name: string | null;
+  alternatives: string[]; // 2-3 ứng viên kế tiếp - đáp án đúng thường nằm ở đây
+  known: boolean;
+  score: number;
+};
+
+export type DiseaseCandidate = {
+  id: number;
+  ten_benh: string;
+};
+
+export type ScannedDisease = {
+  ocr_text: string; // nguyên văn in sau nhãn "Chẩn đoán"/"Bệnh kèm theo"
+  icd_code: string | null; // mã ICD in kèm (I10, E11...) nếu đơn có ghi
+  suggested: DiseaseCandidate | null;
+  alternatives: DiseaseCandidate[];
+};
+
+export type ScanPrescriptionResponse = {
+  document_type: string;
+  drugs: ScannedDrug[];
+  diseases: ScannedDisease[];
+  requires_confirmation: boolean;
+};
+
+// Phải đi qua request<T>() như mọi lệnh gọi khác: phiên đăng nhập nằm ở cookie
+// (medguard_access, hết hạn sau ACCESS_TOKEN_EXPIRE_MINUTES=15 phút), và chỉ
+// request<T>() mới gắn cookie, gắn X-CSRF-Token, và tự gọi /auth/refresh rồi thử
+// lại khi gặp 401. Bản trước gọi fetch thẳng với Bearer từ localStorage nên quét
+// ảnh báo "Token khong hop le hoac het han" sau 15 phút trong khi mọi màn hình
+// khác vẫn chạy bình thường.
+// Tham số token chỉ còn để nơi gọi biết đã đăng nhập hay chưa (khóa nút quét).
+export async function scanPrescription(file: File, _token?: string): Promise<ScanPrescriptionResponse> {
+  const formData = new FormData();
+  formData.append("image", file);
+  return request<ScanPrescriptionResponse>("/api/v1/prescriptions/scan", {
+    method: "POST",
+    body: formData,
   });
 }
 

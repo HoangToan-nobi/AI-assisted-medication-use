@@ -106,3 +106,63 @@ def rank_disease_matches(
 
     ranked.sort(key=lambda item: (item[0], item[1], item[2].id))
     return [item[2] for item in ranked[:limit]]
+
+
+# Độ dài tối thiểu của tên bệnh để được coi là "xuất hiện trong câu". Dưới ngưỡng
+# này (VD "ho", "sốt") chuỗi con dễ trúng ngẫu nhiên giữa một từ khác.
+_MIN_CONTAINED_NAME_LENGTH = 6
+
+
+def _search_terms(disease: Disease) -> set[str]:
+    """Tên bệnh cùng các cách gọi tương đương cần dò trong câu chẩn đoán."""
+    terms = set(_name_variants(disease))
+    for variant in list(terms):
+        for group in _EQUIVALENT_TERMS:
+            if variant in group:
+                terms.update(group)
+    return {term for term in terms if len(term) >= _MIN_CONTAINED_NAME_LENGTH}
+
+
+def match_diseases_in_phrase(
+    diseases: Iterable[Disease], phrase: str, limit: int
+) -> list[Disease]:
+    """Tìm bệnh trong danh mục có tên nằm BÊN TRONG một câu chẩn đoán.
+
+    Ngược chiều với :func:`rank_disease_matches`, vốn phục vụ ô tìm kiếm: ở đó
+    người dùng gõ vài chữ và hệ thống tìm tên đầy đủ, nên nó tính điểm theo
+    "query nằm trong tên bệnh". Chẩn đoán in trên đơn thì đi kèm ngữ cảnh -
+    ``Bệnh tăng huyết áp vô căn (nguyên phát)`` - nên quan hệ bị đảo lại: tên
+    trong danh mục (``Tăng huyết áp``) là chuỗi con của câu, và ``_match_score``
+    trả 0 cho mọi dòng như vậy.
+
+    Tên khớp dài hơn được xếp trước, để ``Đái tháo đường týp 2`` thắng
+    ``Đái tháo đường`` khi câu chẩn đoán nêu rõ týp. Không khớp được gì thì lùi
+    về :func:`rank_disease_matches` cho các dòng đã vốn ngắn gọn.
+    """
+    normalized_phrase = normalize_disease_search_text(phrase)
+    if not normalized_phrase:
+        return []
+    # OCR thường xoá mất dấu cách giữa các âm tiết ("tang huyet ap" -> "tang huyetap").
+    # So thêm một lần trên bản đã bỏ hết dấu cách ở cả hai phía để những dòng đó
+    # không trượt; khớp có dấu cách vẫn được ưu tiên vì tính điểm theo độ dài thật.
+    squashed_phrase = normalized_phrase.replace(" ", "")
+
+    contained: list[tuple[int, str, Disease]] = []
+    for disease in diseases:
+        matched = [
+            term
+            for term in _search_terms(disease)
+            if term in normalized_phrase or term.replace(" ", "") in squashed_phrase
+        ]
+        if not matched:
+            continue
+        display_name = disease.ten_benh_vi or disease.ten_benh
+        contained.append(
+            (-max(len(term) for term in matched), normalize_disease_search_text(display_name), disease)
+        )
+
+    if not contained:
+        return rank_disease_matches(diseases, phrase, limit)
+
+    contained.sort(key=lambda item: (item[0], item[1], item[2].id))
+    return [item[2] for item in contained[:limit]]

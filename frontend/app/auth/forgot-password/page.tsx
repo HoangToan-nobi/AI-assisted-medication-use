@@ -15,7 +15,10 @@ export default function ForgotPasswordPage() {
     setResult(null);
     try {
       const response = await forgotPassword(email);
-      setResult({ tone: "success", message: response.message });
+      setResult({
+        tone: response.code === "EMAIL_NOT_REGISTERED" ? "error" : "success",
+        message: response.message,
+      });
     } catch (error) {
       setResult({ tone: "error", message: error instanceof ApiError ? error.message : "Không thể gửi yêu cầu. Vui lòng thử lại." });
     } finally {
@@ -44,9 +47,9 @@ export default function ForgotPasswordPage() {
           onChange={(event) => setEmail(event.target.value)}
           disabled={loading}
         />
+        {result && <AuthNotice tone={result.tone}>{result.message}</AuthNotice>}
         <AuthPrimaryButton type="submit" loading={loading} icon="send">Gửi liên kết đặt lại</AuthPrimaryButton>
       </form>
-      {result && <AuthNotice tone={result.tone}>{result.message}</AuthNotice>}
       <AuthPageFooter />
     </AuthSupportShell>
   );

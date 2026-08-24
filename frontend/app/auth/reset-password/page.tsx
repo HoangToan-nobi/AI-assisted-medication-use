@@ -25,7 +25,10 @@ export default function ResetPasswordPage() {
     try {
       const response = await resetPassword(token, password);
       setResult({ tone: "success", message: response.message });
-      sessionStorage.setItem("medicheck-reset-credentials", JSON.stringify({ email: response.email || "", password }));
+      // Never persist a password in Web Storage. Keep only a one-time,
+      // non-sensitive marker so the login page can show a success message.
+      sessionStorage.removeItem("medicheck-reset-credentials");
+      sessionStorage.setItem("medicheck-password-reset-success", "1");
       setPassword("");
       setConfirm("");
     } catch (error) {
@@ -77,10 +80,10 @@ export default function ResetPasswordPage() {
           onChange={(event) => setConfirm(event.target.value)}
           disabled={loading || !token}
         />
+        {!token && <AuthNotice tone="error">Liên kết đặt lại mật khẩu không hợp lệ hoặc bị thiếu token. Hãy yêu cầu một liên kết mới.</AuthNotice>}
+        {result && <AuthNotice tone={result.tone}>{result.message}</AuthNotice>}
         <AuthPrimaryButton type="submit" loading={loading} icon="check" disabled={!token}>Cập nhật mật khẩu</AuthPrimaryButton>
       </form>
-      {!token && <AuthNotice tone="error">Liên kết đặt lại mật khẩu không hợp lệ hoặc bị thiếu token. Hãy yêu cầu một liên kết mới.</AuthNotice>}
-      {result && <AuthNotice tone={result.tone}>{result.message}</AuthNotice>}
       <AuthPageFooter />
     </AuthSupportShell>
   );

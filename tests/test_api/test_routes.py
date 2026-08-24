@@ -257,14 +257,19 @@ async def test_pharmacist_receives_review_request_and_can_review(client):
     patient_headers = _auth_headers(patient["access_token"])
     pharmacist_headers = _auth_headers(pharmacist["access_token"])
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app, client=(f"pytest-{uuid.uuid4().hex}", 123)),
-        base_url="http://test",
-    ) as client:
-        patient = await _register(client, "Benh nhan C", "patient")
-        pharmacist = await _register(client, "Duoc si D", "pharmacist")
-        patient_headers = _auth_headers(patient["access_token"])
-        pharmacist_headers = _auth_headers(pharmacist["access_token"])
+    check_resp = await client.post(
+        "/api/v1/medications/check",
+        json={"medications": ["warfarin", "asp"]},
+        headers=patient_headers,
+    )
+    assert check_resp.status_code == 200
+    check_id = check_resp.json()["interaction_check_id"]
+    request_resp = await client.post(
+        f"/api/v1/checks/{check_id}/pharmacists/{pharmacist['user_id']}/request_review",
+        json={"gui_kem_ho_so": True},
+        headers=patient_headers,
+    )
+    assert request_resp.status_code == 201
 
     # Dược sĩ được yêu cầu xem chi tiết đầy đủ - CÓ xu_tri (pharmacist-only).
     detail_resp = await client.get(

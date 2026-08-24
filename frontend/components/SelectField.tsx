@@ -15,6 +15,7 @@ type SelectFieldProps = {
   onChange: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  "aria-label"?: string;
   "aria-invalid"?: boolean;
   "aria-describedby"?: string;
 };
@@ -26,6 +27,7 @@ export default function SelectField({
   onChange,
   placeholder = "Chọn...",
   disabled = false,
+  "aria-label": ariaLabel,
   "aria-invalid": ariaInvalid,
   "aria-describedby": ariaDescribedBy,
 }: SelectFieldProps) {
@@ -94,6 +96,7 @@ export default function SelectField({
         className="select-field__trigger"
         role="combobox"
         aria-controls={listboxId}
+        aria-label={ariaLabel}
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-activedescendant={open ? `${controlId}-option-${activeIndex}` : undefined}

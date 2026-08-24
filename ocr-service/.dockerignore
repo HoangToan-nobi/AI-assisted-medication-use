@@ -1,0 +1,28 @@
+# Giữ build context nhỏ. Không có file này, một .venv lỡ tạo trong thư mục
+# service sẽ đẩy ~7 GB sang Docker daemon trước khi build bắt đầu.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Trọng số model do scripts/fetch_models.sh tải lúc build, không gửi kèm context.
+models/
+*.pth
+
+# Cache checkpoint của PaddleOCR/PaddleX.
+.paddlex/
+paddlex/
+
+# Bí mật không bao giờ được vào image.
+.env
+*.log
+
+# Ảnh đánh giá có thể chứa dữ liệu bệnh nhân; image không cần chúng.
+eval/
+samples/
+
+.git/
+.gitignore

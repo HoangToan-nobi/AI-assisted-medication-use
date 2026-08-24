@@ -24,8 +24,27 @@ engine = create_engine(
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# DB "facts" (interactions/food_interactions/disease_interactions) - xem
+# PLAN_migration_cockroach.md. Khi database_url_facts để trống (dev/test), dùng lại
+# engine chính thay vì mở thêm 1 connection pool trỏ tới cùng 1 DB.
+FACTS_TABLE_NAMES = {"interactions", "food_interactions", "disease_interactions"}
+if settings.database_url_facts:
+    _facts_connect_args = (
+        {"check_same_thread": False} if settings.database_url_facts.startswith("sqlite") else {}
+    )
+    engine_facts = create_engine(
+        settings.database_url_facts,
+        connect_args=_facts_connect_args,
+        pool_pre_ping=True,
+        pool_recycle=300,
+    )
+    SessionLocalFacts = sessionmaker(autocommit=False, autoflush=False, bind=engine_facts)
+else:
+    engine_facts = engine
+    SessionLocalFacts = SessionLocal
 
-def _ensure_column(table: str, column: str, ddl_type: str) -> None:
+
+def _ensure_column(table: str, column: str, ddl_type: str, *, engine=engine) -> None:
     """Không có framework migration (chỉ create_all, không ALTER bảng đã tồn tại) -
     thêm cột thủ công 1 lần, idempotent, cho các bảng được tạo trước khi cột này
     xuất hiện trong model.
@@ -42,7 +61,9 @@ def _ensure_column(table: str, column: str, ddl_type: str) -> None:
             conn.commit()
 
 
-def _ensure_column_any_dialect(table: str, column: str, sqlite_ddl_type: str, pg_ddl_type: str) -> None:
+def _ensure_column_any_dialect(
+    table: str, column: str, sqlite_ddl_type: str, pg_ddl_type: str, *, engine=engine
+) -> None:
     """Giống _ensure_column nhưng chạy trên CẢ Postgres lẫn SQLite - _ensure_column
     bỏ qua Postgres với giả định create_all() sẽ tự thêm cột mới cho bảng cũ, nhưng
     thực ra create_all() KHÔNG BAO GIỜ ALTER bảng đã tồn tại sẵn ở bất kỳ dialect
@@ -60,7 +81,7 @@ def _ensure_column_any_dialect(table: str, column: str, sqlite_ddl_type: str, pg
             conn.commit()
 
 
-def _ensure_index(table: str, column: str, index_name: str) -> None:
+def _ensure_index(table: str, column: str, index_name: str, *, engine=engine) -> None:
     """Giống _ensure_column nhưng cho index - create_all() KHÔNG retroactively thêm
     index vào bảng đã tồn tại sẵn (khác cột, đây đúng cho cả SQLite lẫn Postgres),
     nên phải tự chạy CREATE INDEX IF NOT EXISTS 1 lần cho bảng cũ. Thiếu các index
@@ -72,14 +93,23 @@ def _ensure_index(table: str, column: str, index_name: str) -> None:
 
 
 def init_db() -> None:
-    """Tạo bảng nếu chưa tồn tại — gọi 1 lần khi setup (Sprint 0)."""
-    Base.metadata.create_all(bind=engine)
+    """Tạo bảng nếu chưa tồn tại — gọi 1 lần khi setup (Sprint 0).
+
+    interactions/food_interactions/disease_interactions tạo trên engine_facts
+    (CockroachDB) - các bảng còn lại tạo trên engine chính (Supabase). Xem
+    PLAN_migration_cockroach.md."""
+    main_tables = [t for name, t in Base.metadata.tables.items() if name not in FACTS_TABLE_NAMES]
+    facts_tables = [Base.metadata.tables[name] for name in FACTS_TABLE_NAMES]
+    Base.metadata.create_all(bind=engine, tables=main_tables)
+    Base.metadata.create_all(bind=engine_facts, tables=facts_tables)
+
     _ensure_column("patient_medications", "prescription_id", "TEXT REFERENCES patient_prescriptions(id)")
     _ensure_column("users", "mo_ta_ngan", "TEXT")
     _ensure_column("users", "noi_cong_tac", "VARCHAR(255)")
     _ensure_column("users", "email_normalized", "VARCHAR(255)")
     _ensure_column("users", "email_verified_at", "DATETIME")
     _ensure_column("users", "account_status", "VARCHAR(30) DEFAULT 'locked'")
+    _ensure_column("users", "lock_source", "VARCHAR(30)")
     _ensure_column("users", "so_chung_chi_hanh_nghe", "VARCHAR(100)")
     _ensure_column("users", "ly_do_tu_choi", "TEXT")
     _ensure_column("pharmacist_reviews", "gui_kem_ho_so", "BOOLEAN DEFAULT 0")
@@ -89,13 +119,13 @@ def init_db() -> None:
     _ensure_column("pharmacist_reviews", "thoi_gian_xac_nhan", "DATETIME")
     _ensure_column("pharmacist_reviews", "cau_hoi", "TEXT")
     _ensure_column("pharmacist_reviews", "cau_tra_loi", "TEXT")
-    _ensure_column("food_interactions", "thuc_pham_vi", "VARCHAR(255)")
-    _ensure_column("disease_interactions", "ten_benh_vi", "VARCHAR(255)")
-    _ensure_column("interactions", "mo_ta_dich", "TEXT")
-    _ensure_column("interactions", "xu_tri_dich", "TEXT")
-    _ensure_column("food_interactions", "mo_ta_dich", "TEXT")
-    _ensure_column("food_interactions", "xu_tri_dich", "TEXT")
-    _ensure_column("disease_interactions", "mo_ta_dich", "TEXT")
+    _ensure_column("food_interactions", "thuc_pham_vi", "VARCHAR(255)", engine=engine_facts)
+    _ensure_column("disease_interactions", "ten_benh_vi", "VARCHAR(255)", engine=engine_facts)
+    _ensure_column("interactions", "mo_ta_dich", "TEXT", engine=engine_facts)
+    _ensure_column("interactions", "xu_tri_dich", "TEXT", engine=engine_facts)
+    _ensure_column("food_interactions", "mo_ta_dich", "TEXT", engine=engine_facts)
+    _ensure_column("food_interactions", "xu_tri_dich", "TEXT", engine=engine_facts)
+    _ensure_column("disease_interactions", "mo_ta_dich", "TEXT", engine=engine_facts)
 
     _ensure_column_any_dialect("interaction_checks", "thuoc_da_kiem_tra", "TEXT", "JSON")
 
@@ -111,16 +141,37 @@ def init_db() -> None:
 def assert_auth_schema_ready() -> None:
     """Fail with an actionable message instead of serving partially migrated auth."""
     columns = {column["name"]: column for column in inspect(engine).get_columns("users")}
-    required = {"email_normalized", "email_verified_at", "account_status", "so_chung_chi_hanh_nghe", "ly_do_tu_choi"}
+    required = {"email_normalized", "email_verified_at", "account_status", "lock_source", "so_chung_chi_hanh_nghe", "ly_do_tu_choi"}
     if missing := required - columns.keys():
         raise RuntimeError(f"Auth schema chua migrate ({sorted(missing)}); chay python scripts/migrate_auth.py")
     if not columns["mat_khau_hash"]["nullable"]:
         raise RuntimeError("Auth schema cu van bat buoc mat_khau_hash; chay python scripts/migrate_auth.py")
+    with engine.connect() as conn:
+        unclassified_locks = conn.execute(text(
+            "SELECT count(*) FROM users WHERE account_status = 'locked' AND lock_source IS NULL"
+        )).scalar_one()
+    if unclassified_locks:
+        raise RuntimeError(
+            f"Co {unclassified_locks} tai khoan khoa chua co nguon khoa; "
+            "chay python scripts/migrate_auth.py"
+        )
 
 
 def get_db() -> Session:
     """Dependency cho FastAPI route: `db: Session = Depends(get_db)`."""
     db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def get_db_facts() -> Session:
+    """Dependency cho FastAPI route: `db_facts: Session = Depends(get_db_facts)`.
+
+    Trỏ tới CockroachDB (interactions/food_interactions/disease_interactions) -
+    xem PLAN_migration_cockroach.md."""
+    db = SessionLocalFacts()
     try:
         yield db
     finally:

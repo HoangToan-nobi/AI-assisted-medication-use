@@ -17,7 +17,9 @@ export function AuthSupportShell({ eyebrow, title, description, icon, children }
           <Link href="/" className={styles.logo} aria-label="MediCheck - Trang chủ">
             <Image src={asset("2-cropped.png")} alt="MediCheck" fill sizes="142px" priority />
           </Link>
-          <Link href="/auth" className={styles.backLink}><MaterialIcon name="arrow_back" size={18} />Quay lại đăng nhập</Link>
+          <div className={styles.headerActions}>
+            <Link href="/auth" className={styles.backLink}><MaterialIcon name="arrow_back" size={18} />Quay lại đăng nhập</Link>
+          </div>
         </header>
         <section className={styles.layout}>
           <div className={styles.intro}>
@@ -67,10 +69,9 @@ export function AuthIconButton({ children, ...props }: ButtonHTMLAttributes<HTML
 }
 
 export function AuthNotice({ tone, children }: { tone: "info" | "success" | "error" | "pending"; children: ReactNode }) {
-  const icon = tone === "success" ? "check_circle" : tone === "error" ? "error" : tone === "pending" ? "hourglass_top" : "info";
-  return <div className={`${styles.notice} ${styles[tone]}`} role={tone === "error" ? "alert" : "status"} aria-live="polite">
-    <MaterialIcon name={icon} size={20} filled={tone === "success"} /><span>{children}</span>
-  </div>;
+  return <p className={`${styles.notice} ${styles[tone]}`} role={tone === "error" ? "alert" : "status"} aria-live="polite">
+    {children}
+  </p>;
 }
 
 export function AuthPageFooter({ children = "Quay lại đăng nhập" }: { children?: ReactNode }) {

@@ -22,12 +22,15 @@ def _postgres() -> None:
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_normalized VARCHAR(255)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS account_status VARCHAR(30) DEFAULT 'locked'",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS lock_source VARCHAR(30)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS so_chung_chi_hanh_nghe VARCHAR(100)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS ly_do_tu_choi TEXT",
         "ALTER TABLE users ALTER COLUMN mat_khau_hash DROP NOT NULL",
         "UPDATE users SET email_normalized = lower(trim(email)) WHERE email_normalized IS NULL",
         "UPDATE users SET account_status = CASE WHEN lower(email) IN ('demo-patient@medguard.local','demo-pharmacist@medguard.local') THEN 'active' ELSE 'locked' END WHERE account_status IS NULL OR account_status = 'locked'",
         "UPDATE users SET email_verified_at = CURRENT_TIMESTAMP WHERE lower(email) IN ('demo-patient@medguard.local','demo-pharmacist@medguard.local') AND email_verified_at IS NULL",
+        "UPDATE users SET lock_source = CASE WHEN email_verified_at IS NULL THEN 'legacy_migration' ELSE 'admin' END WHERE account_status = 'locked' AND lock_source IS NULL",
+        "UPDATE users SET lock_source = NULL WHERE account_status <> 'locked'",
     ]
     with engine.begin() as conn:
         for statement in statements:
@@ -48,6 +51,7 @@ def _sqlite() -> None:
             "email_normalized": "VARCHAR(255)",
             "email_verified_at": "DATETIME",
             "account_status": "VARCHAR(30) DEFAULT 'locked'",
+            "lock_source": "VARCHAR(30)",
             "so_chung_chi_hanh_nghe": "VARCHAR(100)",
             "ly_do_tu_choi": "TEXT",
         }
@@ -57,6 +61,8 @@ def _sqlite() -> None:
         conn.execute(text("UPDATE users SET email_normalized = lower(trim(email)) WHERE email_normalized IS NULL"))
         conn.execute(text("UPDATE users SET account_status = CASE WHEN lower(email) IN ('demo-patient@medguard.local','demo-pharmacist@medguard.local') THEN 'active' ELSE 'locked' END WHERE account_status IS NULL OR account_status = 'locked'"))
         conn.execute(text("UPDATE users SET email_verified_at = CURRENT_TIMESTAMP WHERE lower(email) IN ('demo-patient@medguard.local','demo-pharmacist@medguard.local') AND email_verified_at IS NULL"))
+        conn.execute(text("UPDATE users SET lock_source = CASE WHEN email_verified_at IS NULL THEN 'legacy_migration' ELSE 'admin' END WHERE account_status = 'locked' AND lock_source IS NULL"))
+        conn.execute(text("UPDATE users SET lock_source = NULL WHERE account_status <> 'locked'"))
         duplicates = conn.execute(text("SELECT email_normalized FROM users GROUP BY email_normalized HAVING count(*) > 1")).fetchall()
         if duplicates:
             raise RuntimeError(f"Email trung sau khi chuan hoa: {[row[0] for row in duplicates]}")
@@ -78,6 +84,7 @@ def _sqlite() -> None:
                         mat_khau_hash VARCHAR(255),
                         vai_tro VARCHAR(20) NOT NULL,
                         account_status VARCHAR(30) NOT NULL DEFAULT 'locked',
+                        lock_source VARCHAR(30),
                         so_chung_chi_hanh_nghe VARCHAR(100),
                         noi_cong_tac VARCHAR(255),
                         mo_ta_ngan TEXT,
@@ -89,12 +96,12 @@ def _sqlite() -> None:
                     INSERT INTO users_auth_new (
                         id, ho_ten, email, email_normalized, email_verified_at,
                         mat_khau_hash, vai_tro, account_status,
-                        so_chung_chi_hanh_nghe, noi_cong_tac, mo_ta_ngan,
+                        lock_source, so_chung_chi_hanh_nghe, noi_cong_tac, mo_ta_ngan,
                         ly_do_tu_choi, ngay_tao
                     )
                     SELECT id, ho_ten, email, email_normalized, email_verified_at,
                         mat_khau_hash, vai_tro, account_status,
-                        so_chung_chi_hanh_nghe, noi_cong_tac, mo_ta_ngan,
+                        lock_source, so_chung_chi_hanh_nghe, noi_cong_tac, mo_ta_ngan,
                         ly_do_tu_choi, ngay_tao
                     FROM users
                 """))

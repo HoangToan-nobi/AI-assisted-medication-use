@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import MaterialIcon from "@/components/MaterialIcon";
-import type { PatientPrescription, ProductSearchResult } from "@/lib/api";
+import MediFox from "@/components/MediFox";
+import PrescriptionScanModal from "@/components/PrescriptionScanModal";
+import { ApiError, scanPrescription, type PatientPrescription, type ProductSearchResult, type ScanPrescriptionResponse } from "@/lib/api";
 import type { SelectedDrug } from "@/lib/prescription";
 
 type PrescriptionPanelProps = {
@@ -21,15 +23,27 @@ type PrescriptionPanelProps = {
   // này thì tên đơn hiển thị tĩnh, không sửa được (VD: bàn cân tương tác của bệnh nhân).
   onRename?: (label: string) => void;
   inputId: string;
+  // Bắt buộc để gọi POST /prescriptions/scan (yêu cầu đăng nhập). Không có token
+  // (khách chưa đăng nhập) -> nút "Quét OCR" bị khóa thay vì gọi API rồi nhận 401.
+  token?: string;
+  // Điều khiển modal duyệt kết quả OCR hiện điểm khớp dạng số ("pharmacist") hay
+  // chỉ nhãn chữ ("patient", mặc định) - xem PrescriptionScanModal.
+  audience?: "patient" | "pharmacist";
 };
 
-export default function PrescriptionPanel({ label, drugs, search, onAdd, onRemoveDrug, onRemovePanel, savedPrescriptions, onImportFrom, onRename, inputId }: PrescriptionPanelProps) {
+export default function PrescriptionPanel({ label, drugs, search, onAdd, onRemoveDrug, onRemovePanel, savedPrescriptions, onImportFrom, onRename, inputId, token, audience }: PrescriptionPanelProps) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<ProductSearchResult[]>([]);
   const [importPickerOpen, setImportPickerOpen] = useState(false);
   const importPickerRef = useRef<HTMLDivElement>(null);
   const [editingLabel, setEditingLabel] = useState(false);
   const [draftLabel, setDraftLabel] = useState(label);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanResult, setScanResult] = useState<ScanPrescriptionResponse | null>(null);
+  const [scannedImageFile, setScannedImageFile] = useState<File | null>(null);
 
   useEffect(() => setDraftLabel(label), [label]);
 
@@ -66,6 +80,32 @@ export default function PrescriptionPanel({ label, drugs, search, onAdd, onRemov
     setEditingLabel(false);
     if (!trimmed || trimmed === label) { setDraftLabel(label); return; }
     onRename?.(trimmed);
+  }
+
+  async function handleScanFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // cho phép chọn lại đúng file đó lần sau
+    if (!file || !token) return;
+    setScanError(null);
+    setScanning(true);
+    setScannedImageFile(file);
+    try {
+      const result = await scanPrescription(file, token);
+      setScanResult(result);
+    } catch (err) {
+      setScanError(err instanceof ApiError ? err.message : "Không thể quét ảnh lúc này. Vui lòng thử lại.");
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  // Panel này chỉ sống trong session (bàn cân tương tác / tra cứu của dược sĩ), không
+  // ghi vào hồ sơ ai cả - nên chẩn đoán đọc được chỉ hiển thị để đối chiếu, phần chọn
+  // bệnh nền bị tắt (canAddConditions không được truyền) và diseaseIds luôn rỗng.
+  function confirmScannedDrugs(selected: { name: string; known: boolean }[]) {
+    selected.forEach((drug) => add(drug.name, drug.known));
+    setScanResult(null);
+    setScannedImageFile(null);
   }
 
   return (
@@ -118,10 +158,58 @@ export default function PrescriptionPanel({ label, drugs, search, onAdd, onRemov
             )}
           </div>
         )}
-        <button type="button" className="prescription-panel__tool" disabled title="Quét đơn thuốc bằng OCR — tính năng sắp ra mắt">
-          <MaterialIcon name="photo_camera" size={16} /><span>Quét OCR</span>
+        <button
+          type="button"
+          className="prescription-panel__tool"
+          disabled={!token || scanning}
+          title={token ? "Chụp ảnh đơn thuốc" : "Đăng nhập để dùng tính năng chụp OCR"}
+          onClick={() => cameraInputRef.current?.click()}
+        >
+          <MaterialIcon name="photo_camera" size={16} /><span>{scanning ? "Đang quét..." : "Chụp ảnh"}</span>
         </button>
+        <button
+          type="button"
+          className="prescription-panel__tool"
+          disabled={!token || scanning}
+          title={token ? "Tải ảnh từ máy" : "Đăng nhập để tải ảnh"}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <MaterialIcon name="image" size={16} /><span>Tải ảnh</span>
+        </button>
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          hidden
+          onChange={(e) => void handleScanFile(e)}
+        />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => void handleScanFile(e)}
+        />
       </div>
+
+      {scanning && (
+        <div className="ocr-scan-loading" role="status">
+          <MediFox variant="loading" className="ocr-scan-loading__fox" />
+          <strong>Cáo Medi đang đọc đơn thuốc của bạn…</strong>
+          <span>Có thể mất vài giây, đừng tắt trang nhé.</span>
+        </div>
+      )}
+      {scanError && <p className="error-text" role="alert">{scanError}</p>}
+      {scanResult && (
+        <PrescriptionScanModal
+          result={scanResult}
+          onConfirm={confirmScannedDrugs}
+          onClose={() => { setScanResult(null); setScannedImageFile(null); }}
+          imageFile={scannedImageFile || undefined}
+          audience={audience}
+        />
+      )}
 
       <div className="interaction-search__input icon-input-spacing">
         <MaterialIcon name="search" size={19} />

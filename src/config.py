@@ -1,5 +1,6 @@
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import urlparse
 
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -30,6 +31,11 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "sqlite:///./data/app.db"
+    # DB "facts" (interactions/food_interactions/disease_interactions) - CockroachDB
+    # tách riêng khỏi DB chính vì đây là 3 bảng chiếm >95% dung lượng và Supabase free
+    # tier chỉ có 0.5GB. Rỗng -> fallback dùng database_url (dev/test không bắt buộc
+    # phải có CockroachDB). Xem PLAN_migration_cockroach.md.
+    database_url_facts: str = ""
 
     # Auth (token HMAC tự ký - xem src/services/auth.py; đổi secret_key khi deploy that)
     secret_key: str = "dev-secret-change-me"
@@ -41,8 +47,8 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     enable_demo_accounts: bool = False
 
-    # Transactional email. In development/test, missing SMTP settings cause the
-    # verification URL to be logged instead of silently activating the account.
+    # Transactional email. In development/test, missing SMTP settings emit a
+    # warning without logging one-time verification/reset credentials.
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_username: str = ""
@@ -56,9 +62,37 @@ class Settings(BaseSettings):
         default=True,
         validation_alias=AliasChoices("SMTP_STARTTLS", "SMTP_USE_TLS"),
     )
+    smtp_ssl: bool = False
+    smtp_timeout_seconds: int = Field(default=15, ge=1, le=60)
+    smtp_max_retries: int = Field(default=3, ge=1, le=5)
+    smtp_retry_delay_seconds: float = Field(default=1.0, ge=0, le=10)
+
+    # Gmail API (OAuth) - alternate transport for transactional email, used
+    # instead of SMTP on hosts (e.g. Render) that block outbound SMTP at the
+    # network level. When gmail_oauth_refresh_token is set, src/services/email.py
+    # sends via the Gmail API over HTTPS instead of smtplib.
+    gmail_oauth_client_id: str = ""
+    gmail_oauth_client_secret: str = ""
+    gmail_oauth_refresh_token: str = ""
 
     # Vector Store
     chroma_persist_dir: str = "./data/chroma"
+
+    # OCR service (proxy quét đơn thuốc - xem POST /api/v1/prescriptions/scan).
+    # Mặc định localhost:8001 cho chạy tay trên máy (OCR né cổng 8000 của backend
+    # host); docker-compose ghi đè thành http://ocr:8000 (mạng nội bộ container);
+    # production trỏ tới URL Modal (xem ocr-service/modal_app.py).
+    ocr_service_url: str = "http://localhost:8001"
+    # Modal free tier scale-to-zero sau 60s không dùng (xem modal_app.py) - lần
+    # gọi đầu sau khi "nguội" phải cộng thêm thời gian khởi động container + nạp
+    # model, không chỉ 4-7s xử lý ảnh bình thường. Đặt dư ra để không timeout oan
+    # một request hợp lệ đang cold start.
+    ocr_timeout_seconds: float = 90.0
+    # Proxy Auth Token của Modal (Settings -> Proxy Tokens trên Modal dashboard) -
+    # rỗng thì không gửi header, dùng được cho ocr-service chạy local không có
+    # xác thực (docker-compose).
+    modal_key_id: str = ""
+    modal_key_secret: str = ""
 
 
 @lru_cache
@@ -76,7 +110,33 @@ def validate_production_auth_settings(settings: Settings) -> None:
         problems.append("COOKIE_SECURE phai bat trong production")
     if not settings.google_client_id:
         problems.append("GOOGLE_CLIENT_ID chua duoc cau hinh")
-    if not settings.smtp_host or not settings.smtp_from:
-        problems.append("SMTP_HOST/SMTP_FROM chua duoc cau hinh")
+    has_gmail_api = bool(
+        settings.gmail_oauth_client_id
+        and settings.gmail_oauth_client_secret
+        and settings.gmail_oauth_refresh_token
+    )
+    has_smtp = bool(settings.smtp_host and settings.smtp_from)
+    if not has_gmail_api and not has_smtp:
+        problems.append("Can cau hinh SMTP_HOST/SMTP_FROM hoac GMAIL_OAUTH_* de gui duoc email")
+    if not has_gmail_api:
+        if settings.smtp_username and not settings.smtp_password:
+            problems.append("SMTP_PASSWORD bat buoc khi co SMTP_USERNAME")
+        if settings.smtp_starttls and settings.smtp_ssl:
+            problems.append("Chi duoc bat mot trong SMTP_STARTTLS hoac SMTP_SSL")
+
+    frontend = urlparse(settings.frontend_url)
+    if frontend.scheme != "https" or not frontend.netloc:
+        problems.append("FRONTEND_URL phai la URL HTTPS hop le trong production")
+
+    origins = [origin.strip().rstrip("/") for origin in settings.cors_origins.split(",") if origin.strip()]
+    if not origins:
+        problems.append("CORS_ORIGINS khong duoc de trong")
+    for origin in origins:
+        parsed = urlparse(origin)
+        if origin == "*" or parsed.scheme != "https" or not parsed.netloc or parsed.path not in {"", "/"}:
+            problems.append(f"CORS origin khong hop le cho production: {origin}")
+    frontend_origin = f"{frontend.scheme}://{frontend.netloc}" if frontend.scheme and frontend.netloc else ""
+    if frontend_origin and frontend_origin not in origins:
+        problems.append("CORS_ORIGINS phai chua origin cua FRONTEND_URL")
     if problems:
         raise RuntimeError("Cau hinh auth production khong hop le: " + "; ".join(problems))

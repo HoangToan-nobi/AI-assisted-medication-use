@@ -9,16 +9,39 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      - OCR_SERVICE_URL=http://ocr:8000
     volumes:
       - ./data:/app/data
       - ./src:/app/src
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
     restart: unless-stopped
+    depends_on:
+      ocr:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
+
+  # Service OCR đơn thuốc riêng biệt (torch + paddlepaddle, ~4 GB image, ~2 GB RAM
+  # lúc chạy) - KHÔNG publish ra host, chỉ backend gọi được qua mạng nội bộ compose,
+  # vì bản thân nó không có xác thực/CORS/rate-limit. Xem ocr-service/README.md.
+  ocr:
+    build:
+      context: ./ocr-service
+    expose:
+      - "8000"
+    volumes:
+      # Dùng chung đúng 1 file CSV với scripts/import_products.py để candidates
+      # OCR trả về luôn là products.ten_thuoc hợp lệ - xem data/raw/README hoặc
+      # ocr-service/INTEGRATION.md. File này gitignore, phải tự đặt vào trước.
+      - ./data/raw/thuoc_final_project.csv:/srv/app/data/thuoc_final_project.csv:ro
+    restart: unless-stopped
+    # Không khai báo healthcheck ở đây - dùng lại đúng HEALTHCHECK đã có sẵn trong
+    # ocr-service/Dockerfile (cổng 8000, khớp CMD). Compose tự đọc healthcheck của
+    # image cho "condition: service_healthy" ở backend phía trên.
 
   frontend:
     build:
@@ -30,7 +53,6 @@ services:
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
       - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
-      - NEXT_PUBLIC_ENABLE_DEMO_ACCOUNTS=${ENABLE_DEMO_ACCOUNTS:-false}
       - WATCHPACK_POLLING=true
     volumes:
       - ./frontend:/app
