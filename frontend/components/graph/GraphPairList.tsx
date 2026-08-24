@@ -11,6 +11,10 @@ export type GraphPairItem = {
   severity?: Severity;
   description: string;
   source: string;
+  // Trích dẫn ngắn gọn cho popover "Nguồn trích dẫn" - 1-2 câu trọn vẹn mỗi cặp
+  // hoạt chất góp phần vào cạnh này (xem buildCitationReferences). Rỗng với bệnh
+  // nhân (không có mo_ta_dich) - AlertCard tự rơi về hint mặc định.
+  references?: string[];
   hasIncompletePair?: boolean;
   // Gợi ý xử trí dành cho dược sĩ (xu_tri) - chỉ có khi xem qua luồng dược sĩ,
   // backend đã tự ẩn field này với bệnh nhân nên phía trên luôn là undefined.
@@ -43,7 +47,7 @@ export default function GraphPairList({ items, onViewDetail }: GraphPairListProp
           )}
           <AlertCard
             thuocA={item.thuocA} thuocB={item.thuocB} severity={item.severity} description={item.description} source={item.source}
-            management={item.management} scientificDescription={item.scientificDescription}
+            management={item.management} scientificDescription={item.scientificDescription} references={item.references}
           />
           {item.hasIncompletePair && (
             <p className="tt-graph-pair__notice"><MaterialIcon name="info" size={15} /> Còn cặp chưa được phân loại mức độ trong nhóm này.</p>

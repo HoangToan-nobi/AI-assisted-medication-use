@@ -6,7 +6,7 @@ import MaterialIcon from "@/components/MaterialIcon";
 import PharmacistReviewPrompt from "@/components/PharmacistReviewPrompt";
 import type { MedicationCheckResponse, Severity } from "@/lib/api";
 import type { Session } from "@/lib/auth";
-import { assignGroupColors, buildPrescriptionGraph, buildProductGraph, withDataOnly } from "@/lib/interactionGraph";
+import { assignGroupColors, buildCitationReferences, buildPrescriptionGraph, buildProductGraph, withDataOnly } from "@/lib/interactionGraph";
 import { drugOrigins, firstPrescriptionIndex, isCrossPrescription, mergedDrugNames, type Prescription } from "@/lib/prescription";
 import type { GraphPairItem } from "./GraphPairList";
 import InteractionDetailTabs from "./InteractionDetailTabs";
@@ -242,6 +242,7 @@ export default function InteractionOverview({ result, prescriptions, session, au
       severity: e.muc_do,
       description: pickText(backendItem, audience),
       source: backendItem?.nguon_trich_dan ?? "",
+      references: buildCitationReferences(e.pairs),
       hasIncompletePair: e.hasIncompletePair,
       // Chỉ dược sĩ mới có (backend đã tự ẩn với bệnh nhân) - bản dịch nguyên văn
       // (không qua diễn giải) từ CSDL của mô tả tương tác + khuyến nghị xử trí.

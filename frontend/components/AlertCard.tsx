@@ -16,6 +16,9 @@ type AlertCardProps = {
   // của mô tả khoa học từ CSDL DDInter 2.0 - chỉ backend trả về cho dược sĩ, bệnh
   // nhân không có field này nên luôn undefined.
   scientificDescription?: string;
+  // Trích dẫn ngắn gọn (1-2 câu/cặp hoạt chất góp phần) hiện trong popover nguồn -
+  // rỗng/undefined thì popover rơi về hint mặc định.
+  references?: string[];
 };
 
 const CONFIG: Record<Severity, { label: string; tag: string; icon: string; className: string }> = {
@@ -28,7 +31,7 @@ const CONFIG: Record<Severity, { label: string; tag: string; icon: string; class
 // Thẻ luôn hiện đầy đủ giai_thich (rút gọn bằng ExpandableText nếu quá dài, xem
 // component đó) - không còn thu-gọn-chỉ-header/bấm-để-mở-cả-thẻ như trước, vì
 // bệnh nhân/dược sĩ cần đọc được cảnh báo ngay mà không phải bấm thêm 1 bước.
-export default function AlertCard({ thuocA, thuocB, severity, description, source, management, scientificDescription }: AlertCardProps) {
+export default function AlertCard({ thuocA, thuocB, severity, description, source, management, scientificDescription, references }: AlertCardProps) {
   const [sourceOpen, setSourceOpen] = useState(false);
   // Dữ liệu gốc + xử trí gốc chỉ dược sĩ mới nhận được (bệnh nhân luôn undefined,
   // backend đã tự ẩn) - 2 nút bật/tắt độc lập (không còn loại trừ nhau) để dược sĩ
@@ -68,6 +71,6 @@ export default function AlertCard({ thuocA, thuocB, severity, description, sourc
         )}
       </div>
     )}
-    <div className={`citation-wrap ${sourceOpen ? "citation-wrap--open" : ""}`}><button type="button" className="citation-trigger" aria-expanded={sourceOpen} aria-label={`Xem nguồn: ${source}`} onClick={() => setSourceOpen((open) => !open)}><MaterialIcon name="database" size={15} /> <span className="citation-trigger__text">{source || "Nguồn trích dẫn"}</span><MaterialIcon name={sourceOpen ? "expand_less" : "expand_more"} size={16} /></button><div className="citation-popover" role="tooltip"><span className="citation-popover__label">NGUỒN THAM KHẢO</span><strong>{source || "Chưa có thông tin nguồn"}</strong><p>Nhấn lại nút nguồn để thu gọn thông tin tham khảo.</p></div></div>
+    <div className={`citation-wrap ${sourceOpen ? "citation-wrap--open" : ""}`}><button type="button" className="citation-trigger" aria-expanded={sourceOpen} aria-label={`Xem nguồn: ${source}`} onClick={() => setSourceOpen((open) => !open)}><MaterialIcon name="database" size={15} /> <span className="citation-trigger__text">{source || "Nguồn trích dẫn"}</span><MaterialIcon name={sourceOpen ? "expand_less" : "expand_more"} size={16} /></button><div className="citation-popover" role="tooltip"><span className="citation-popover__label">NGUỒN THAM KHẢO</span><strong>{source || "Chưa có thông tin nguồn"}</strong>{references?.length ? <ul className="citation-popover__refs">{references.map((ref, i) => <li key={i}>{ref}</li>)}</ul> : <p>Nhấn lại nút nguồn để thu gọn thông tin tham khảo.</p>}</div></div>
   </article>;
 }

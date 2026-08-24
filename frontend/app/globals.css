@@ -1338,21 +1338,19 @@ button.primary:hover,
 }
 
 /* Khối "Dữ liệu tương tác gốc"/"Cách xử lý gốc" luôn nằm trong DOM (2 nút bật
-   độc lập, có thể mở cả 2 cùng lúc) - chỉ đổi grid-template-rows 0fr <-> 1fr
-   để cả thẻ giãn/co chiều cao mượt, thay vì khối bật/tắt đột ngột. */
+   độc lập, có thể mở cả 2 cùng lúc) - mặc định max-height: 0 + overflow hidden
+   để thực sự ẩn hẳn (không lộ viền/chữ như grid-template-rows: 0fr, vốn không
+   co về đúng 0 khi container cha có chiều cao auto), chỉ hiện khi bấm mở, và
+   chuyển động mượt thay vì bật/tắt đột ngột.
+   600px là trần rộng rãi hơn nội dung thực tế, không phải chiều cao thật. */
 .alert-detail-box__collapse {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 0.22s ease;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
 }
 
 .alert-detail-box__collapse--open {
-  grid-template-rows: 1fr;
-}
-
-.alert-detail-box__collapse > div {
-  overflow: hidden;
-  min-height: 0;
+  max-height: 600px;
 }
 
 /* Nút "Xem thêm"/"Thu gọn" nội tuyến cuối đoạn text bị rút gọn (ExpandableText) -
@@ -1425,6 +1423,8 @@ button.primary:hover,
   display: block;
   font-size: 13px;
   font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
   margin-bottom: 4px;
   color: var(--on-surface-variant);
 }
@@ -6098,6 +6098,16 @@ html[data-theme="dark"] .ocr-scan-row__unmatched {
   color: #687b91;
   font-size: 12px;
   line-height: 1.45;
+}
+.citation-popover__refs {
+  margin: 8px 0 0;
+  padding-left: 16px;
+  color: #687b91;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.citation-popover__refs li + li {
+  margin-top: 6px;
 }
 .check-result-page .alert-card {
   font-family: var(--font-body);

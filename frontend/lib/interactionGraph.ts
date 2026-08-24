@@ -101,6 +101,29 @@ export function buildProductGraph(products: string[], explanations: InteractionE
   return [...edges.values()].sort((a, b) => (order.get(a.productA.toLowerCase()) ?? 0) - (order.get(b.productA.toLowerCase()) ?? 0));
 }
 
+// Lấy N câu ĐẦU TIÊN trọn vẹn (không cắt giữa câu) từ 1 đoạn văn.
+function firstSentences(text: string, count: number): string {
+  const matches = text.match(/[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$/g) ?? [text];
+  return matches.slice(0, count).join(" ").trim();
+}
+
+// Trích dẫn nguồn cho popover "Nguồn trích dẫn" ở AlertCard: mỗi cặp hoạt chất góp
+// phần vào cạnh thuốc-thuốc này đóng góp 1 câu tóm tắt (2 câu nếu chỉ có <=2 cặp),
+// lấy từ mô tả khoa học nguyên văn (mo_ta_dich, dược sĩ mới có) - giữ nguồn đủ ngắn
+// gọn dù cạnh được gộp từ nhiều cặp hoạt chất. Bệnh nhân không thấy mo_ta_dich nên
+// trả về mảng rỗng, popover rơi về hint mặc định.
+export function buildCitationReferences(pairs: InteractionExplanation[]): string[] {
+  const sentencesPerPair = pairs.length <= 2 ? 2 : 1;
+  const references: string[] = [];
+  for (const pair of pairs) {
+    const text = pair.mo_ta_dich ?? pair.mo_ta;
+    if (!text) continue;
+    const excerpt = firstSentences(text, sentencesPerPair);
+    if (excerpt) references.push(excerpt);
+  }
+  return references;
+}
+
 // Gộp ProductEdge[] (đã tính trên toàn bộ danh sách thuốc gộp từ mọi đơn) lên cấp
 // đơn thuốc. Với mỗi cạnh thuốc, xét MỌI cặp chỉ số đơn (rxA, rxB) mà 2 đầu cạnh
 // thuộc về - vì origins không đảm bảo mỗi thuốc chỉ thuộc đúng 1 đơn.
