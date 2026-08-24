@@ -128,6 +128,7 @@ def init_db() -> None:
     _ensure_column("disease_interactions", "mo_ta_dich", "TEXT", engine=engine_facts)
 
     _ensure_column_any_dialect("interaction_checks", "thuoc_da_kiem_tra", "TEXT", "JSON")
+    _ensure_column_any_dialect("food_disease_explanation_cache", "nguon_trich_dan_chi_tiet", "TEXT", "TEXT")
 
     _ensure_index("patient_profiles", "user_id", "idx_patient_profiles_user_id")
     _ensure_index("patient_prescriptions", "patient_id", "idx_patient_prescriptions_patient_id")

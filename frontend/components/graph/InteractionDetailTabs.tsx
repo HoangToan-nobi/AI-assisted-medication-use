@@ -79,7 +79,7 @@ export default function InteractionDetailTabs({ drugPairItems, foodItems, diseas
                 severity={item.muc_do}
                 description={pickText(item, audience)}
                 source={item.nguon_trich_dan}
-                references={buildCitationReferences([item])}
+                references={buildCitationReferences([{ nguon_trich_dan: item.nguon_trich_dan_chi_tiet }])}
                 management={item.xu_tri_dich}
                 scientificDescription={item.mo_ta_dich}
               />
@@ -98,7 +98,7 @@ export default function InteractionDetailTabs({ drugPairItems, foodItems, diseas
                 severity={item.muc_do}
                 description={pickText(item, audience)}
                 source={item.nguon_trich_dan}
-                references={buildCitationReferences([item])}
+                references={buildCitationReferences([{ nguon_trich_dan: item.nguon_trich_dan_chi_tiet }])}
                 scientificDescription={item.mo_ta_dich}
               />
             </div>

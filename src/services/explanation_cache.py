@@ -24,6 +24,9 @@ def lookup_cached(model_cls: type, **filters) -> dict | None:
             "giai_thich": row.giai_thich,
             "giai_thich_duoc_si": row.giai_thich_duoc_si,
             "nguon_trich_dan": row.nguon_trich_dan,
+            # Chỉ FoodDiseaseExplanationCache có cột này (ProductExplanationCache
+            # không có) - getattr với default None để dùng chung được 1 hàm cho cả 2.
+            "nguon_trich_dan_chi_tiet": getattr(row, "nguon_trich_dan_chi_tiet", None),
             "mo_ta_dich": row.mo_ta_dich,
             "xu_tri_dich": row.xu_tri_dich,
         }

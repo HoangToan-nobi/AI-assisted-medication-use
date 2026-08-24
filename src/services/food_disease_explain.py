@@ -89,6 +89,16 @@ def _fd_citation(pair_count: int) -> str:
     return f"Tổng hợp từ {pair_count} hoạt chất tương tác trong CSDL DDInter 2.0."
 
 
+# Nối nguon_trich_dan GỐC (không qua tóm tắt) của từng dòng hoạt chất đã gộp vào
+# cạnh này bằng "|" - dòng food/disease trong DDInter vốn đã dùng "|" nối nhiều
+# mục con bên trong 1 dòng (khác thuốc-thuốc dùng "[N]"), nên nối thêm giữa CÁC
+# DÒNG cũng bằng "|" vẫn ra đúng 1 chuỗi tách được từng mục ở tầng hiển thị
+# (frontend buildCitationReferences không phân biệt mục đó gốc từ dòng nào).
+def _fd_citation_detail(contributing_rows: list[dict]) -> str | None:
+    parts = [row["nguon_trich_dan"] for row in contributing_rows if row.get("nguon_trich_dan")]
+    return "|".join(parts) if parts else None
+
+
 _FD_STYLE_PATIENT = (
     "Giọng gần gũi, thân thiện, dùng từ ngữ đời thường - viết sao cho người "
     "không có chuyên môn y dược đọc cũng hiểu ngay. Độ dài co giãn theo độ "
@@ -220,6 +230,7 @@ async def _explain_food_edge(edge: dict, audience: str) -> dict:
             "muc_do": muc_do,
             **_tone_fields(message, audience),
             "nguon_trich_dan": _fd_citation(pair_count),
+            "nguon_trich_dan_chi_tiet": _fd_citation_detail(edge["contributing_rows"]),
             "mo_ta_dich": None,
             "xu_tri_dich": None,
         }
@@ -248,6 +259,7 @@ async def _explain_food_edge(edge: dict, audience: str) -> dict:
     result = {
         **_tone_fields(text, audience),
         "nguon_trich_dan": _fd_citation(pair_count),
+        "nguon_trich_dan_chi_tiet": _fd_citation_detail(edge["contributing_rows"]),
         "mo_ta_dich": mo_ta_dich,
         "xu_tri_dich": xu_tri_dich,
     }
@@ -269,6 +281,7 @@ async def _explain_disease_edge(edge: dict, audience: str) -> dict:
             "muc_do": muc_do,
             **_tone_fields(message, audience),
             "nguon_trich_dan": _fd_citation(pair_count),
+            "nguon_trich_dan_chi_tiet": _fd_citation_detail(edge["contributing_rows"]),
             "mo_ta_dich": None,
         }
 
@@ -300,6 +313,7 @@ async def _explain_disease_edge(edge: dict, audience: str) -> dict:
     result = {
         **_tone_fields(text, audience),
         "nguon_trich_dan": _fd_citation(pair_count),
+        "nguon_trich_dan_chi_tiet": _fd_citation_detail(edge["contributing_rows"]),
         "mo_ta_dich": mo_ta_dich,
     }
     save_cached(FoodDiseaseExplanationCache, **cache_filters, **result, xu_tri_dich=None)
