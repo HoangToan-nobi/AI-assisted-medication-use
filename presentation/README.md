@@ -1,26 +1,32 @@
-# Pitch Deck & Demo Materials
+# MediCheck Presentation
 
-## Files
+## Bản thuyết trình hoàn chỉnh
 
-- `pitch_deck.pptx` — Slide thuyết trình Demo Day
-- `video_demo.mp4` — Video demo sản phẩm (tối đa 5 phút)
+- `pitch_deck_medicheck_vi.pptx` — deck PowerPoint 12 slide, có thể chỉnh sửa.
+- `pitch_deck_medicheck_vi.pdf` — bản PDF để xem hoặc gửi nhanh.
+- `speaker_notes_vi.md` — lời dẫn ngắn theo từng slide.
+- `generate_pitch_deck.js` — mã nguồn tạo lại deck.
 
-## Pitch Deck Structure (10 slides)
+## Nội dung 12 slide
 
-1. **Title** — Tên dự án + Team
-2. **Problem** — Vấn đề là gì? Có bao nhiêu người gặp?
-3. **Solution** — Giải pháp AI của bạn
-4. **Demo** — Screenshot/Video ngắn
-5. **Architecture** — System diagram đơn giản
-6. **Tech Stack** — Technologies used
-7. **Traction** — Metrics, users, feedback
-8. **Market** — Quy mô thị trường
-9. **Team** — Ai làm gì
-10. **Ask** — Bạn cần gì tiếp theo?
+1. Giới thiệu MediCheck
+2. Bài toán và khoảng trống
+3. Giải pháp
+4. Hai nhóm người dùng
+5. Trải nghiệm tra cứu
+6. Kết quả tương tác
+7. Human-in-the-loop
+8. Kiến trúc hệ thống
+9. Pipeline AI Agent và an toàn
+10. Nền tảng kỹ thuật
+11. SWOT và roadmap
+12. Team và Q&A
 
-## Video Demo Checklist
+## Tạo lại file PowerPoint
 
-- [ ] Giới thiệu problem (< 30 giây)
-- [ ] Demo live feature chính (2-3 phút)
-- [ ] Hiển thị kết quả AI (1 phút)
-- [ ] Tóm tắt impact (< 30 giây)
+```powershell
+npm install --prefix presentation --no-package-lock --no-save pptxgenjs
+node presentation/generate_pitch_deck.js
+```
+
+Ảnh minh họa được lấy trực tiếp từ `docs/screenshots/` của dự án.
