@@ -603,9 +603,13 @@ export default function AuthPage() {
         .mc-auth__google-wrap {
           margin-top: 10px;
         }
-        /* Nút Google thật render vào đây - xem renderGoogleButton() trong component. */
+        /* Nút Google thật render vào đây - xem renderGoogleButton() trong component.
+           size:"large" của Google cố định ~40px, thấp hơn .mc-auth__submit (46px) -
+           đặt min-height bằng nhau rồi canh giữa (align-items) để 2 nút cao ngang
+           nhau, không lệch. */
         .mc-auth__google-mount {
           width: 100%;
+          min-height: 46px;
           align-items: center;
           justify-content: center;
         }
@@ -799,6 +803,9 @@ export default function AuthPage() {
           .mc-auth__google-wrap {
             margin-top: 18px;
           }
+          .mc-auth__google-mount {
+            min-height: 74px;
+          }
           .mc-auth__google-btn {
             min-height: 70px;
             border-radius: 16px;
@@ -873,7 +880,8 @@ export default function AuthPage() {
           }
           .mc-auth__demo button,
           .mc-auth__submit,
-          .mc-auth__google-btn {
+          .mc-auth__google-btn,
+          .mc-auth__google-mount {
             min-height: 56px;
           }
           .mc-auth__input {
