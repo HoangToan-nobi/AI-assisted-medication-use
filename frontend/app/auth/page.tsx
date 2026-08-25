@@ -616,14 +616,22 @@ export default function AuthPage() {
           overflow: hidden;
           opacity: 0;
         }
-        .mc-auth__google-btn:hover:not(:disabled) {
+        /* Nút Google thật đè lên (overlay) nuốt mất hover/click chuột trước khi tới
+           được .mc-auth__google-btn bên dưới, nên :hover/:active đặt thẳng trên nó
+           sẽ không bao giờ kích hoạt một khi overlay hoạt động - nút trông như chết
+           dù bấm vẫn ăn. :hover/:active xét theo hình học (bounding box), không bị
+           iframe con chặn như sự kiện JS, nên đặt luôn trên .mc-auth__google-wrap
+           (phần tử cha bao cả overlay) vẫn kích hoạt đúng lúc hover/bấm qua overlay. */
+        .mc-auth__google-btn:hover:not(:disabled),
+        .mc-auth__google-wrap:hover .mc-auth__google-btn:not(:disabled) {
           transform: translateY(-3px);
           border-color: #7ea1df;
           background: #edf4ff;
           color: #244b8d;
           box-shadow: 0 10px 22px #4167b228;
         }
-        .mc-auth__google-btn:active:not(:disabled) {
+        .mc-auth__google-btn:active:not(:disabled),
+        .mc-auth__google-wrap:active .mc-auth__google-btn:not(:disabled) {
           transform: translateY(0) scale(0.985);
           box-shadow: 0 4px 10px #4167b21c;
         }
@@ -1137,6 +1145,10 @@ export default function AuthPage() {
                 className="mc-auth__google-btn"
                 onClick={handleGoogleClick}
                 disabled={loading}
+                // Overlay hoạt động -> nút Google thật (phía trên) mới là điểm dừng
+                // tab thật sự; bỏ nút trang trí này khỏi thứ tự Tab để không tạo 2
+                // điểm dừng trùng nhau khi điều hướng bằng bàn phím.
+                tabIndex={googleOverlayActive ? -1 : 0}
               >
                 <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
                   <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z" />
