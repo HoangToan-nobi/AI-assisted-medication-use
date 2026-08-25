@@ -29,9 +29,9 @@ const features = [
     text: "Phân tích tương tác giữa các loại thuốc bạn đang dùng để giảm rủi ro.",
   },
   {
-    icon: "search",
-    title: "Tra cứu thuốc",
-    text: "Thông tin rõ ràng về hàng ngàn loại thuốc, liều lượng và tác dụng phụ.",
+    icon: "hub",
+    title: "Đồ thị tương tác trực quan",
+    text: "Mỗi thuốc là một nút, mỗi cặp tương tác là một đường nối tô màu theo mức độ nghiêm trọng.",
   },
   {
     icon: "support_agent",
@@ -350,7 +350,7 @@ function HeroSection({
   return (
     <section
       className="mc-shell mc-hero"
-      aria-label="MediCheck - tra cứu thông minh, dùng thuốc an toàn"
+      aria-label="MediCheck - tra cứu tương tác, dùng thuốc an toàn"
     >
       <div className="mc-hero__glow" />
       <Image
@@ -377,7 +377,7 @@ function HeroSection({
       </div>
       <div className="mc-hero__new-copy">
         <h1>
-          Tra cứu thông minh
+          Tra cứu tương tác
           <br />
           <em>dùng thuốc an toàn</em>
         </h1>

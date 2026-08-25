@@ -218,6 +218,7 @@ export default function PatientPrescriptionPanel({
           onConfirm={(selected, diseaseIds) => void confirmScannedDrugs(selected, diseaseIds)}
           onClose={() => { setScanResult(null); setScannedImageFile(null); }}
           imageFile={scannedImageFile || undefined}
+          search={search}
           canAddConditions={Boolean(onAddConditions)}
         />
       )}

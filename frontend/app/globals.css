@@ -5422,7 +5422,7 @@ html[data-theme="dark"] .profile-field-control > input:-webkit-autofill:active {
   font: inherit;
   font-size: 13px;
 }
-.ocr-scan-option--skip .ocr-scan-option__name {
+.ocr-scan-option__name--empty {
   color: var(--on-surface-variant);
   font-weight: 500;
 }
@@ -5433,6 +5433,102 @@ html[data-theme="dark"] .profile-field-control > input:-webkit-autofill:active {
   margin: 8px 0 0;
   color: #6d7785;
   font-size: 12px;
+}
+/* Dòng thuốc đã duyệt: ứng viên điểm cao nhất hiện sẵn (khối .ocr-scan-option
+   readonly) kèm hai nút Sửa/Xóa nhỏ bên dưới. */
+.ocr-scan-drug-picked {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ocr-scan-drug-actions {
+  display: flex;
+  gap: 8px;
+}
+.ocr-scan-drug-actions button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: unset;
+  padding: 5px 10px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-sm);
+  background: var(--surface-container-lowest);
+  color: var(--on-surface-variant);
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: none;
+}
+.ocr-scan-drug-actions button:hover {
+  color: var(--on-surface);
+  border-color: var(--primary);
+}
+/* Chế độ sửa một dòng thuốc: ô tìm kiếm (dùng lại khung .ocr-scan-option--manual)
+   + danh sách kết quả khớp CSDL bên dưới. Chỉ tên bấm chọn từ danh sách này mới
+   được chốt - gõ tay không có tác dụng nếu không chọn một kết quả thật. */
+.ocr-scan-drug-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ocr-scan-drug-edit__suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ocr-scan-drug-edit__suggestions .ocr-scan-option {
+  width: 100%;
+  min-height: unset;
+  justify-content: flex-start;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  box-shadow: none;
+}
+.ocr-scan-drug-edit__suggestions .ocr-scan-option:hover {
+  border-color: var(--primary);
+}
+.ocr-scan-drug-edit__empty {
+  margin: 0;
+  color: var(--on-surface-variant);
+  font-size: 12px;
+}
+.ocr-scan-drug-edit__cancel {
+  align-self: flex-start;
+  min-height: unset;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--on-surface-variant);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: underline;
+  box-shadow: none;
+}
+.ocr-scan-row__removed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--outline-variant);
+  border-radius: var(--radius);
+  color: var(--on-surface-variant);
+  font-size: 12.5px;
+}
+.ocr-scan-row__removed button {
+  min-height: unset;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--primary);
+  font-size: 12.5px;
+  font-weight: 700;
+  text-decoration: underline;
+  box-shadow: none;
 }
 .ocr-scan-modal__footer {
   display: flex;

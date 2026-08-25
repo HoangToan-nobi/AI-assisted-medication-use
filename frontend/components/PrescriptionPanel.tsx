@@ -207,6 +207,7 @@ export default function PrescriptionPanel({ label, drugs, search, onAdd, onRemov
           onConfirm={confirmScannedDrugs}
           onClose={() => { setScanResult(null); setScannedImageFile(null); }}
           imageFile={scannedImageFile || undefined}
+          search={search}
           audience={audience}
         />
       )}
