@@ -382,8 +382,8 @@ function HeroSection({
           <em>dùng thuốc an toàn</em>
         </h1>
         <p>
-          Tra cứu tương tác thuốc nhanh chóng, đồng hành cùng bạn sử dụng
-          thuốc an toàn.
+          Biến tương tác phức tạp thành phân tích trực quan, đồng hành cùng
+          bạn dùng thuốc an toàn.
         </p>
       </div>
       <HeroDrugSearch onComplete={onComplete} />
