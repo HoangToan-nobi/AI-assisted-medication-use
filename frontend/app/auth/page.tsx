@@ -56,6 +56,9 @@ export default function AuthPage() {
   const [googleButtonRendered, setGoogleButtonRendered] = useState(false);
   const googleBtnWrapRef = useRef<HTMLDivElement>(null);
   const googleBtnMountRef = useRef<HTMLDivElement>(null);
+  // Rộng (px) đã vẽ nút Google gần nhất - xem renderGoogleButton() để hiểu vì sao
+  // cần chặn vẽ lại khi rộng không đổi.
+  const googleButtonWidthRef = useRef(0);
 
   useEffect(() => {
     const resetSucceeded = sessionStorage.getItem("medicheck-password-reset-success") === "1";
@@ -187,7 +190,13 @@ export default function AuthPage() {
   function renderGoogleButton() {
     if (!window.google || !googleBtnWrapRef.current || !googleBtnMountRef.current) return;
     const width = Math.round(googleBtnWrapRef.current.offsetWidth);
-    if (width <= 0) return;
+    // Vẽ lại (xóa rồi renderButton lại) làm iframe Google mất một nhịp để tải lại
+    // -> chiều cao của nó dao động trong lúc chờ -> ResizeObserver bên dưới lại
+    // kích hoạt lần nữa -> vẽ lại tiếp... một vòng lặp bất tận, biểu hiện ra ngoài
+    // là con trỏ chuột nhấp nháy liên tục qua lại. Chỉ vẽ lại khi RỘNG thực sự đổi
+    // (đúng lý do cần vẽ lại - khớp breakpoint mới), bỏ qua khi chỉ CAO đổi do bản
+    // thân nút Google tự ổn định lại sau khi tải xong.
+    if (width <= 0 || width === googleButtonWidthRef.current) return;
     googleBtnMountRef.current.innerHTML = "";
     try {
       window.google.accounts.id.renderButton(googleBtnMountRef.current, {
@@ -199,10 +208,12 @@ export default function AuthPage() {
         logo_alignment: "left",
         width,
       });
+      googleButtonWidthRef.current = width;
       setGoogleButtonRendered(googleBtnMountRef.current.childElementCount > 0);
     } catch {
       // Script Google trả lỗi lúc render - giữ nút tự vẽ bên dưới (gọi prompt()
-      // khi bấm) làm phương án dự phòng.
+      // khi bấm) làm phương án dự phòng. Không ghi nhận width để lần đổi kích
+      // thước sau còn thử vẽ lại.
       setGoogleButtonRendered(false);
     }
   }
