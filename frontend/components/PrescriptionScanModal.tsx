@@ -38,14 +38,19 @@ type PrescriptionScanModalProps = {
 
 // Modal duyệt kết quả OCR - BẮT BUỘC có bước này trước khi thêm bất kỳ thuốc nào
 // vào đơn. Độ chính xác khớp tên hiện tại ~67%: dòng hệ thống tự tin nhất vẫn có
-// thể sai (ví dụ "Đại tần giao" bị khớp thành "Tần giao"). Trước đây xử lý bằng
-// cách không tick sẵn gì và bắt chọn giữa nhiều ứng viên; giờ đổi hướng khác: hiện
-// thẳng ứng viên điểm cao nhất như đã chọn sẵn (đỡ phải dò qua danh sách cho từng
-// dòng), và để "Sửa"/"Xóa" xử lý phần còn lại - Sửa mở tìm kiếm toàn bộ CSDL chứ
-// không chỉ 2-3 ứng viên gợi ý, Xóa bỏ hẳn dòng nếu không cần.
+// thể sai (ví dụ "Đại tần giao" bị khớp thành "Tần giao"). Ứng viên điểm cao nhất
+// chỉ được tick sẵn khi backend đánh giá là đủ tin cậy (known); dòng không đạt
+// ngưỡng đó bắt đầu ở trạng thái trống - đỡ phải dò qua danh sách cho dòng đã chắc
+// chắn, nhưng không âm thầm nhận một cái tên chỉ là "giống nhất" trong toàn bộ CSDL.
+// "Sửa"/"Xóa" xử lý phần còn lại - Sửa mở tìm kiếm toàn bộ CSDL chứ không chỉ 2-3
+// ứng viên gợi ý, Xóa bỏ hẳn dòng nếu không cần.
 export default function PrescriptionScanModal({ result, onConfirm, onClose, imageFile, search, canAddConditions = false, audience = "patient" }: PrescriptionScanModalProps) {
+  // Chỉ tick sẵn khi backend đã coi ứng viên là đủ tin cậy (known, điểm >=0.75).
+  // Dưới ngưỡng đó, tên gợi ý có thể chỉ là thứ giống nhất trong toàn bộ CSDL
+  // dù ảnh chẳng liên quan gì đến thuốc (ví dụ chụp một tấm QR khảo sát) - để
+  // trống buộc người dùng tự bấm "Sửa" thay vì âm thầm thêm nhầm thuốc vào đơn.
   const [drugRows, setDrugRows] = useState<DrugRowState[]>(
-    () => result.drugs.map((row) => ({ removed: false, chosenName: row.suggested_name })),
+    () => result.drugs.map((row) => ({ removed: false, chosenName: row.known ? row.suggested_name : null })),
   );
   // Chỉ một dòng được sửa cùng lúc - đơn giản hơn so với giữ ô tìm kiếm riêng cho
   // từng dòng, và cũng khớp cách người dùng thực tế duyệt: sửa xong dòng này mới
@@ -264,7 +269,14 @@ export default function PrescriptionScanModal({ result, onConfirm, onClose, imag
           {result.drugs.length === 0 ? (
             <p className="ocr-scan-modal__empty">Không đọc được dòng thuốc nào trong ảnh này. Hãy chụp lại rõ hơn hoặc nhập tên thuốc thủ công.</p>
           ) : (
-            <ul className="ocr-scan-rows">
+            <>
+              {/* Đọc được chữ nhưng không dòng nào khớp CSDL đủ tin cậy - khác
+                  với case rỗng ở trên (không đọc được chữ gì). Thường là ảnh
+                  chụp nhầm thứ không phải thuốc (hóa đơn, biển báo...). */}
+              {result.drugs.every((row) => !row.known) && (
+                <p className="ocr-scan-modal__empty">Không tìm thấy thuốc nào trong ảnh. Thử chụp lại rõ hơn hoặc nhập tay.</p>
+              )}
+              <ul className="ocr-scan-rows">
             {result.drugs.map((row, index) => {
               const state = drugRows[index];
               const isEditing = editingRow === index;
@@ -344,7 +356,8 @@ export default function PrescriptionScanModal({ result, onConfirm, onClose, imag
                 </li>
               );
             })}
-            </ul>
+              </ul>
+            </>
           )}
           </div>
         </div>
