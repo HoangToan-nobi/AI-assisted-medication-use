@@ -609,7 +609,10 @@ export default function AuthPage() {
            nhau, không lệch. */
         .mc-auth__google-mount {
           width: 100%;
-          min-height: 46px;
+          /* .mc-auth__submit đặt min-height: 46px nhưng padding/icon bên trong đẩy
+             chiều cao thật lên ~48.6px - khớp theo số đo thật, không phải theo
+             min-height khai báo. */
+          min-height: 49px;
           align-items: center;
           justify-content: center;
         }
