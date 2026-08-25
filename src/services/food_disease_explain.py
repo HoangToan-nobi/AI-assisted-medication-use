@@ -89,6 +89,16 @@ def _fd_citation(pair_count: int) -> str:
     return f"Tổng hợp từ {pair_count} hoạt chất tương tác trong CSDL DDInter 2.0."
 
 
+# Nối nguon_trich_dan GỐC (không qua tóm tắt) của từng dòng hoạt chất đã gộp vào
+# cạnh này bằng "|" - dòng food/disease trong DDInter vốn đã dùng "|" nối nhiều
+# mục con bên trong 1 dòng (khác thuốc-thuốc dùng "[N]"), nên nối thêm giữa CÁC
+# DÒNG cũng bằng "|" vẫn ra đúng 1 chuỗi tách được từng mục ở tầng hiển thị
+# (frontend buildCitationReferences không phân biệt mục đó gốc từ dòng nào).
+def _fd_citation_detail(contributing_rows: list[dict]) -> str | None:
+    parts = [row["nguon_trich_dan"] for row in contributing_rows if row.get("nguon_trich_dan")]
+    return "|".join(parts) if parts else None
+
+
 _FD_STYLE_PATIENT = (
     "Giọng gần gũi, thân thiện, dùng từ ngữ đời thường - viết sao cho người "
     "không có chuyên môn y dược đọc cũng hiểu ngay. Độ dài co giãn theo độ "
@@ -220,6 +230,7 @@ async def _explain_food_edge(edge: dict, audience: str) -> dict:
             "muc_do": muc_do,
             **_tone_fields(message, audience),
             "nguon_trich_dan": _fd_citation(pair_count),
+            "nguon_trich_dan_chi_tiet": _fd_citation_detail(edge["contributing_rows"]),
             "mo_ta_dich": None,
             "xu_tri_dich": None,
         }
@@ -248,6 +259,7 @@ async def _explain_food_edge(edge: dict, audience: str) -> dict:
     result = {
         **_tone_fields(text, audience),
         "nguon_trich_dan": _fd_citation(pair_count),
+        "nguon_trich_dan_chi_tiet": _fd_citation_detail(edge["contributing_rows"]),
         "mo_ta_dich": mo_ta_dich,
         "xu_tri_dich": xu_tri_dich,
     }
@@ -269,6 +281,7 @@ async def _explain_disease_edge(edge: dict, audience: str) -> dict:
             "muc_do": muc_do,
             **_tone_fields(message, audience),
             "nguon_trich_dan": _fd_citation(pair_count),
+            "nguon_trich_dan_chi_tiet": _fd_citation_detail(edge["contributing_rows"]),
             "mo_ta_dich": None,
         }
 
@@ -300,6 +313,7 @@ async def _explain_disease_edge(edge: dict, audience: str) -> dict:
     result = {
         **_tone_fields(text, audience),
         "nguon_trich_dan": _fd_citation(pair_count),
+        "nguon_trich_dan_chi_tiet": _fd_citation_detail(edge["contributing_rows"]),
         "mo_ta_dich": mo_ta_dich,
     }
     save_cached(FoodDiseaseExplanationCache, **cache_filters, **result, xu_tri_dich=None)
@@ -325,19 +339,29 @@ async def build_disease_interaction_explanations(
 
 
 def build_food_disease_warning_line(
-    food_explanations: list[dict], disease_explanations: list[dict]
+    food_explanations: list[dict], disease_explanations: list[dict], audience: str = "patient"
 ) -> list[str] | None:
     """Danh sách 1-3 câu CỐ ĐỊNH (không qua LLM) liệt kê tên thực phẩm/bệnh nền cần
     lưu ý, hiện thành các đoạn riêng SAU đoạn LLM sinh về tương tác thuốc-thuốc ở
     tóm tắt tổng quan - không có rủi ro bịa dữ kiện vì chỉ liệt kê thẳng tên đã
     khớp được trong DDInter. Thứ tự: dòng thực phẩm (nếu có) -> dòng bệnh nền (nếu
-    có) -> câu mời trao đổi dược sĩ (nếu có ít nhất 1 trong 2 dòng trên)."""
+    có) -> câu mời trao đổi dược sĩ (nếu có ít nhất 1 trong 2 dòng trên, CHỈ với
+    audience="patient" - dược sĩ đang là người thực hiện tra cứu nên câu mời tự
+    trao đổi với chính mình vô nghĩa, và giọng văn hướng "bạn/bệnh nhân của bạn"
+    thay vì xưng hô như đang nói chuyện trực tiếp với bệnh nhân)."""
     foods = sorted({item["thuc_pham"] for item in food_explanations})
     diseases = sorted({item["ten_benh"] for item in disease_explanations})
     if not foods and not diseases:
         return None
 
     lines = []
+    if audience == "pharmacist":
+        if foods:
+            lines.append(f"Ngoài ra, cần khuyến cáo bệnh nhân tránh dùng chung với: {', '.join(foods)}.")
+        if diseases:
+            lines.append(f"Cũng cần thận trọng nếu bệnh nhân có tiền sử/đang mắc: {', '.join(diseases)}.")
+        return lines
+
     prefix = "Ngoài ra, cần"
     if foods:
         lines.append(f"{prefix} lưu ý tránh dùng chung với: {', '.join(foods)}.")

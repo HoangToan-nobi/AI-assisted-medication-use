@@ -92,6 +92,20 @@ def _ensure_index(table: str, column: str, index_name: str, *, engine=engine) ->
         conn.commit()
 
 
+def _purge_stale_food_disease_cache(*, engine=engine) -> None:
+    """Xoá các bản ghi food_disease_explanation_cache đã lưu TRƯỚC KHI cột
+    nguon_trich_dan_chi_tiet tồn tại (nên cột đó đang NULL) - cache không có cơ chế
+    tự làm mới, nếu không xoá thì các cạnh đã tra cứu trước đây sẽ mãi mãi không có
+    references thật dù backend đã hỗ trợ. Idempotent + tự giới hạn: sau lần dọn đầu
+    tiên, gần như mọi bản ghi mới đều có nguon_trich_dan_chi_tiet (dữ liệu DDInter
+    hiếm khi thiếu nguon_trich_dan gốc) nên lệnh này rơi về no-op ở các lần khởi
+    động sau. Chỉ xoá cache (không phải dữ liệu DDInter gốc) - lần tra cứu kế tiếp
+    tự tính lại (gọi LLM lại 1 lần cho các cạnh đã xoá)."""
+    with engine.connect() as conn:
+        conn.execute(text("DELETE FROM food_disease_explanation_cache WHERE nguon_trich_dan_chi_tiet IS NULL"))
+        conn.commit()
+
+
 def init_db() -> None:
     """Tạo bảng nếu chưa tồn tại — gọi 1 lần khi setup (Sprint 0).
 
@@ -128,6 +142,8 @@ def init_db() -> None:
     _ensure_column("disease_interactions", "mo_ta_dich", "TEXT", engine=engine_facts)
 
     _ensure_column_any_dialect("interaction_checks", "thuoc_da_kiem_tra", "TEXT", "JSON")
+    _ensure_column_any_dialect("food_disease_explanation_cache", "nguon_trich_dan_chi_tiet", "TEXT", "TEXT")
+    _purge_stale_food_disease_cache()
 
     _ensure_index("patient_profiles", "user_id", "idx_patient_profiles_user_id")
     _ensure_index("patient_prescriptions", "patient_id", "idx_patient_prescriptions_patient_id")

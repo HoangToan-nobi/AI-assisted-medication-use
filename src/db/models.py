@@ -400,6 +400,11 @@ class FoodDiseaseExplanationCache(Base):
     giai_thich = Column(Text, nullable=False)
     giai_thich_duoc_si = Column(Text, nullable=True)
     nguon_trich_dan = Column(Text)
+    # Tài liệu tham khảo GỐC (nguyên văn từ DDInter) của TỪNG dòng hoạt chất đã gộp
+    # vào cạnh này, nối bằng "|" - khác nguon_trich_dan ở trên vốn chỉ là câu tóm tắt
+    # "Tổng hợp từ N hoạt chất..." không tra cứu được. Cho cả 2 audience (không phải
+    # field chỉ dược sĩ) vì đây là trích dẫn nguồn, không phải nội dung diễn giải.
+    nguon_trich_dan_chi_tiet = Column(Text, nullable=True)
     mo_ta_dich = Column(Text, nullable=True)
     xu_tri_dich = Column(Text, nullable=True)  # NULL cho disease (DDSI không có xu_tri)
     created_at = Column(DateTime, default=datetime.utcnow)

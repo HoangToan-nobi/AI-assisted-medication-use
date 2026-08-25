@@ -16,6 +16,7 @@ import {
   type PatientPrescription,
 } from "@/lib/api";
 import { getSession } from "@/lib/auth";
+import { scrollBelowStickyHeader } from "@/lib/scroll";
 import {
   createPrescription,
   mergeSavedIntoPrescriptions,
@@ -261,6 +262,11 @@ function InteractionPageContent() {
         "medguard_last_check",
         JSON.stringify(data),
       );
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollBelowStickyHeader("interaction-result");
+        });
+      });
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -375,11 +381,13 @@ function InteractionPageContent() {
       </section>
 
       {result && (
-        <InteractionResultView
-          result={result}
-          prescriptions={resultPrescriptions ?? []}
-          session={session}
-        />
+        <section id="interaction-result">
+          <InteractionResultView
+            result={result}
+            prescriptions={resultPrescriptions ?? []}
+            session={session}
+          />
+        </section>
       )}
     </main>
   );
