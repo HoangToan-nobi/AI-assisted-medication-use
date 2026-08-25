@@ -23,7 +23,7 @@ declare global {
           prompt(): void;
           renderButton(
             parent: HTMLElement,
-            options: { type: "standard"; theme: "outline"; size: "large"; text: "continue_with"; shape: "rectangular"; logo_alignment: "left"; width: number },
+            options: { type: "standard"; theme: "outline"; size: "large"; text: "continue_with"; shape: "pill"; logo_alignment: "left"; width: number },
           ): void;
         };
       };
@@ -200,11 +200,15 @@ export default function AuthPage() {
     googleBtnMountRef.current.innerHTML = "";
     try {
       window.google.accounts.id.renderButton(googleBtnMountRef.current, {
+        // shape: "pill" (bo tròn hết 2 đầu) để khớp với nút "Đăng nhập" ngay phía
+        // trên (border-radius: 999px) - đây là tuỳ chọn gần nhất có thể chỉnh được;
+        // Google vẽ nội dung trong iframe riêng của họ nên không chỉnh được màu/
+        // font/viền chính xác từng pixel như các nút khác của trang.
         type: "standard",
         theme: "outline",
         size: "large",
         text: "continue_with",
-        shape: "rectangular",
+        shape: "pill",
         logo_alignment: "left",
         width,
       });
