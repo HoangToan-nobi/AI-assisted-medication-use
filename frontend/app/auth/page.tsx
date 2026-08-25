@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import Script from "next/script";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import MaterialIcon from "@/components/MaterialIcon";
 import { ApiError, completeGoogleRegistration, googleLogin, linkGoogle, login, register, resendVerification, type AuthResponse, type GoogleAuthResult } from "@/lib/api";
@@ -16,7 +16,18 @@ type Role = "patient" | "pharmacist";
 
 declare global {
   interface Window {
-    google?: { accounts: { id: { initialize(config: { client_id: string; callback: (response: { credential: string }) => void }): void; prompt(): void } } };
+    google?: {
+      accounts: {
+        id: {
+          initialize(config: { client_id: string; callback: (response: { credential: string }) => void }): void;
+          prompt(): void;
+          renderButton(
+            parent: HTMLElement,
+            options: { type: "standard"; theme: "outline"; size: "large"; text: "continue_with"; shape: "rectangular"; logo_alignment: "left"; width: number },
+          ): void;
+        };
+      };
+    };
   }
 }
 
@@ -40,6 +51,12 @@ export default function AuthPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [googleReady, setGoogleReady] = useState(false);
+  // Google mount đè: overlay chỉ chặn click (pointer-events) khi renderButton() đã
+  // chạy xong thật sự - tránh trường hợp script lỗi/chậm khiến overlay rỗng nuốt
+  // mất click mà không có gì xử lý bên dưới.
+  const [googleOverlayActive, setGoogleOverlayActive] = useState(false);
+  const googleBtnWrapRef = useRef<HTMLDivElement>(null);
+  const googleBtnMountRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const resetSucceeded = sessionStorage.getItem("medicheck-password-reset-success") === "1";
@@ -154,13 +171,61 @@ export default function AuthPage() {
     } finally { setLoading(false); }
   }
 
+  // accounts.id.prompt() (One Tap) là API khác hẳn: nó dành cho popup TỰ hiện khi
+  // tải trang, không phải cho một nút bấm tường minh. Nếu người dùng đóng One Tap
+  // mà không chọn tài khoản, Google tự lưu trạng thái đó và ngừng hiện One Tap một
+  // thời gian (cooldown chống làm phiền) - nên nút "Tiếp tục với Google" nếu gọi
+  // prompt() sẽ có lúc bấm mà không thấy gì hiện ra. Cách đúng: dùng nút Google
+  // thật (renderButton) - không bị cooldown này vì là một luồng popup chọn tài
+  // khoản riêng. Để không đổi giao diện, nút Google thật được render trong suốt
+  // (opacity 0) đè lên đúng vị trí nút hiển thị - xem .mc-auth__google-overlay.
+  function renderGoogleButton() {
+    if (!window.google || !googleBtnWrapRef.current || !googleBtnMountRef.current) return;
+    const width = Math.round(googleBtnWrapRef.current.offsetWidth);
+    if (width <= 0) return;
+    googleBtnMountRef.current.innerHTML = "";
+    try {
+      window.google.accounts.id.renderButton(googleBtnMountRef.current, {
+        type: "standard",
+        theme: "outline",
+        size: "large",
+        text: "continue_with",
+        shape: "rectangular",
+        logo_alignment: "left",
+        width,
+      });
+      setGoogleOverlayActive(true);
+    } catch {
+      // Script Google trả lỗi lúc render - để overlay tắt, nút hiển thị bên dưới
+      // (gọi prompt() khi bấm) vẫn dùng được như phương án dự phòng.
+      setGoogleOverlayActive(false);
+    }
+  }
+
   function initGoogleAuth() {
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
     if (!clientId || !window.google) return;
     window.google.accounts.id.initialize({ client_id: clientId, callback: ({ credential }) => void handleGoogleCredential(credential) });
     setGoogleReady(true);
+    renderGoogleButton();
   }
 
+  // Nút Google thật (đè lên, xem renderButton) có bề rộng cố định theo px, không
+  // tự co giãn như .mc-auth__google-btn (width: 100%, đổi theo breakpoint) - phải
+  // vẽ lại mỗi khi khung bao đổi kích thước để overlay luôn phủ đúng hết vùng bấm.
+  useEffect(() => {
+    if (!googleReady) return;
+    const wrap = googleBtnWrapRef.current;
+    if (!wrap) return;
+    const observer = new ResizeObserver(() => renderGoogleButton());
+    observer.observe(wrap);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleReady]);
+
+  // Chỉ còn là phương án dự phòng cho lúc overlay chưa sẵn sàng (script Google
+  // chưa tải xong) - một khi overlay hoạt động, click luôn rơi vào nút Google thật
+  // ở trên, hàm này không chạy tới prompt() nữa.
   function handleGoogleClick() {
     if (!googleReady || !window.google) {
       setError("Google Sign-In đang tải, vui lòng thử lại sau giây lát.");
@@ -516,6 +581,10 @@ export default function AuthPage() {
           color: #244b8d;
           box-shadow: 0 0 0 3px #7399df1c;
         }
+        .mc-auth__google-wrap {
+          position: relative;
+          margin-top: 10px;
+        }
         .mc-auth__google-btn {
           display: flex;
           align-items: center;
@@ -523,7 +592,6 @@ export default function AuthPage() {
           gap: 10px;
           width: 100%;
           min-height: 44px;
-          margin-top: 10px;
           padding: 8px;
           border: 1px solid #c5d7f0;
           border-radius: 12px;
@@ -536,6 +604,17 @@ export default function AuthPage() {
           box-shadow: 0 4px 12px transparent;
           transition: transform 180ms ease, border-color 180ms ease,
             background-color 180ms ease, box-shadow 180ms ease, color 180ms ease;
+        }
+        /* Nút Google thật render vào đây, trong suốt, đè khít lên .mc-auth__google-btn
+           phía dưới - xem renderGoogleButton() trong component. */
+        .mc-auth__google-overlay {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+          opacity: 0;
         }
         .mc-auth__google-btn:hover:not(:disabled) {
           transform: translateY(-3px);
@@ -704,11 +783,13 @@ export default function AuthPage() {
             margin-bottom: 36px;
             font-size: 19px;
           }
+          .mc-auth__google-wrap {
+            margin-top: 18px;
+          }
           .mc-auth__google-btn {
             min-height: 70px;
             border-radius: 16px;
             font-size: 17px;
-            margin-top: 18px;
           }
           .mc-auth__demo {
             gap: 12px;
@@ -1050,20 +1131,31 @@ export default function AuthPage() {
                 )}
               </button>
             </form>
-            <button
-              type="button"
-              className="mc-auth__google-btn"
-              onClick={handleGoogleClick}
-              disabled={loading}
-            >
-              <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-                <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z" />
-                <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.81.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z" />
-                <path fill="#FBBC05" d="M3.97 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.29-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.05l3.01-2.33z" />
-                <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.46 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z" />
-              </svg>
-              Tiếp tục với Google
-            </button>
+            <div className="mc-auth__google-wrap" ref={googleBtnWrapRef}>
+              <button
+                type="button"
+                className="mc-auth__google-btn"
+                onClick={handleGoogleClick}
+                disabled={loading}
+              >
+                <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+                  <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z" />
+                  <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.81.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z" />
+                  <path fill="#FBBC05" d="M3.97 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.29-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.05l3.01-2.33z" />
+                  <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.46 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z" />
+                </svg>
+                Tiếp tục với Google
+              </button>
+              {/* Nút Google thật, trong suốt, đè khít lên nút hiển thị phía trên -
+                  xem renderGoogleButton(). pointer-events chỉ bật khi đã render xong
+                  (googleOverlayActive) để không nuốt mất click lúc script còn đang tải. */}
+              <div
+                ref={googleBtnMountRef}
+                className="mc-auth__google-overlay"
+                aria-hidden="true"
+                style={{ pointerEvents: googleOverlayActive ? "auto" : "none" }}
+              />
+            </div>
             <p className="mc-auth__switch">
               {mode === "login" ? (
                 <>
