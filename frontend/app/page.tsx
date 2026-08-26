@@ -18,7 +18,6 @@ import {
 import { getSession, type Session } from "@/lib/auth";
 import type { Prescription } from "@/lib/prescription";
 import InteractionResultView from "@/components/graph/InteractionResultView";
-import MediFox from "@/components/MediFox";
 import ThemeModeToggle from "@/components/ThemeModeToggle";
 
 const asset = (name: string) => encodeURI(`/Bộ nhận diện y tế/${name}`);
@@ -30,9 +29,9 @@ const features = [
     text: "Phân tích tương tác giữa các loại thuốc bạn đang dùng để giảm rủi ro.",
   },
   {
-    icon: "search",
-    title: "Tra cứu thuốc",
-    text: "Thông tin rõ ràng về hàng ngàn loại thuốc, liều lượng và tác dụng phụ.",
+    icon: "hub",
+    title: "Đồ thị tương tác trực quan",
+    text: "Mỗi thuốc là một nút, mỗi cặp tương tác là một đường nối tô màu theo mức độ nghiêm trọng.",
   },
   {
     icon: "support_agent",
@@ -351,7 +350,7 @@ function HeroSection({
   return (
     <section
       className="mc-shell mc-hero"
-      aria-label="MediCheck - tra cứu thông minh, dùng thuốc an toàn"
+      aria-label="MediCheck - tra cứu tương tác, dùng thuốc an toàn"
     >
       <div className="mc-hero__glow" />
       <Image
@@ -378,17 +377,16 @@ function HeroSection({
       </div>
       <div className="mc-hero__new-copy">
         <h1>
-          Tra cứu thông minh
+          Tra cứu tương tác
           <br />
           <em>dùng thuốc an toàn</em>
         </h1>
         <p>
-          Tra cứu tương tác thuốc nhanh chóng, đồng hành cùng bạn sử dụng
-          thuốc an toàn.
+          Biến tương tác phức tạp thành phân tích trực quan, đồng hành cùng
+          bạn dùng thuốc an toàn.
         </p>
       </div>
       <HeroDrugSearch onComplete={onComplete} />
-      <MediFox variant="search" className="mc-hero__fox" />
     </section>
   );
 }
@@ -1518,7 +1516,7 @@ export default function LandingPage() {
         .mc-hero__capsule {
           width: 65%;
           height: 182%;
-          right: 46%;
+          right: 27.4%;
           top: -39%;
           transform: rotate(-2deg) scale(1.8);
           transform-origin: 62% 50%;
@@ -1567,7 +1565,7 @@ export default function LandingPage() {
           }
         }
         .mc-hero__capsule {
-          transform: translateX(18vw) rotate(-2deg) scale(1.78);
+          transform: translateX(220px) rotate(-2deg) scale(1.78);
           transform-origin: 62% 50%;
         }
         .mc-search-panel {
@@ -1771,25 +1769,6 @@ export default function LandingPage() {
           }
           .mc-audience-card p {
             font-size: 14px;
-          }
-        }
-        .mc-hero__fox {
-          position: absolute;
-          z-index: 5;
-          right: 3.5%;
-          bottom: 5%;
-          width: 150px;
-          height: 122px;
-          pointer-events: none;
-          filter: drop-shadow(0 12px 14px #31528420);
-        }
-        @media (max-width: 760px) {
-          .mc-hero__fox {
-            right: 4%;
-            bottom: 3%;
-            width: 96px;
-            height: 78px;
-            opacity: 0.9;
           }
         }
         .mc-search-panel {
@@ -2228,10 +2207,10 @@ export default function LandingPage() {
 
         @keyframes mc-capsule-float {
           0%, 100% {
-            transform: translate3d(18vw, 0, 0) rotate(-2deg) scale(1.78);
+            transform: translate3d(220px, 0, 0) rotate(-2deg) scale(1.78);
           }
           50% {
-            transform: translate3d(calc(18vw + 8px), -18px, 0) rotate(1deg) scale(1.82);
+            transform: translate3d(228px, -18px, 0) rotate(1deg) scale(1.82);
           }
         }
 

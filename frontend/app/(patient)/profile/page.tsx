@@ -29,6 +29,7 @@ import {
 } from "@/lib/api";
 import { getSession, saveSession } from "@/lib/auth";
 import type { Prescription } from "@/lib/prescription";
+import { scrollBelowStickyHeader } from "@/lib/scroll";
 
 type ProfileTab = "personal" | "prescriptions";
 type ProfileField = "ngaySinh" | "canNang" | "chieuCao";
@@ -431,12 +432,11 @@ function ProfilePageContent() {
         { personalized: true },
       );
       setPrescriptionCheck(result);
-      window.setTimeout(() => {
-        document.getElementById("saved-prescription-result")?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollBelowStickyHeader("saved-prescription-result");
         });
-      }, 0);
+      });
     } catch (err) {
       setPrescriptionsError(
         err instanceof ApiError ? err.message : "Không thể phân tích tương tác lúc này.",

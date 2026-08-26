@@ -89,6 +89,10 @@ export type FoodInteractionExplanation = {
   giai_thich: string;
   giai_thich_duoc_si?: string;
   nguon_trich_dan: string;
+  // Tài liệu tham khảo GỐC (nối bằng "|") của từng hoạt chất đã gộp vào cạnh này -
+  // khác nguon_trich_dan ở trên vốn chỉ là câu tóm tắt số lượng. Dùng với
+  // buildCitationReferences (lib/interactionGraph.ts) để hiện trong AlertCard.
+  nguon_trich_dan_chi_tiet?: string;
   mo_ta_dich?: string;
   xu_tri_dich?: string;
 };
@@ -100,6 +104,7 @@ export type DiseaseInteractionExplanation = {
   giai_thich: string;
   giai_thich_duoc_si?: string;
   nguon_trich_dan: string;
+  nguon_trich_dan_chi_tiet?: string;
   // Không có xu_tri_dich - nguồn DDInter cho tương tác bệnh nền không có trường xử trí.
   mo_ta_dich?: string;
 };

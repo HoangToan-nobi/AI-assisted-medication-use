@@ -6,7 +6,7 @@ import MaterialIcon from "@/components/MaterialIcon";
 import PharmacistReviewPrompt from "@/components/PharmacistReviewPrompt";
 import type { MedicationCheckResponse, Severity } from "@/lib/api";
 import type { Session } from "@/lib/auth";
-import { assignGroupColors, buildPrescriptionGraph, buildProductGraph, withDataOnly } from "@/lib/interactionGraph";
+import { assignGroupColors, buildCitationReferences, buildPrescriptionGraph, buildProductGraph, withDataOnly } from "@/lib/interactionGraph";
 import { drugOrigins, firstPrescriptionIndex, isCrossPrescription, mergedDrugNames, type Prescription } from "@/lib/prescription";
 import type { GraphPairItem } from "./GraphPairList";
 import InteractionDetailTabs from "./InteractionDetailTabs";
@@ -242,6 +242,7 @@ export default function InteractionOverview({ result, prescriptions, session, au
       severity: e.muc_do,
       description: pickText(backendItem, audience),
       source: backendItem?.nguon_trich_dan ?? "",
+      references: buildCitationReferences(e.pairs),
       hasIncompletePair: e.hasIncompletePair,
       // Chỉ dược sĩ mới có (backend đã tự ẩn với bệnh nhân) - bản dịch nguyên văn
       // (không qua diễn giải) từ CSDL của mô tả tương tác + khuyến nghị xử trí.
@@ -286,7 +287,7 @@ export default function InteractionOverview({ result, prescriptions, session, au
 
   return (
     <>
-      {audience === "pharmacist" && hasAnySevere && (
+      {false && audience === "pharmacist" && hasAnySevere && (
         <aside className="interaction-mascot-note interaction-mascot-note--alert">
           <MediFox variant="alert" className="interaction-mascot-note__image" />
           <div>
@@ -320,9 +321,6 @@ export default function InteractionOverview({ result, prescriptions, session, au
       <section className="interaction-result panel">
       <div className="interaction-result__header">
         <div><p className="eyebrow">ĐỒ THỊ TƯƠNG TÁC</p><h2>{title}</h2></div>
-        <span className={hasAnySevere ? "result-pill result-pill--danger" : result.has_unclassified ? "result-pill result-pill--unknown" : "result-pill"}>
-          {hasAnySevere ? "Cần lưu ý" : result.has_unclassified ? "Chưa cập nhật" : "An toàn"}
-        </span>
       </div>
 
       {boardMode && (

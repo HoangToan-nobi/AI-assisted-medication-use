@@ -1337,21 +1337,20 @@ button.primary:hover,
   margin-bottom: 8px;
 }
 
-/* Tab "Dữ liệu tương tác gốc"/"Cách xử lý gốc" bung ra - trượt nhẹ xuống + mờ
-   dần vào thay vì bật ra đột ngột. */
-.alert-detail-box--reveal {
-  animation: alert-card-reveal 0.18s ease;
+/* Khối "Dữ liệu tương tác gốc"/"Cách xử lý gốc" luôn nằm trong DOM (2 nút bật
+   độc lập, có thể mở cả 2 cùng lúc) - mặc định max-height: 0 + overflow hidden
+   để thực sự ẩn hẳn (không lộ viền/chữ như grid-template-rows: 0fr, vốn không
+   co về đúng 0 khi container cha có chiều cao auto), chỉ hiện khi bấm mở, và
+   chuyển động mượt thay vì bật/tắt đột ngột.
+   600px là trần rộng rãi hơn nội dung thực tế, không phải chiều cao thật. */
+.alert-detail-box__collapse {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
 }
 
-@keyframes alert-card-reveal {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.alert-detail-box__collapse--open {
+  max-height: 600px;
 }
 
 /* Nút "Xem thêm"/"Thu gọn" nội tuyến cuối đoạn text bị rút gọn (ExpandableText) -
@@ -1411,23 +1410,7 @@ button.primary:hover,
   margin: 8px 0;
 }
 
-.alert-action-box {
-  background: var(--surface-container-low);
-  border-radius: var(--radius);
-  padding: 12px;
-  margin-top: 10px;
-  font-size: 14px;
-  line-height: 20px;
-}
-
-.alert-action-box strong {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 4px;
-  color: var(--on-surface-variant);
-}
-
+.alert-action-box,
 .alert-science-box {
   background: #f1f5fb;
   border: 1px dashed #c3d3e8;
@@ -1439,6 +1422,7 @@ button.primary:hover,
   line-height: 20px;
 }
 
+.alert-action-box strong,
 .alert-science-box strong {
   display: block;
   font-size: 12px;
@@ -2072,6 +2056,15 @@ body {
   padding-top: 10px;
   padding-bottom: 10px;
   box-shadow: 0 1px 0 rgba(37, 85, 119, 0.04);
+}
+
+/* Bu chieu cao header sticky (.patient-header/.pharmacist-nav) khi auto-scroll
+   xuong ket qua sau "Phan tich tuong tac", de khong bi header che mat phan
+   canh bao cua Cao Medi o dau ket qua. */
+#interaction-result,
+#pharmacist-interaction-result,
+#saved-prescription-result {
+  scroll-margin-top: 96px;
 }
 
 .patient-header .brand-logo__mark,
@@ -5429,7 +5422,7 @@ html[data-theme="dark"] .profile-field-control > input:-webkit-autofill:active {
   font: inherit;
   font-size: 13px;
 }
-.ocr-scan-option--skip .ocr-scan-option__name {
+.ocr-scan-option__name--empty {
   color: var(--on-surface-variant);
   font-weight: 500;
 }
@@ -5440,6 +5433,102 @@ html[data-theme="dark"] .profile-field-control > input:-webkit-autofill:active {
   margin: 8px 0 0;
   color: #6d7785;
   font-size: 12px;
+}
+/* Dòng thuốc đã duyệt: ứng viên điểm cao nhất hiện sẵn (khối .ocr-scan-option
+   readonly) kèm hai nút Sửa/Xóa nhỏ bên dưới. */
+.ocr-scan-drug-picked {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ocr-scan-drug-actions {
+  display: flex;
+  gap: 8px;
+}
+.ocr-scan-drug-actions button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: unset;
+  padding: 5px 10px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-sm);
+  background: var(--surface-container-lowest);
+  color: var(--on-surface-variant);
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: none;
+}
+.ocr-scan-drug-actions button:hover {
+  color: var(--on-surface);
+  border-color: var(--primary);
+}
+/* Chế độ sửa một dòng thuốc: ô tìm kiếm (dùng lại khung .ocr-scan-option--manual)
+   + danh sách kết quả khớp CSDL bên dưới. Chỉ tên bấm chọn từ danh sách này mới
+   được chốt - gõ tay không có tác dụng nếu không chọn một kết quả thật. */
+.ocr-scan-drug-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ocr-scan-drug-edit__suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ocr-scan-drug-edit__suggestions .ocr-scan-option {
+  width: 100%;
+  min-height: unset;
+  justify-content: flex-start;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  box-shadow: none;
+}
+.ocr-scan-drug-edit__suggestions .ocr-scan-option:hover {
+  border-color: var(--primary);
+}
+.ocr-scan-drug-edit__empty {
+  margin: 0;
+  color: var(--on-surface-variant);
+  font-size: 12px;
+}
+.ocr-scan-drug-edit__cancel {
+  align-self: flex-start;
+  min-height: unset;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--on-surface-variant);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: underline;
+  box-shadow: none;
+}
+.ocr-scan-row__removed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--outline-variant);
+  border-radius: var(--radius);
+  color: var(--on-surface-variant);
+  font-size: 12.5px;
+}
+.ocr-scan-row__removed button {
+  min-height: unset;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--primary);
+  font-size: 12.5px;
+  font-weight: 700;
+  text-decoration: underline;
+  box-shadow: none;
 }
 .ocr-scan-modal__footer {
   display: flex;
@@ -6088,6 +6177,25 @@ html[data-theme="dark"] .ocr-scan-row__unmatched {
   color: #687b91;
   font-size: 12px;
   line-height: 1.45;
+}
+.citation-popover__refs {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+  color: #687b91;
+  font-size: 11.5px;
+  font-style: italic;
+  line-height: 1.5;
+}
+.citation-popover__refs li + li {
+  margin-top: 7px;
+}
+.citation-popover__refs-num {
+  font-style: normal;
+  font-weight: 700;
+  color: #5b719a;
 }
 .check-result-page .alert-card {
   font-family: var(--font-body);
@@ -8446,8 +8554,8 @@ html[data-theme="dark"] .empty-state {
     transition: none !important;
   }
 
-  .alert-detail-box--reveal {
-    animation: none !important;
+  .alert-detail-box__collapse {
+    transition: none !important;
   }
 }
 
