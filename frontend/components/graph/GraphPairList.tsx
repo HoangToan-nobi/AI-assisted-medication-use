@@ -35,7 +35,7 @@ export default function GraphPairList({ items, onViewDetail }: GraphPairListProp
   return (
     <div className="interaction-pairs">
       {items.map((item) => (
-        <div className="interaction-pair-card" id={`interaction-pair-${item.id}`} key={item.id}>
+        <div className={`interaction-pair-card ${onViewDetail ? "interaction-pair-card--with-actions" : ""}`} id={`interaction-pair-${item.id}`} key={item.id}>
           {item.mergedPairIds?.map((id) => <span key={id} id={`interaction-pair-${id}`} />)}
           {onViewDetail && (
             <div className="tt-graph-pair__actions">

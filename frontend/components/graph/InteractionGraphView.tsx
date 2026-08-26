@@ -18,6 +18,7 @@ type InteractionGraphViewProps = {
   edges: GraphEdgeVM[];
   groups: GraphGroup[];
   ariaLabel: string;
+  showLegend?: boolean;
 };
 
 const NODE_RADIUS = 7;
@@ -39,7 +40,7 @@ export function scrollToPairCard(edgeId: string) {
   window.setTimeout(() => target.classList.remove("interaction-pair-card--focused"), 1600);
 }
 
-export default function InteractionGraphView({ nodes, edges, groups, ariaLabel }: InteractionGraphViewProps) {
+export default function InteractionGraphView({ nodes, edges, groups, ariaLabel, showLegend = true }: InteractionGraphViewProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hovered, setHovered] = useState<Hovered | null>(null);
   const [tooltip, setTooltip] = useState<{ left: number; top: number; content: string; below: boolean; background?: string } | null>(null);
@@ -207,7 +208,7 @@ export default function InteractionGraphView({ nodes, edges, groups, ariaLabel }
         })}
       </svg>
       {tooltip && <GraphTooltip left={tooltip.left} top={tooltip.top} below={tooltip.below} background={tooltip.background}>{tooltip.content}</GraphTooltip>}
-      {groups.length > 0 && (
+      {showLegend && groups.length > 0 && (
         <div className="tt-graph-legend">
           {groups.map((g) => <span key={g.id}><i className="tt-graph-legend__dot" style={{ background: g.color }} /> {g.label}</span>)}
         </div>
