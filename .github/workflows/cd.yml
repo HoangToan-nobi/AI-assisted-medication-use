@@ -29,10 +29,20 @@ jobs:
         run: ruff check src/ tests/
 
       - name: Run tests
-        run: pytest tests/ -v --tb=short
+        # DATABASE_URL: file rieng cho CI, khong dinh Supabase/CockroachDB that -
+        # da thu tro thang DB that (secret) nhung quyet dinh khong dung vi runner
+        # BTC dung chung cho ca chuong trinh, test co insert/delete du lieu that
+        # neu chua ro muc do co lap giua cac job cua cac team. Dung SQLite rieng,
+        # tao moi moi lan chay (rm -f truoc khi chay vi self-hosted co the giu lai
+        # workspace giua cac lan, khong dam bao sach nhu ubuntu-latest).
+        run: |
+          rm -f ci_test.db
+          pytest tests/ -v --tb=short
         env:
           APP_ENV: test
           OPENAI_API_KEY: test-key
+          DATABASE_URL: sqlite:///./ci_test.db
+          DATABASE_URL_FACTS: ""
 
   deploy-backend:
     needs: test
