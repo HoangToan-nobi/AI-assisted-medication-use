@@ -17,6 +17,7 @@ import {
 } from "@/lib/api";
 import { getSession, type Session } from "@/lib/auth";
 import type { Prescription } from "@/lib/prescription";
+import { scrollBelowStickyHeader } from "@/lib/scroll";
 import InteractionResultView from "@/components/graph/InteractionResultView";
 import ThemeModeToggle from "@/components/ThemeModeToggle";
 
@@ -551,14 +552,27 @@ function LandingFooter() {
 export default function LandingPage() {
   const [landingCheck, setLandingCheck] = useState<LandingCheck | null>(null);
 
+  useEffect(() => {
+    if (!landingCheck) return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        scrollBelowStickyHeader("landing-interaction-result");
+      });
+    });
+  }, [landingCheck]);
+
   return (
     <main className="mc-page">
       <style jsx global>{`
         .mc-page {
           --ink: #f5f8ff;
           --muted: #a8b5cc;
-          min-height: 100vh;
-          overflow: clip;
+          height: 100dvh;
+          min-height: 0;
+          overflow-x: clip;
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          scrollbar-gutter: stable;
           background: #070d18;
           color: var(--ink);
           font-family: Inter, Arial, sans-serif;
@@ -2376,7 +2390,7 @@ export default function LandingPage() {
       <Header />
       <HeroSection onComplete={setLandingCheck} />
       {landingCheck ? (
-        <section className="mc-result-shell mc-shell">
+        <section id="landing-interaction-result" className="mc-result-shell mc-shell">
           <div className="mc-result-shell__header">
             <div>
               <span className="mc-kicker">KẾT QUẢ TRA CỨU</span>

@@ -123,7 +123,7 @@ function ReviewContent() {
   }
 
   return (
-    <main>
+    <main className="pharmacist-review-page">
       <div className="page-header page-header--in-content">
         <button className="page-header__back" onClick={() => router.push("/pharmacist-dashboard")} aria-label="Quay lại">
           <MaterialIcon name="arrow_back" size={22} />
@@ -215,6 +215,8 @@ function ReviewContent() {
           prescriptions={prescriptions}
           session={session}
           showReviewPrompt={false}
+          showAiSummaryAction={false}
+          graphPaneScrollable={false}
         />
       )}
           <Disclaimer />

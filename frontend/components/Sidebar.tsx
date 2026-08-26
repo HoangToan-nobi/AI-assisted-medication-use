@@ -55,103 +55,103 @@ function SidebarContent({
         />
       )}
       <nav
-      className={`bottom-nav sidebar ${collapsed ? "sidebar--collapsed" : ""} ${mobileOpen ? "sidebar--mobile-open" : ""}`}
-      aria-label="Điều hướng chính"
+        className={`bottom-nav sidebar ${collapsed ? "sidebar--collapsed" : ""} ${mobileOpen ? "sidebar--mobile-open" : ""}`}
+        aria-label="Điều hướng chính"
       >
-      <div className="sidebar__brand-row">
+        <div className="sidebar__brand-row">
+          <Link
+            href="/dashboard"
+            className="sidebar__brand-link"
+            aria-label="Về trang chủ MediCheck"
+          >
+            <BrandLogo size="sm" className="sidebar__brand" />
+          </Link>
+          {onToggleCollapsed && (
+            <button
+              type="button"
+              className="sidebar__toggle"
+              onClick={onToggleCollapsed}
+              aria-label={
+                collapsed
+                  ? "Mở rộng thanh điều hướng"
+                  : "Thu gọn thanh điều hướng"
+              }
+              title={
+                collapsed
+                  ? "Mở rộng thanh điều hướng"
+                  : "Thu gọn thanh điều hướng"
+              }
+            >
+              <MaterialIcon
+                name={collapsed ? "chevron_right" : "chevron_left"}
+                size={30}
+              />
+            </button>
+          )}
+        </div>
         <Link
           href="/dashboard"
-          className="sidebar__brand-link"
-          aria-label="Về trang chủ MediCheck"
+          className={`bottom-nav__item ${isActive("/dashboard") ? "bottom-nav__item--active" : ""}`}
         >
-          <BrandLogo size="sm" className="sidebar__brand" />
+          <MaterialIcon name="home" size={22} filled={isActive("/dashboard")} />
+          <span>Trang chủ</span>
         </Link>
-        {onToggleCollapsed && (
-          <button
-            type="button"
-            className="sidebar__toggle"
-            onClick={onToggleCollapsed}
-            aria-label={
-              collapsed
-                ? "Mở rộng thanh điều hướng"
-                : "Thu gọn thanh điều hướng"
-            }
-            title={
-              collapsed
-                ? "Mở rộng thanh điều hướng"
-                : "Thu gọn thanh điều hướng"
-            }
-          >
-            <MaterialIcon
-              name={
-                collapsed
-                  ? "chevron_right"
-                  : "chevron_left"
-              }
-              size={30}
-            />
-          </button>
-        )}
-      </div>
-      <Link
-        href="/dashboard"
-        className={`bottom-nav__item ${isActive("/dashboard") ? "bottom-nav__item--active" : ""}`}
-      >
-        <MaterialIcon name="home" size={22} filled={isActive("/dashboard")} />
-        <span>Trang chủ</span>
-      </Link>
-      <Link
-        href="/profile"
-        className={`bottom-nav__item ${isPersonalInfoActive ? "bottom-nav__item--active" : ""}`}
-      >
-        <MaterialIcon name="person" size={22} filled={isPersonalInfoActive} />
-        <span>Thông tin cá nhân</span>
-      </Link>
-      <Link
-        href="/profile?tab=prescriptions"
-        className={`bottom-nav__item ${isPrescriptionsActive ? "bottom-nav__item--active" : ""}`}
-      >
-        <MaterialIcon
-          name="medication"
-          size={22}
-          filled={isPrescriptionsActive}
-        />
-        <span>Đơn thuốc của tôi</span>
-      </Link>
-      {onCheck ? (
-        <button
-          type="button"
-          className="bottom-nav__item"
-          onClick={onCheck}
-          disabled={checking}
-        >
-          {checking ? (
-            <span className="spinner spinner--sm" aria-hidden="true" />
-          ) : (
-            <MaterialIcon name="analytics" size={22} />
-          )}
-          <span>{checking ? "Đang kiểm tra" : "Tương tác"}</span>
-        </button>
-      ) : (
         <Link
-          href="/interaction"
-          className={`bottom-nav__item ${isActive("/interaction") ? "bottom-nav__item--active" : ""}`}
+          href="/profile"
+          className={`bottom-nav__item ${isPersonalInfoActive ? "bottom-nav__item--active" : ""}`}
+        >
+          <MaterialIcon name="person" size={22} filled={isPersonalInfoActive} />
+          <span>Hồ sơ</span>
+        </Link>
+        <Link
+          href="/profile?tab=prescriptions"
+          className={`bottom-nav__item ${isPrescriptionsActive ? "bottom-nav__item--active" : ""}`}
         >
           <MaterialIcon
-            name="analytics"
+            name="medication"
             size={22}
-            filled={isActive("/interaction")}
+            filled={isPrescriptionsActive}
           />
-          <span>Tra cứu tương tác</span>
+          <span>Đơn thuốc của tôi</span>
         </Link>
-      )}
-      <Link
-        href="/history"
-        className={`bottom-nav__item ${isActive("/history") ? "bottom-nav__item--active" : ""}`}
-      >
-        <MaterialIcon name="history" size={22} filled={isActive("/history")} />
-        <span>Lịch sử</span>
-      </Link>
+        {onCheck ? (
+          <button
+            type="button"
+            className="bottom-nav__item"
+            onClick={onCheck}
+            disabled={checking}
+          >
+            {checking ? (
+              <span className="spinner spinner--sm" aria-hidden="true" />
+            ) : (
+              <MaterialIcon name="analytics" size={22} />
+            )}
+            <span>{checking ? "Đang kiểm tra" : "Tương tác"}</span>
+          </button>
+        ) : (
+          <Link
+            href="/interaction"
+            className={`bottom-nav__item ${isActive("/interaction") ? "bottom-nav__item--active" : ""}`}
+          >
+            <MaterialIcon
+              name="analytics"
+              size={22}
+              filled={isActive("/interaction")}
+            />
+            <span>Tra cứu tương tác</span>
+          </Link>
+        )}
+        <Link
+          href="/history"
+          className={`bottom-nav__item ${isActive("/history") ? "bottom-nav__item--active" : ""}`}
+        >
+          <MaterialIcon
+            name="history"
+            size={22}
+            filled={isActive("/history")}
+          />
+          <span>Lịch sử</span>
+        </Link>
       </nav>
     </>
   );

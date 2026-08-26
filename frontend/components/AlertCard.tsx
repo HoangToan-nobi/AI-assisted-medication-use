@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ExpandableText from "@/components/ExpandableText";
 import MaterialIcon from "@/components/MaterialIcon";
 import type { Severity } from "@/lib/api";
@@ -33,12 +33,28 @@ const CONFIG: Record<Severity, { label: string; tag: string; icon: string; class
 // bệnh nhân/dược sĩ cần đọc được cảnh báo ngay mà không phải bấm thêm 1 bước.
 export default function AlertCard({ thuocA, thuocB, severity, description, management, scientificDescription, references }: AlertCardProps) {
   const [sourceOpen, setSourceOpen] = useState(false);
+  const citationRef = useRef<HTMLDivElement>(null);
   // Dữ liệu gốc + xử trí gốc chỉ dược sĩ mới nhận được (bệnh nhân luôn undefined,
   // backend đã tự ẩn) - 2 nút bật/tắt độc lập (không còn loại trừ nhau) để dược sĩ
   // có thể mở cả 2 khối cùng lúc, xem tuần tự mô tả rồi tới xử trí.
   const [scienceOpen, setScienceOpen] = useState(false);
   const [managementOpen, setManagementOpen] = useState(false);
   const config = severity ? CONFIG[severity] : { label: "Không đủ dữ liệu", tag: "Chưa cập nhật", icon: "block", className: "severity-none" };
+
+  useEffect(() => {
+    if (!sourceOpen) return;
+
+    function closeWhenClickingOutside(event: PointerEvent) {
+      const target = event.target;
+      if (target instanceof Node && !citationRef.current?.contains(target)) {
+        setSourceOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", closeWhenClickingOutside);
+    return () => document.removeEventListener("pointerdown", closeWhenClickingOutside);
+  }, [sourceOpen]);
+
   return <article className={`alert-card ${config.className}`} data-severity={severity ?? "none"}>
     <div className="alert-card-header">
       <span className="alert-icon-wrap"><MaterialIcon name={config.icon} size={22} filled /></span>
@@ -71,6 +87,8 @@ export default function AlertCard({ thuocA, thuocB, severity, description, manag
         )}
       </div>
     )}
-    <div className={`citation-wrap ${sourceOpen ? "citation-wrap--open" : ""}`}><button type="button" className="citation-trigger" aria-expanded={sourceOpen} aria-label="Xem nguồn trích dẫn" onClick={() => setSourceOpen((open) => !open)}><MaterialIcon name="database" size={15} /> <span className="citation-trigger__text">NGUỒN THAM KHẢO</span><MaterialIcon name={sourceOpen ? "expand_less" : "expand_more"} size={16} /></button><div className="citation-popover" role="tooltip"><span className="citation-popover__label">NGUỒN THAM KHẢO</span>{references?.length ? <ol className="citation-popover__refs">{references.map((ref, i) => <li key={i}><span className="citation-popover__refs-num">[{i + 1}]</span> {ref}</li>)}</ol> : <p>Nhấn lại nút nguồn để thu gọn thông tin tham khảo.</p>}</div></div>
+    {severity && severity !== "chua_phan_loai" && (
+      <div ref={citationRef} className={`citation-wrap ${sourceOpen ? "citation-wrap--open" : ""}`}><button type="button" className="citation-trigger" aria-expanded={sourceOpen} aria-label="Xem nguồn trích dẫn" onClick={() => setSourceOpen((open) => !open)}><MaterialIcon name="database" size={15} /> <span className="citation-trigger__text">NGUỒN THAM KHẢO</span><MaterialIcon name={sourceOpen ? "expand_less" : "expand_more"} size={16} /></button><div className="citation-popover" role="tooltip"><span className="citation-popover__label">NGUỒN THAM KHẢO</span>{references?.length ? <ol className="citation-popover__refs">{references.map((ref, i) => <li key={i}><span className="citation-popover__refs-num">[{i + 1}]</span> {ref}</li>)}</ol> : <p>Nhấn lại nút nguồn để thu gọn thông tin tham khảo.</p>}</div></div>
+    )}
   </article>;
 }
