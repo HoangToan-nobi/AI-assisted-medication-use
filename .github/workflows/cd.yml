@@ -6,7 +6,12 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Runner BTC (shared, FIFO) thay vi ubuntu-latest - Actions bi chan boi billing
+    # loi cua to chuc (xem HUONG_DAN_DEPLOY_THU_CONG.md), self-hosted khong tinh
+    # phi Actions minutes nen khong bi chan. Ca deploy-backend/deploy-frontend ben
+    # duoi cung da doi - can Docker + Node co san tren runner BTC, chua tu kiem
+    # chung duoc, se ro sau lan chay dau tien.
+    runs-on: self-hosted
 
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +36,7 @@ jobs:
 
   deploy-backend:
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
@@ -55,7 +60,7 @@ jobs:
 
   deploy-frontend:
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
       # Chay tu repo root (KHONG working-directory: frontend) - project Vercel da

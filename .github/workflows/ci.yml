@@ -8,7 +8,8 @@ on:
 
 jobs:
   lint-and-test:
-    runs-on: ubuntu-latest
+    # Runner BTC (shared, FIFO) thay vi ubuntu-latest - xem comment trong cd.yml
+    runs-on: self-hosted
 
     steps:
       - uses: actions/checkout@v4
