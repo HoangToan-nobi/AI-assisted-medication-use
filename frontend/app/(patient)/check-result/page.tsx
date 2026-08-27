@@ -78,7 +78,6 @@ function CheckResultContent() {
         </section>
       )}
 
-      <div className="section__header result-list-heading"><h2 className="section__title"><MaterialIcon name="fact_check" size={20} /> Chi tiết tương tác</h2></div>
       <InteractionOverview result={result} prescriptions={prescriptions} session={session} />
     </>}
     <Disclaimer />

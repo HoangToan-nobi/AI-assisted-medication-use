@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Disclaimer from "@/components/Disclaimer";
 import MaterialIcon from "@/components/MaterialIcon";
 import InteractionOverview from "@/components/graph/InteractionOverview";
 import {
@@ -219,7 +218,6 @@ function ReviewContent() {
           graphPaneScrollable={false}
         />
       )}
-          <Disclaimer />
         </div>
 
         <div className="review-layout__sidebar">
