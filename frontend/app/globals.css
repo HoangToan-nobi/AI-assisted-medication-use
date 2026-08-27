@@ -2287,6 +2287,9 @@ button,
   line-height: 1.2;
   letter-spacing: 0;
 }
+.dashboard-title__mobile {
+  display: none;
+}
 .dashboard-subtitle {
   margin-top: 8px;
   color: var(--on-surface-variant);
@@ -3402,10 +3405,36 @@ html[data-theme="dark"] .bottom-nav.sidebar {
   container-name: interaction-result;
 }
 .interaction-result__layout {
+  --interaction-graph-width: 58%;
   display: grid;
-  grid-template-columns: minmax(0, 1.18fr) minmax(370px, 0.82fr);
+  grid-template-columns: minmax(0, var(--interaction-graph-width)) 12px minmax(0, 1fr);
   align-items: stretch;
-  gap: 18px;
+  gap: 0;
+}
+.interaction-result__layout--resizing,
+.interaction-result__layout--resizing * {
+  cursor: col-resize !important;
+  user-select: none;
+}
+.interaction-result__divider {
+  position: relative;
+  z-index: 12;
+  width: 12px;
+  min-width: 12px;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+.interaction-result__divider::before {
+  display: none;
+}
+.interaction-result__divider:hover::before,
+.interaction-result__divider:focus-visible::before,
+.interaction-result__layout--resizing .interaction-result__divider::before {
+  display: none;
 }
 .interaction-result__pane {
   min-width: 0;
@@ -3416,7 +3445,9 @@ html[data-theme="dark"] .bottom-nav.sidebar {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  /* Let a wheel/touch gesture continue in the outer page once this pane
+     reaches either edge instead of trapping the user inside the graph. */
+  overscroll-behavior-y: auto;
   scrollbar-gutter: stable;
 }
 .interaction-result__pane--analysis {
@@ -3438,17 +3469,22 @@ html[data-theme="dark"] .bottom-nav.sidebar {
   min-height: 0;
   padding-right: 4px;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  /* Native scroll chaining moves the outer workspace after the last detail. */
+  overscroll-behavior-y: auto;
   scrollbar-gutter: stable;
 }
 .interaction-result__pane--graph::-webkit-scrollbar,
 .interaction-result__analysis-scroll::-webkit-scrollbar {
-  width: 7px;
+  width: 3px;
+}
+.interaction-result__pane--graph::-webkit-scrollbar-track,
+.interaction-result__analysis-scroll::-webkit-scrollbar-track {
+  background: transparent;
 }
 .interaction-result__pane--graph::-webkit-scrollbar-thumb,
 .interaction-result__analysis-scroll::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: #c5d2e4;
+  background: #b9c8dc;
 }
 .interaction-result__analysis-actions {
   position: absolute;
@@ -3907,6 +3943,9 @@ html[data-theme="dark"] .bottom-nav.sidebar {
   .interaction-result__layout {
     grid-template-columns: minmax(0, 1fr);
   }
+  .interaction-result__divider {
+    display: none;
+  }
   .interaction-result__pane--analysis {
     height: auto;
     max-height: none;
@@ -3918,6 +3957,9 @@ html[data-theme="dark"] .bottom-nav.sidebar {
 @media (max-width: 1080px) {
   .interaction-result__layout {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .interaction-result__divider {
+    display: none;
   }
   .interaction-result__pane--analysis {
     height: auto;
@@ -4524,10 +4566,10 @@ html[data-theme="dark"] .bottom-nav.sidebar {
   width: 58px;
   height: 58px;
   color: #4167b2;
-  border: 1px solid #cedcf3;
-  border-radius: 17px;
-  background: #fff;
-  box-shadow: 0 8px 18px rgba(56, 86, 141, 0.12);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 .profile-intro > div {
   position: relative;
@@ -7949,9 +7991,28 @@ html[data-theme="dark"] .interaction-result__pane--graph::-webkit-scrollbar-thum
 html[data-theme="dark"] .interaction-result__analysis-scroll::-webkit-scrollbar-thumb {
   background: #49617f;
 }
+html[data-theme="dark"] .interaction-result__divider::before {
+  display: none;
+}
+html[data-theme="dark"] .interaction-result__divider:hover::before,
+html[data-theme="dark"] .interaction-result__divider:focus-visible::before,
+html[data-theme="dark"] .interaction-result__layout--resizing .interaction-result__divider::before {
+  display: none;
+}
 html[data-theme="dark"] .interaction-result__analysis-actions {
   border-color: #405a7d;
   background: rgba(20, 33, 52, 0.96);
+}
+
+.interaction-result__analysis-actions--summary-only,
+html[data-theme="dark"] .interaction-result__analysis-actions--summary-only {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 html[data-theme="dark"] .interaction-result__analysis-action--secondary {
   color: #c5d8f5;
@@ -8148,6 +8209,11 @@ html[data-theme="dark"] .profile-intro__state {
   background: #203552;
   border-color: #42628b;
   color: #c6dcff;
+}
+html[data-theme="dark"] .profile-avatar {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 html[data-theme="dark"] .prescription-board__add,
 html[data-theme="dark"] .prescription-board__add:hover {
@@ -10046,6 +10112,31 @@ html[data-theme="dark"] .dashboard-page .empty-state span { color: #aebfda; }
   .dashboard-page .dashboard-section__header h2 { font-size: 21px; }
   .dashboard-page .patient-card--large .patient-card__footer { align-items: stretch; flex-direction: column; gap: 12px; }
   .dashboard-page .patient-card--large .secondary { width: 100%; justify-content: center; }
+  .dashboard-page .patient-card--large {
+    position: relative;
+  }
+  .dashboard-page .patient-card--large .patient-card__info {
+    width: 100%;
+    padding-right: 118px;
+  }
+  .dashboard-page .patient-card--large .patient-card__info > div {
+    min-width: 0;
+  }
+  .dashboard-page .patient-card--large .patient-card__info h2 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .dashboard-page .patient-card--large .patient-card__footer > .badge {
+    position: absolute;
+    top: 20px;
+    right: 16px;
+    max-width: 112px;
+    overflow: hidden;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 @media (max-width: 640px) {
@@ -10485,15 +10576,20 @@ html[data-theme="dark"] .profile-tabs__item--active {
     left: 14px;
     z-index: 1102;
     display: grid;
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
     place-items: center;
-    border: 1px solid rgba(178, 199, 235, 0.9);
-    border-radius: 12px;
+    border: 0;
+    border-radius: 0;
     color: #405d9e;
-    background: rgba(255, 255, 255, 0.92);
-    box-shadow: 0 8px 20px rgba(44, 70, 115, 0.16);
-    backdrop-filter: blur(12px);
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    transition: top 220ms ease, left 220ms ease, color 160ms ease;
+  }
+
+  .sidebar-mobile-toggle .material-symbols-outlined {
+    font-size: 38px !important;
   }
 
   .sidebar-mobile-backdrop {
@@ -10568,9 +10664,8 @@ html[data-theme="dark"] .profile-tabs__item--active {
   }
 
   html[data-theme="dark"] .sidebar-mobile-toggle {
-    border-color: #405b80;
     color: #c5d7f5;
-    background: rgba(24, 41, 65, 0.94);
+    background: transparent;
   }
 }
 
@@ -11026,4 +11121,715 @@ html[data-theme="dark"] .admin-segmented button.active { color: #c7d9fa; backgro
   .admin-modal { padding: 22px; }
   .admin-sidebar .admin-sidebar__eyebrow { display: block; }
   .admin-sidebar .admin-sidebar__footer { display: flex; }
+}
+
+/* --------------------------------------------------------------------------
+   Responsive foundation (mobile + tablet)
+   Keep every authenticated workspace inside one stable viewport and let only
+   its content area scroll. These rules intentionally live last so legacy page
+   breakpoints cannot re-introduce horizontal overflow or nested scrolling.
+   -------------------------------------------------------------------------- */
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+img,
+svg,
+canvas,
+video {
+  max-width: 100%;
+}
+
+.app-shell,
+.app-content,
+.app-content > main,
+.pharmacist-content,
+.pharmacist-content > main,
+.panel,
+.card,
+.prescription-panel,
+.interaction-result,
+.review-layout,
+.review-layout__main,
+.review-layout__sidebar {
+  min-width: 0;
+}
+
+@media (min-width: 768px) and (max-width: 1180px) {
+  .app-content > main,
+  .pharmacist-content > main {
+    padding-inline: clamp(18px, 3vw, 30px);
+  }
+
+  .dashboard-grid,
+  .profile-details-grid,
+  .med-detail-overview,
+  .med-detail-content,
+  .review-layout {
+    gap: 18px;
+  }
+
+  .review-layout {
+    grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.85fr);
+  }
+
+  .admin-page {
+    padding-inline: 22px;
+  }
+}
+
+@media (max-width: 767px) {
+  html,
+  body {
+    height: 100%;
+    overscroll-behavior: none;
+  }
+
+  body {
+    min-width: 320px;
+  }
+
+  .app-shell--with-nav {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    width: 100%;
+    height: 100svh;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .app-shell--with-nav .app-content,
+  .app-shell--with-nav .pharmacist-content {
+    min-height: 0;
+    overflow-x: clip;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: auto;
+  }
+
+  .patient-header,
+  .admin-header {
+    position: relative;
+    z-index: 30;
+    min-height: 62px;
+    margin: 8px 8px 0;
+    padding: 8px max(12px, env(safe-area-inset-right)) 8px 66px;
+    border: 1px solid #dfe6f1;
+    border-radius: 18px;
+  }
+
+  .patient-header__actions {
+    min-width: 0;
+    margin-left: auto !important;
+    gap: 5px;
+  }
+
+  .patient-header__identity {
+    min-width: 0;
+  }
+
+  .patient-header__identity > div,
+  .patient-header__identity > span:not(.patient-header__avatar):not(.patient-header__tooltip) {
+    display: none;
+  }
+
+  .patient-header .theme-toggle {
+    width: 62px;
+    height: 34px;
+    border-width: 2px;
+  }
+
+  .patient-header .theme-toggle__thumb {
+    top: 3px;
+    left: 3px;
+    width: 26px;
+    height: 26px;
+  }
+
+  .patient-header .theme-toggle--dark .theme-toggle__thumb {
+    transform: translateX(28px);
+  }
+
+  .patient-header .icon-btn {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+  }
+
+  .notification-bell__panel {
+    position: fixed;
+    top: calc(78px + env(safe-area-inset-top, 0px));
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-height: calc(100svh - 96px - env(safe-area-inset-bottom, 0px));
+    box-sizing: border-box;
+  }
+
+  .sidebar-mobile-toggle {
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    left: max(12px, env(safe-area-inset-left));
+  }
+
+  .sidebar-mobile-toggle[aria-expanded="true"] {
+    top: calc(18px + env(safe-area-inset-top, 0px));
+    left: calc(min(86vw, 310px) - 52px);
+  }
+
+  .bottom-nav.sidebar,
+  .bottom-nav.sidebar.sidebar--collapsed {
+    width: min(86vw, 310px);
+    max-width: calc(100vw - 48px);
+    min-height: 100svh;
+    padding-top: calc(18px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+  }
+
+  .app-content > main,
+  .pharmacist-content > main {
+    width: 100%;
+    max-width: 100%;
+    padding: 18px 14px calc(28px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .page-intro,
+  .page-header--in-content,
+  .profile-page > .page-header--in-content,
+  .greeting {
+    width: 100%;
+    min-width: 0;
+    margin-bottom: 18px;
+  }
+
+  .page-intro--with-action,
+  .page-header--in-content,
+  .med-detail-header,
+  .dashboard-section__header,
+  .section__header,
+  .profile-interaction-result__header,
+  .admin-page-heading,
+  .admin-section-title {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .page-intro--with-action > div,
+  .page-header--in-content > div,
+  .med-detail-header > div,
+  .admin-page-heading > div,
+  .admin-section-title > div {
+    min-width: 0;
+  }
+
+  .page-intro h1,
+  .page-header__title,
+  .greeting__title,
+  .dashboard-title,
+  .med-detail-title h1,
+  .admin-page-heading h1 {
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    overflow-wrap: normal;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    word-break: normal;
+    font-size: clamp(20px, 5.5vw, 24px) !important;
+    line-height: 1.18;
+  }
+
+  .page-title-icon,
+  .section__title,
+  .dashboard-section__header h2,
+  .profile-interaction-result__header h2,
+  .interaction-result__header h2,
+  .admin-section-title h2 {
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    overflow-wrap: normal;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    word-break: normal;
+  }
+
+  .section__title,
+  .dashboard-section__header h2,
+  .profile-interaction-result__header h2,
+  .interaction-result__header h2,
+  .admin-section-title h2 {
+    font-size: clamp(17px, 4.8vw, 20px) !important;
+  }
+
+  .interaction-result__pane--analysis {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .interaction-result__pane--graph,
+  html[data-theme="dark"] .interaction-result__pane--graph {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .interaction-result__analysis-actions,
+  html[data-theme="dark"] .interaction-result__analysis-actions {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  html[data-theme="dark"] .interaction-result__pane--analysis {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .page-intro--with-action > button,
+  .page-intro--with-action > a,
+  .med-detail-actions,
+  .admin-page-heading__action {
+    width: 100%;
+  }
+
+  .med-detail-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .med-detail-actions button {
+    min-width: 0;
+    padding-inline: 10px;
+  }
+
+  .dashboard-hero,
+  .profile-intro,
+  .interaction-guide,
+  .prescription-guide,
+  .mascot-tip,
+  .panel,
+  .card,
+  .history-tile,
+  .prescription-panel,
+  .interaction-result,
+  .profile-details-card,
+  .contact-list,
+  .med-detail-overview,
+  .usage-guide,
+  .side-effect-card,
+  .med-history {
+    max-width: 100%;
+    border-radius: 15px;
+  }
+
+  .dashboard-hero {
+    min-height: 164px;
+    padding: 18px;
+    overflow: hidden;
+  }
+
+  .dashboard-hero--patient {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    align-items: center;
+    gap: 14px;
+  }
+
+  .dashboard-title__desktop {
+    display: none;
+  }
+
+  .dashboard-title__mobile {
+    display: inline;
+  }
+
+  .dashboard-hero--patient > div:first-child {
+    grid-column: 2;
+    grid-row: 1;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .dashboard-title {
+    font-size: clamp(18px, 5vw, 22px) !important;
+  }
+
+  .dashboard-subtitle {
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .dashboard-hero__mascot {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    grid-column: 1;
+    grid-row: 1;
+    width: 96px;
+    height: 104px;
+  }
+
+  .dashboard-summary-row,
+  .dashboard-grid,
+  .profile-details-grid,
+  .history-grid,
+  .emergency-cards,
+  .med-detail-overview,
+  .med-detail-content,
+  .review-layout,
+  .admin-dashboard-grid,
+  .admin-pharmacist-grid,
+  .admin-drug-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .dashboard-summary-row {
+    gap: 10px;
+  }
+
+  .dashboard-summary-row > div {
+    min-width: 0;
+  }
+
+  .interaction-guide,
+  .prescription-guide,
+  .mascot-tip {
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .interaction-guide__fox,
+  .prescription-guide__fox,
+  .mascot-tip__image {
+    width: 64px;
+    height: 64px;
+    flex: 0 0 64px;
+  }
+
+  .prescription-board-wrap,
+  .prescription-board,
+  .prescription-board--slider,
+  .interaction-workspace {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .prescription-board,
+  .prescription-board--slider,
+  .interaction-workspace {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .prescription-panel,
+  .profile-details-card,
+  .interaction-result,
+  .interaction-selection {
+    padding: 15px;
+  }
+
+  .profile-tabs,
+  .interaction-detail-tabs__nav,
+  .tt-severity-strip {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+
+  .profile-tabs::-webkit-scrollbar,
+  .interaction-detail-tabs__nav::-webkit-scrollbar,
+  .tt-severity-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .profile-tabs__item,
+  .interaction-detail-tabs__nav button,
+  .tt-severity-strip > * {
+    flex: 0 0 auto;
+  }
+
+  .tt-graph-canvas,
+  .tt-graph-canvas svg {
+    min-height: 360px;
+    height: 360px;
+  }
+
+  .interaction-result,
+  .profile-interaction-result,
+  .review-layout__main,
+  .review-layout__sidebar {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .pharmacist-review-page {
+    overflow-x: hidden;
+  }
+
+  .pharmacist-review-page .review-layout {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 100%;
+    gap: 14px;
+  }
+
+  .pharmacist-review-page .review-layout__main,
+  .pharmacist-review-page .review-layout__sidebar,
+  .pharmacist-review-page .profile-medications {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .pharmacist-review-page .prescription-board--slider {
+    display: flex;
+    gap: 12px;
+    padding: 2px 2px 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scroll-padding-left: 2px;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .pharmacist-review-page .prescription-board--slider .prescription-panel {
+    flex: 0 0 min(82vw, 300px);
+    width: min(82vw, 300px);
+    max-width: min(82vw, 300px);
+    min-width: 0;
+    scroll-snap-align: start;
+  }
+
+  .pharmacist-review-page .field p,
+  .pharmacist-review-page .selected-medication,
+  .pharmacist-review-page .selected-medication strong,
+  .pharmacist-review-page .disease-scope-note p {
+    max-width: 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .contact-row {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .contact-row__actions {
+    grid-column: 1 / -1;
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .contact-row__actions a {
+    justify-content: center;
+  }
+
+  .med-detail-overview,
+  .med-detail-content {
+    display: grid;
+  }
+
+  .med-detail-facts,
+  .med-schedule,
+  .usage-guide,
+  .side-effect-card {
+    min-width: 0;
+  }
+
+  .med-fact-grid,
+  .med-history-table {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .admin-page {
+    width: 100%;
+    padding: 20px 14px 32px;
+  }
+
+  .admin-stat-grid,
+  .admin-data-summary__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .admin-stat-card,
+  .admin-data-summary__grid > div {
+    min-width: 0;
+    min-height: 104px;
+    padding: 13px;
+  }
+
+  .admin-toolbar,
+  .admin-toolbar--tabs {
+    width: 100%;
+    padding: 13px;
+  }
+
+  .admin-segmented {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .admin-segmented button {
+    min-width: max-content;
+  }
+
+  .admin-table-wrap {
+    max-width: 100%;
+    border-radius: 14px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .admin-table {
+    min-width: 760px;
+  }
+
+  .admin-feedback-card,
+  .admin-pharmacist-card {
+    padding: 16px;
+  }
+
+  .admin-feedback-card__top .admin-status {
+    margin-left: 0;
+  }
+
+  .admin-modal-backdrop {
+    align-items: end;
+    padding: 12px;
+  }
+
+  .admin-modal {
+    max-height: calc(100svh - 24px);
+    padding: 20px 16px calc(20px + env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+    border-radius: 20px;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea,
+  button {
+    max-width: 100%;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  p,
+  li,
+  dd,
+  td,
+  h1,
+  h2,
+  h3,
+  strong,
+  span {
+    overflow-wrap: break-word;
+  }
+}
+
+@media (max-width: 390px) {
+  .app-content > main,
+  .pharmacist-content > main,
+  .admin-page {
+    padding-inline: 11px;
+  }
+
+  .patient-header,
+  .admin-header {
+    padding-right: 9px;
+    padding-left: 60px;
+  }
+
+  .patient-header .theme-toggle {
+    width: 56px;
+  }
+
+  .patient-header .theme-toggle--dark .theme-toggle__thumb {
+    transform: translateX(22px);
+  }
+
+  .dashboard-hero--patient > div:first-child {
+    max-width: 100%;
+  }
+
+  .dashboard-hero--patient {
+    grid-template-columns: 82px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .dashboard-hero__mascot {
+    width: 82px;
+    height: 90px;
+  }
+
+  .admin-stat-grid,
+  .admin-data-summary__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .med-detail-actions,
+  .contact-row__actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.frontend-boot-gate__card,
+.frontend-boot-gate__copy {
+  min-width: 0;
+}
+
+@media (max-width: 560px) {
+  .frontend-boot-gate {
+    padding: 16px !important;
+  }
+
+  .frontend-boot-gate__card {
+    width: 100%;
+    max-width: 360px !important;
+    gap: 12px !important;
+    padding: 16px !important;
+    border-radius: 17px !important;
+  }
+
+  .frontend-boot-gate__mascot {
+    width: 62px;
+    height: 54px;
+    flex: 0 0 62px;
+  }
+
+  .frontend-boot-gate__copy strong {
+    font-size: 15px !important;
+    line-height: 1.35;
+  }
+
+  .frontend-boot-gate__copy span {
+    font-size: 12px !important;
+  }
 }

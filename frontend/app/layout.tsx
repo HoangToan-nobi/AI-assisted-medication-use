@@ -1,4 +1,5 @@
 import "./globals.css";
+import type { Viewport } from "next";
 import FrontendBootGate from "@/components/FrontendBootGate";
 import MediAlertProvider from "@/components/MediAlertProvider";
 
@@ -10,7 +11,11 @@ export const metadata = {
   },
 };
 
-export const viewport = {
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
   themeColor: "#005eb8",
 };
 
@@ -20,8 +25,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="vi">
+    <html lang="vi" suppressHydrationWarning>
       <head>
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `html:not([data-frontend-ready="true"]) .mc-page{visibility:hidden!important}html:not([data-frontend-ready="true"]) body{overflow:hidden!important}.frontend-boot-gate{visibility:visible!important}`,
+          }}
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){document.documentElement.removeAttribute("data-frontend-ready");try{var saved=localStorage.getItem("medicheck_theme");var theme=saved==="dark"||saved==="light"?saved:(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");document.documentElement.dataset.theme=theme;}catch(e){document.documentElement.dataset.theme="light";}})();`,
+          }}
+        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"
@@ -39,8 +54,8 @@ export default function RootLayout({
       </head>
       <body>
         <MediAlertProvider>
-          {children}
           <FrontendBootGate />
+          {children}
         </MediAlertProvider>
       </body>
     </html>

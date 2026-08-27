@@ -57,6 +57,7 @@ docker-compose.override.yml
 node_modules/
 .next/
 .next-stale-*/
+.next.stale-*/
 out/
 .nuxt/
 *.tsbuildinfo

@@ -45,10 +45,15 @@ function Header() {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const updateHeader = () => setScrolled(window.scrollY > 12);
+    const scrollRoot = document.querySelector(".mc-page");
+    const updateHeader = () => {
+      const scrollTop = scrollRoot instanceof HTMLElement ? scrollRoot.scrollTop : window.scrollY;
+      setScrolled(scrollTop > 12);
+    };
     updateHeader();
-    window.addEventListener("scroll", updateHeader, { passive: true });
-    return () => window.removeEventListener("scroll", updateHeader);
+    const eventTarget = scrollRoot instanceof HTMLElement ? scrollRoot : window;
+    eventTarget.addEventListener("scroll", updateHeader, { passive: true });
+    return () => eventTarget.removeEventListener("scroll", updateHeader);
   }, []);
 
   return (
@@ -72,6 +77,9 @@ function Header() {
           Đăng nhập
         </Link>
       </nav>
+      <Link href="/auth" className="mc-mobile-login">
+        Đăng nhập
+      </Link>
     </header>
   );
 }
@@ -82,7 +90,14 @@ type LandingCheck = {
   session: Session | null;
 };
 
-const LANDING_SEARCH_PLACEHOLDER = "Nhập tên thuốc, có thể thêm tối đa 3 thuốc";
+const LANDING_SEARCH_PLACEHOLDER = "Nhập tên thuốc rồi chọn trong danh sách gợi ý";
+const DRUG_CHIP_LABEL_MAX_LENGTH = 30;
+
+function compactDrugChipLabel(name: string): string {
+  return name.length > DRUG_CHIP_LABEL_MAX_LENGTH
+    ? `${name.slice(0, DRUG_CHIP_LABEL_MAX_LENGTH).trimEnd()}…`
+    : name;
+}
 
 function HeroDrugSearch({
   onComplete,
@@ -96,6 +111,7 @@ function HeroDrugSearch({
   const [showLoginToast, setShowLoginToast] = useState(false);
   const [toastLeaving, setToastLeaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [messageIsError, setMessageIsError] = useState(false);
   const [animatedPlaceholder, setAnimatedPlaceholder] = useState("");
 
   useEffect(() => {
@@ -108,27 +124,21 @@ function HeroDrugSearch({
     let visibleCharacters = 0;
     let deleting = false;
     let timer: number;
-
-    function typeNextFrame() {
-      setAnimatedPlaceholder(
-        LANDING_SEARCH_PLACEHOLDER.slice(0, visibleCharacters),
-      );
-
-      let delay = deleting ? 32 : 62;
+    const animate = () => {
+      setAnimatedPlaceholder(LANDING_SEARCH_PLACEHOLDER.slice(0, visibleCharacters));
+      let delay = deleting ? 30 : 58;
       if (!deleting && visibleCharacters === LANDING_SEARCH_PLACEHOLDER.length) {
         deleting = true;
         delay = 1500;
       } else if (deleting && visibleCharacters === 0) {
         deleting = false;
-        delay = 450;
+        delay = 400;
       } else {
         visibleCharacters += deleting ? -1 : 1;
       }
-
-      timer = window.setTimeout(typeNextFrame, delay);
-    }
-
-    typeNextFrame();
+      timer = window.setTimeout(animate, delay);
+    };
+    animate();
     return () => window.clearTimeout(timer);
   }, []);
 
@@ -138,20 +148,26 @@ function HeroDrugSearch({
       setSuggestions([]);
       return;
     }
+    let cancelled = false;
     const timer = window.setTimeout(() => {
       searchGuestProducts(keyword)
-        .then(setSuggestions)
-        .catch(() => setSuggestions([]));
+        .then((results) => {
+          if (cancelled) return;
+          setSuggestions(results);
+          if (results.length === 0) {
+            setMessage("Không tìm thấy tên thuốc này. Vui lòng nhập lại và chọn từ danh sách gợi ý.");
+            setMessageIsError(true);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setSuggestions([]);
+        });
     }, 250);
-    return () => window.clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [query]);
-
-  function parseNames(value: string) {
-    return value
-      .split(/[,;|\n]/)
-      .map((name) => name.trim())
-      .filter(Boolean);
-  }
 
   function triggerLoginToast() {
     setToastLeaving(false);
@@ -179,6 +195,7 @@ function HeroDrugSearch({
       if (next.length >= 3) {
         triggerLoginToast();
         setMessage("");
+        setMessageIsError(false);
         return;
       }
       next.push(name);
@@ -188,23 +205,21 @@ function HeroDrugSearch({
     setQuery("");
     setSuggestions([]);
     setMessage("");
+    setMessageIsError(false);
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const typed = parseNames(query);
     const next = [...selectedRef.current];
-    for (const name of typed) {
-      if (!next.some((item) => item.toLowerCase() === name.toLowerCase()))
-        next.push(name);
-    }
-    if (next.length >= 4) {
-      triggerLoginToast();
-      setMessage("");
+
+    if (query.trim()) {
+      setMessage("Tên thuốc bạn vừa gõ chưa được chọn. Hãy bấm vào đúng thuốc trong danh sách gợi ý.");
+      setMessageIsError(true);
       return;
     }
     if (next.length < 2) {
-      setMessage("Hãy nhập ít nhất 2 thuốc để kiểm tra tương tác.");
+      setMessage("Hãy tìm và chọn ít nhất 2 thuốc từ danh sách gợi ý để kiểm tra tương tác.");
+      setMessageIsError(true);
       return;
     }
     const prescription: Prescription = {
@@ -214,6 +229,7 @@ function HeroDrugSearch({
     };
     const session = getSession();
     setMessage("Đang phân tích tương tác...");
+    setMessageIsError(false);
     try {
       const payload = [{ label: prescription.label, products: next }];
       const result = session
@@ -223,6 +239,7 @@ function HeroDrugSearch({
       setMessage("");
     } catch {
       setMessage("Không thể phân tích tương tác lúc này. Vui lòng thử lại.");
+      setMessageIsError(true);
     }
   }
 
@@ -234,7 +251,7 @@ function HeroDrugSearch({
             {selected.map((name) => (
               <span key={name} className="mc-drug-chip">
                 <span className="mc-drug-chip__name" title={name}>
-                  {name}
+                  {compactDrugChipLabel(name)}
                 </span>
                 <button
                   type="button"
@@ -262,8 +279,16 @@ function HeroDrugSearch({
           </span>
           <input
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            aria-label="Nhập tên thuốc"
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setMessage("");
+              setMessageIsError(false);
+            }}
+            aria-label="Tìm và chọn tên thuốc"
+            aria-autocomplete="list"
+            aria-controls="landing-drug-suggestions"
+            aria-expanded={suggestions.length > 0}
+            aria-describedby={message ? "landing-drug-search-message" : undefined}
             placeholder={animatedPlaceholder}
           />
           <button type="submit">
@@ -271,7 +296,7 @@ function HeroDrugSearch({
           </button>
         </div>
         {suggestions.length > 0 && (
-          <ul className="mc-search-suggestions">
+          <ul id="landing-drug-suggestions" className="mc-search-suggestions" aria-label="Danh sách thuốc gợi ý">
             {suggestions.slice(0, 5).map((product) => (
               <li key={product.id} className={selected.some((name) => name.toLowerCase() === product.ten_thuoc.toLowerCase()) ? "mc-search-suggestion--selected" : undefined}>
                 <button
@@ -279,14 +304,18 @@ function HeroDrugSearch({
                   disabled={selected.some((name) => name.toLowerCase() === product.ten_thuoc.toLowerCase())}
                   onClick={() => addDrugs([product.ten_thuoc])}
                 >
-                  {product.ten_thuoc}{selected.some((name) => name.toLowerCase() === product.ten_thuoc.toLowerCase()) && <small>Đã chọn</small>}
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    {selected.some((name) => name.toLowerCase() === product.ten_thuoc.toLowerCase()) ? "check_circle" : "add_circle"}
+                  </span>
+                  <b>{product.ten_thuoc}</b>
+                  <small>{selected.some((name) => name.toLowerCase() === product.ten_thuoc.toLowerCase()) ? "Đã chọn" : "Chọn"}</small>
                 </button>
               </li>
             ))}
           </ul>
         )}
         {message && (
-          <p className="mc-search-message" role="alert">
+          <p id="landing-drug-search-message" className={`mc-search-message ${messageIsError ? "mc-search-message--error" : ""}`} role={messageIsError ? "alert" : "status"}>
             {message}
           </p>
         )}
@@ -1870,7 +1899,10 @@ export default function LandingPage() {
           border-top: 1px solid #edf2fa;
         }
         .mc-search-suggestions button {
-          display: block;
+          display: grid;
+          grid-template-columns: 22px minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 9px;
           width: 100%;
           padding: 11px 13px;
           border: 0;
@@ -1880,6 +1912,22 @@ export default function LandingPage() {
           text-align: left;
           font: inherit;
           font-size: 13px;
+        }
+        .mc-search-suggestions button > .material-symbols-outlined {
+          color: #5276bd;
+          font-size: 20px;
+        }
+        .mc-search-suggestions button > b {
+          min-width: 0;
+          overflow: hidden;
+          font-weight: 700;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .mc-search-suggestions button > small {
+          color: #5574ad;
+          font-size: 11px;
+          font-weight: 750;
         }
         .mc-search-suggestions button:hover {
           background: #eef5ff;
@@ -1923,7 +1971,6 @@ export default function LandingPage() {
           cursor: not-allowed;
         }
         .mc-search-suggestion--selected small {
-          float: right;
           margin-left: 12px;
           color: #7085aa;
           font-size: 11px;
@@ -1947,14 +1994,13 @@ export default function LandingPage() {
           background: rgba(49, 72, 108, 0.6);
         }
         html[data-theme="dark"] .mc-search-suggestion--selected small { color: #9bb0d0; }
-        .mc-search-help,
         .mc-search-message {
           margin: 8px 4px 0;
           color: #54709d;
           font-size: 11px;
           line-height: 1.4;
         }
-        .mc-search-message {
+        .mc-search-message--error {
           color: #b14455;
           font-weight: 700;
         }
@@ -2084,23 +2130,41 @@ export default function LandingPage() {
           box-shadow: 0 12px 28px #274d872b;
         }
         .mc-drug-chips {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          display: flex;
+          flex-wrap: nowrap;
+          align-items: center;
           gap: 9px;
           width: 100%;
+          overflow-x: auto;
+          overflow-y: hidden;
+          scrollbar-width: none;
+          -webkit-overflow-scrolling: touch;
+        }
+        .mc-drug-chips::-webkit-scrollbar {
+          display: none;
         }
         .mc-drug-chip {
           min-width: 0;
-          display: flex;
+          width: fit-content;
+          max-width: 100%;
+          flex: 0 0 auto;
+          min-height: 0 !important;
+          height: 52px !important;
+          display: inline-flex;
+          align-self: center;
           align-items: center;
           gap: 7px;
+          padding: 8px 12px;
+          line-height: 1.25;
+          overflow: hidden;
         }
         .mc-drug-chip__name {
           min-width: 0;
+          max-width: 100%;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
-          flex: 1;
+          flex: 1 1 auto;
         }
         .mc-drug-chip button {
           width: auto;
@@ -2278,6 +2342,9 @@ export default function LandingPage() {
           color: #204779;
           background: #ffffffaa;
         }
+        .mc-mobile-login {
+          display: none;
+        }
         .mc-hero {
           background: #fff;
           border-color: #d7e4f7;
@@ -2371,19 +2438,302 @@ export default function LandingPage() {
         }
 
         @media (max-width: 760px) {
+          .mc-page {
+            height: 100svh;
+            width: 100%;
+            max-width: 100%;
+            overflow-x: hidden;
+            scrollbar-gutter: auto;
+          }
+          .mc-shell {
+            width: calc(100% - 24px);
+          }
+          .mc-header,
+          .mc-header.mc-shell {
+            width: calc(100% - 12px);
+            height: 64px;
+            min-height: 64px;
+            margin: 6px auto 0;
+            padding: 6px 8px;
+            top: 6px;
+            gap: 4px;
+            border: 1px solid rgba(183, 204, 237, 0.72);
+            border-radius: 22px;
+            background: rgba(255, 255, 255, 0.48) !important;
+            box-shadow: 0 8px 24px rgba(45, 77, 124, 0.1) !important;
+            backdrop-filter: blur(18px) saturate(140%);
+            -webkit-backdrop-filter: blur(18px) saturate(140%);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+          }
+          html[data-theme="dark"] .mc-header,
+          html[data-theme="dark"] .mc-header.mc-shell {
+            border-color: rgba(91, 119, 160, 0.58);
+            background: rgba(13, 28, 49, 0.48) !important;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18) !important;
+          }
+          .mc-logo {
+            flex: 0 1 clamp(62px, 20vw, 88px);
+            width: clamp(62px, 20vw, 88px);
+            height: 42px;
+            min-width: 0;
+          }
+          .mc-nav {
+            position: static;
+            flex: 1 1 auto;
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: clamp(1px, 0.8vw, 5px);
+            height: auto;
+            padding: 0;
+            border: 0;
+            border-radius: 999px;
+            background: transparent !important;
+            box-shadow: none;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+          }
+          html[data-theme="dark"] .mc-header .mc-nav {
+            border-color: transparent;
+            background: transparent !important;
+            box-shadow: none;
+          }
+          .mc-nav a:not(.mc-login) {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 34px;
+            padding: 4px clamp(2px, 1vw, 6px);
+            font-size: clamp(9px, 2.7vw, 12px);
+            white-space: nowrap;
+          }
+          .mc-nav .mc-login {
+            display: inline-flex !important;
+            flex: 0 0 auto;
+            width: auto !important;
+            height: 34px !important;
+            min-height: 34px;
+            padding: 5px clamp(6px, 2vw, 10px);
+            font-size: clamp(9px, 2.7vw, 12px);
+          }
+          .mc-header .theme-toggle {
+            display: inline-flex !important;
+            flex: 0 0 clamp(38px, 11vw, 48px);
+            width: clamp(38px, 11vw, 48px);
+            height: 24px;
+          }
+          .mc-header .theme-toggle__thumb {
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+          }
+          .mc-header .theme-toggle--dark .theme-toggle__thumb {
+            transform: translateX(calc(clamp(38px, 11vw, 48px) - 24px));
+          }
+          .mc-mobile-login {
+            display: none;
+          }
+          html[data-theme="dark"] .mc-mobile-login {
+            border-color: #4d71a5;
+            background: #1b3152;
+            color: #e7f0ff;
+          }
+          .mc-hero,
+          .mc-hero.mc-shell {
+            display: flex;
+            flex-direction: column;
+            width: auto !important;
+            min-height: 0;
+            height: auto;
+            aspect-ratio: auto !important;
+            margin: 12px !important;
+            padding: 30px 18px 20px;
+            overflow: hidden;
+            border-radius: 26px;
+            max-width: none;
+            box-sizing: border-box;
+          }
+          .mc-hero__new-copy {
+            position: relative;
+            z-index: 4;
+            top: auto;
+            left: auto;
+            width: 100%;
+            max-width: none;
+          }
+          .mc-hero__new-copy h1 {
+            margin: 0 0 12px;
+            font-size: clamp(32px, 9.2vw, 38px);
+            line-height: 1.06;
+            letter-spacing: -0.045em;
+            overflow-wrap: normal;
+            word-break: normal;
+          }
+          .mc-hero__new-copy p {
+            max-width: 34rem;
+            font-size: 13px;
+            line-height: 1.5;
+          }
           .mc-hero__capsule {
-            object-position: 70% 12%;
+            width: 76%;
+            height: 240px;
+            top: 174px;
+            right: auto;
+            left: 12%;
+            object-position: center;
+            opacity: 0.48;
+            animation: none !important;
+            transform: none !important;
+            will-change: auto;
           }
           .mc-hero__overlay {
             background: linear-gradient(
               0deg,
               #ffffff 0%,
-              #ffffffef 48%,
-              #ffffff22 100%
+              #fffffff2 34%,
+              #ffffff38 72%,
+              #ffffffb8 100%
             );
           }
-          .mc-hero__caption h1 {
-            font-size: 44px;
+          html[data-theme="dark"] .mc-hero__overlay {
+            background: linear-gradient(
+              0deg,
+              #0d1c31 0%,
+              #0d1c31ee 34%,
+              #0d1c3144 72%,
+              #0d1c31c7 100%
+            );
+          }
+          .mc-search-panel {
+            position: static !important;
+            z-index: 8;
+            top: auto;
+            right: auto;
+            bottom: auto !important;
+            left: auto;
+            width: 100%;
+            max-width: 100%;
+            margin-top: 154px;
+          }
+          .mc-search-row {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
+            gap: 5px 9px;
+            min-height: 0;
+            width: 100%;
+            max-width: 100%;
+            padding: 8px;
+            overflow: hidden;
+            border-radius: 20px;
+            box-sizing: border-box;
+            box-shadow: 0 12px 30px rgba(39, 73, 126, 0.1);
+          }
+          .mc-search-icon {
+            align-self: center;
+            margin-left: 4px;
+            font-size: 24px;
+          }
+          .mc-search-row input {
+            width: 100%;
+            min-height: 42px;
+            padding: 0;
+            font-size: 14px;
+            text-overflow: ellipsis;
+          }
+          .mc-search-row button {
+            grid-column: 1 / -1;
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            min-height: 44px;
+            padding: 10px 18px;
+            font-size: 13px;
+            box-sizing: border-box;
+            justify-self: stretch;
+          }
+          .mc-search-stats {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            margin: 12px 0 0;
+            padding: 0;
+          }
+          .mc-search-stats span {
+            min-width: 0;
+            min-height: 58px;
+            width: 100%;
+            padding: 6px 3px;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            flex-direction: column;
+            justify-content: flex-start;
+            gap: 5px;
+            font-size: 9.5px;
+            line-height: 1.25;
+            text-align: center;
+            white-space: normal;
+            box-sizing: border-box;
+          }
+          .mc-search-stats i {
+            flex: 0 0 auto;
+            font-size: 19px;
+          }
+          html[data-theme="dark"] .mc-search-stats,
+          html[data-theme="dark"] .mc-search-stats span,
+          html[data-theme="dark"] .mc-search-stats i {
+            color: #91b4ff;
+          }
+          html[data-theme="dark"] .mc-search-stats span {
+            border-color: transparent;
+            background: transparent;
+          }
+          .mc-search-suggestions {
+            position: static;
+            width: 100%;
+            margin-top: 8px;
+            max-height: 220px;
+          }
+          .mc-drug-chips {
+            display: flex;
+            flex-wrap: nowrap;
+          }
+          .mc-drug-chip {
+            height: 44px !important;
+          }
+          .mc-section {
+            padding-top: 64px;
+            padding-bottom: 64px;
+          }
+          .mc-section-heading,
+          .mc-section-heading p,
+          .mc-mission,
+          .mc-feature-grid,
+          .mc-audience-grid {
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+          }
+          .mc-feature-grid,
+          .mc-audience-grid {
+            grid-template-columns: minmax(0, 1fr);
+          }
+          .mc-feature-card,
+          .mc-audience-card,
+          .mc-mission__card {
+            min-width: 0;
+          }
+          .mc-section-heading h2,
+          .mc-mission h2,
+          .mc-cta h2 {
+            font-size: clamp(30px, 9vw, 40px);
+            line-height: 1.08;
+            overflow-wrap: normal;
+            word-break: normal;
           }
         }
       `}</style>
@@ -2401,7 +2751,9 @@ export default function LandingPage() {
               className="mc-result-shell__close"
               onClick={() => {
                 setLandingCheck(null);
-                window.scrollTo({ top: 0, behavior: "smooth" });
+                const landingPage = document.querySelector(".mc-page");
+                if (landingPage instanceof HTMLElement) landingPage.scrollTo({ top: 0, behavior: "smooth" });
+                else window.scrollTo({ top: 0, behavior: "smooth" });
               }}
             >
               Quay lại trang giới thiệu
@@ -2412,6 +2764,7 @@ export default function LandingPage() {
             prescriptions={landingCheck.prescriptions}
             session={landingCheck.session}
             requireLoginToReview={!landingCheck.session}
+            showReviewAction={false}
           />
         </section>
       ) : (

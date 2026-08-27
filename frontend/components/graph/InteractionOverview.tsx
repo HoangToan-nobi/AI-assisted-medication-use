@@ -1,6 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import MaterialIcon from "@/components/MaterialIcon";
 import PharmacistReviewPrompt, { type PharmacistReviewPromptHandle } from "@/components/PharmacistReviewPrompt";
@@ -52,6 +62,9 @@ type InteractionOverviewProps = {
   // bệnh nhân (audience="patient" mặc định) nhưng khung mời "nhờ dược sĩ xác nhận"
   // vô nghĩa với chính dược sĩ.
   showReviewPrompt?: boolean;
+  // Có thể ẩn riêng nút thao tác trong panel phân tích nhưng vẫn giữ khung đăng
+  // nhập/gửi yêu cầu phía dưới (landing page dùng cấu hình này).
+  showReviewAction?: boolean;
   // Cho phép ẩn riêng nút cuộn tới phần tóm tắt. Trang dược sĩ xem hồ sơ yêu
   // cầu đã có luồng nhận xét riêng nên không cần thao tác AI này.
   showAiSummaryAction?: boolean;
@@ -133,7 +146,10 @@ function renderOverviewText(
 // tra cứu độc lập của dược sĩ (audience="pharmacist") và trang dược sĩ xem xét 1
 // yêu cầu xét duyệt cụ thể (showReviewPrompt={false}, audience mặc định "patient"
 // để giọng văn y hệt bệnh nhân).
-export default function InteractionOverview({ result, prescriptions, session, audience = "patient", showReviewPrompt = audience === "patient", showAiSummaryAction = true, graphPaneScrollable = true, requireLoginToReview = false }: InteractionOverviewProps) {
+export default function InteractionOverview({ result, prescriptions, session, audience = "patient", showReviewPrompt = audience === "patient", showReviewAction = true, showAiSummaryAction = true, graphPaneScrollable = true, requireLoginToReview = false }: InteractionOverviewProps) {
+  const DEFAULT_GRAPH_PANE_PERCENT = 58;
+  const MIN_GRAPH_PANE_PERCENT = 30;
+  const MAX_GRAPH_PANE_PERCENT = 72;
   const boardMode = prescriptions.length > 1;
   // Chỉ có ý nghĩa khi boardMode: mặc định đồ thị gộp theo ĐƠN THUỐC (như cũ) -
   // bấm nút mới bung ra xem chi tiết cấp THUỐC giữa các đơn (mỗi đơn 1 màu, có chú
@@ -142,7 +158,11 @@ export default function InteractionOverview({ result, prescriptions, session, au
   const [selectedSeverity, setSelectedSeverity] = useState<Severity | "all">("all");
   const graphPaneRef = useRef<HTMLElement>(null);
   const graphSummaryRef = useRef<HTMLDivElement>(null);
+  const splitLayoutRef = useRef<HTMLDivElement>(null);
+  const splitDragActiveRef = useRef(false);
   const pharmacistReviewRef = useRef<PharmacistReviewPromptHandle>(null);
+  const [graphPanePercent, setGraphPanePercent] = useState(DEFAULT_GRAPH_PANE_PERCENT);
+  const [splitDragActive, setSplitDragActive] = useState(false);
 
   useEffect(() => {
     setSelectedSeverity("all");
@@ -158,6 +178,65 @@ export default function InteractionOverview({ result, prescriptions, session, au
     if (!pane || !summary) return;
     const top = pane.scrollTop + summary.getBoundingClientRect().top - pane.getBoundingClientRect().top - 20;
     pane.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+  }
+
+  const splitBounds = useCallback(() => {
+    const width = splitLayoutRef.current?.getBoundingClientRect().width ?? 0;
+    if (width <= 0) return { min: MIN_GRAPH_PANE_PERCENT, max: MAX_GRAPH_PANE_PERCENT };
+
+    // Keep both panes usable even after an aggressive drag. On a narrower
+    // desktop the pixel minimums take priority; wider screens keep a flexible
+    // 30%-72% range.
+    const min = Math.max(MIN_GRAPH_PANE_PERCENT, (420 / width) * 100);
+    const max = Math.min(MAX_GRAPH_PANE_PERCENT, 100 - ((360 + 12) / width) * 100);
+    return { min, max: Math.max(min, max) };
+  }, []);
+
+  const resizeSplitFromClientX = useCallback((clientX: number) => {
+    const layout = splitLayoutRef.current;
+    if (!layout) return;
+    const rect = layout.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const { min, max } = splitBounds();
+    const next = ((clientX - rect.left) / rect.width) * 100;
+    setGraphPanePercent(Math.min(max, Math.max(min, next)));
+  }, [splitBounds]);
+
+  function startSplitDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    splitDragActiveRef.current = true;
+    setSplitDragActive(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    resizeSplitFromClientX(event.clientX);
+  }
+
+  function moveSplitDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!splitDragActiveRef.current) return;
+    resizeSplitFromClientX(event.clientX);
+  }
+
+  function stopSplitDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!splitDragActiveRef.current) return;
+    splitDragActiveRef.current = false;
+    setSplitDragActive(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function resizeSplitWithKeyboard(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const { min, max } = splitBounds();
+    const step = event.shiftKey ? 5 : 2;
+    let next: number | null = null;
+    if (event.key === "ArrowLeft") next = graphPanePercent - step;
+    if (event.key === "ArrowRight") next = graphPanePercent + step;
+    if (event.key === "Home") next = min;
+    if (event.key === "End") next = max;
+    if (event.key === "Enter" || event.key === " ") next = DEFAULT_GRAPH_PANE_PERCENT;
+    if (next === null) return;
+    event.preventDefault();
+    setGraphPanePercent(Math.min(max, Math.max(min, next)));
   }
 
   function openPharmacistReview() {
@@ -310,7 +389,8 @@ export default function InteractionOverview({ result, prescriptions, session, au
   const visibleDiseaseItems = result.disease_interactions ?? [];
   const totalDetailCount = visibleRawPairItems.length + visibleFoodItems.length + visibleDiseaseItems.length;
   const hasAnySevere = result.has_severe || result.has_severe_disease_interaction;
-  const reviewActionAvailable = showReviewPrompt && (requireLoginToReview || Boolean(result.interaction_check_id));
+  const reviewPromptAvailable = showReviewPrompt && (requireLoginToReview || Boolean(result.interaction_check_id));
+  const reviewActionAvailable = showReviewAction && reviewPromptAvailable;
   const aiSummaryActionAvailable = showAiSummaryAction && Boolean(result.overview);
   const conditionNames = (result.patient_conditions_snapshot ?? []).map(
     (condition) => condition.ten_benh_vi || condition.ten_benh
@@ -350,7 +430,12 @@ export default function InteractionOverview({ result, prescriptions, session, au
         </aside>
       )}
       <section className="interaction-result interaction-result--split">
-        <div id="interaction-result-layout" className="interaction-result__layout">
+        <div
+          ref={splitLayoutRef}
+          id="interaction-result-layout"
+          className={`interaction-result__layout${splitDragActive ? " interaction-result__layout--resizing" : ""}`}
+          style={{ "--interaction-graph-width": `${graphPanePercent}%` } as CSSProperties}
+        >
           <section
             ref={graphPaneRef}
             className={`interaction-result__pane interaction-result__pane--graph panel${graphPaneScrollable ? "" : " interaction-result__pane--graph-static"}`}
@@ -397,6 +482,24 @@ export default function InteractionOverview({ result, prescriptions, session, au
               </div>
             )}
           </section>
+
+          <div
+            className="interaction-result__divider"
+            role="separator"
+            aria-label="Thay đổi độ rộng giữa đồ thị và phần phân tích"
+            aria-orientation="vertical"
+            aria-valuemin={MIN_GRAPH_PANE_PERCENT}
+            aria-valuemax={MAX_GRAPH_PANE_PERCENT}
+            aria-valuenow={Math.round(graphPanePercent)}
+            tabIndex={0}
+            title="Kéo sang trái hoặc phải để thay đổi độ rộng"
+            onPointerDown={startSplitDrag}
+            onPointerMove={moveSplitDrag}
+            onPointerUp={stopSplitDrag}
+            onPointerCancel={stopSplitDrag}
+            onDoubleClick={() => setGraphPanePercent(DEFAULT_GRAPH_PANE_PERCENT)}
+            onKeyDown={resizeSplitWithKeyboard}
+          />
 
           <section
             className={`interaction-result__pane interaction-result__pane--analysis panel${reviewActionAvailable ? "" : " interaction-result__pane--analysis-no-mobile-actions"}`}
@@ -459,7 +562,7 @@ export default function InteractionOverview({ result, prescriptions, session, au
         </div>
       </section>
 
-      {reviewActionAvailable && (
+      {reviewPromptAvailable && (
         <section id="pharmacist-review-list" className="pharmacist-review-section pharmacist-review-section--below-result">
           {session && result.interaction_check_id ? (
             <PharmacistReviewPrompt
