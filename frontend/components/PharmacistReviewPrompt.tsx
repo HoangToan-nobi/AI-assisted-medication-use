@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useState } from "react";
 import Link from "next/link";
 import MaterialIcon from "@/components/MaterialIcon";
 import { getPharmacists, listPatientChecks, requestReview, type PharmacistSummary } from "@/lib/api";
@@ -14,6 +14,16 @@ type PharmacistReviewPromptProps = {
   // dựa vào state cục bộ "assigned" - state đó mất ngay khi rời trang/reload).
   patientId?: string;
   onAssigned?: () => void;
+  // Báo cho khung kết quả sau khi danh sách đã thật sự xuất hiện trong DOM. Bên
+  // ngoài dùng mốc này để cuộn chính xác, thay vì đoán thời điểm React render.
+  onListVisible?: () => void;
+  // Ẩn CTA mặc định khi bên gọi đã có một nút kích hoạt riêng. Component vẫn
+  // được mount để ref có thể mở trực tiếp danh sách dược sĩ.
+  hideCollapsed?: boolean;
+};
+
+export type PharmacistReviewPromptHandle = {
+  toggleList: () => boolean;
 };
 
 type KnownStatus = "chua_xac_nhan" | "cho_xac_nhan" | "da_xac_nhan";
@@ -22,7 +32,10 @@ type Step = "cta" | "list" | "form";
 // Gợi ý gửi lần kiểm tra hiện tại cho dược sĩ xem lại - tách từ check-result/page.tsx
 // để dùng lại được ở mọi nơi hiện kết quả (InteractionOverview render widget này
 // cho MỌI lần tra cứu, không riêng gì tương tác nghiêm trọng).
-export default function PharmacistReviewPrompt({ checkId, token, personalized = false, patientId, onAssigned }: PharmacistReviewPromptProps) {
+const PharmacistReviewPrompt = forwardRef<PharmacistReviewPromptHandle, PharmacistReviewPromptProps>(function PharmacistReviewPrompt(
+  { checkId, token, personalized = false, patientId, onAssigned, onListVisible, hideCollapsed = false },
+  ref,
+) {
   const [step, setStep] = useState<Step>("cta");
   const [pharmacists, setPharmacists] = useState<PharmacistSummary[]>([]);
   const [pharmacistsLoading, setPharmacistsLoading] = useState(false);
@@ -65,6 +78,23 @@ export default function PharmacistReviewPrompt({ checkId, token, personalized = 
     finally { setPharmacistsLoading(false); }
   }
 
+  useImperativeHandle(ref, () => ({
+    toggleList: () => {
+      if (step === "cta") {
+        void handleShowPharmacists();
+        return true;
+      }
+      setSelected(null);
+      setStep("cta");
+      return false;
+    },
+  }));
+
+  useLayoutEffect(() => {
+    if (step !== "list" || statusLoading) return;
+    onListVisible?.();
+  }, [step, statusLoading, onListVisible]);
+
   function handleSelectPharmacist(p: PharmacistSummary) {
     setSelected(p);
     setAttachProfile(!personalized);
@@ -98,7 +128,7 @@ export default function PharmacistReviewPrompt({ checkId, token, personalized = 
 
   if (!token) {
     return (
-      <div className="pharmacist-prompt">
+      <div className="pharmacist-prompt pharmacist-prompt--cta-row">
         <p className="pharmacist-prompt__title">Bạn có muốn nhờ dược sĩ xác nhận lại tương tác thuốc này không?</p>
         <Link href="/" className="guest-login-link">Đăng nhập để gửi yêu cầu cho dược sĩ</Link>
       </div>
@@ -106,6 +136,7 @@ export default function PharmacistReviewPrompt({ checkId, token, personalized = 
   }
 
   if (statusLoading) {
+    if (hideCollapsed) return null;
     return (
       <div className="pharmacist-prompt pharmacist-prompt--loading">
         <span className="spinner spinner--sm" /> Đang kiểm tra trạng thái gửi dược sĩ...
@@ -187,13 +218,15 @@ export default function PharmacistReviewPrompt({ checkId, token, personalized = 
     );
   }
 
+  if (step === "cta" && hideCollapsed) return null;
+
   return (
-    <div className="pharmacist-prompt">
+    <div className={`pharmacist-prompt ${step === "cta" ? "pharmacist-prompt--cta-row" : ""}`}>
       <p className="pharmacist-prompt__title">Bạn có muốn nhờ dược sĩ xác nhận lại tương tác thuốc này không?</p>
       {step === "cta" ? (
         <button type="button" className="pharmacist-prompt__cta" onClick={() => void handleShowPharmacists()}>Nhờ dược sĩ xác nhận</button>
       ) : (
-        <div className="pharmacist-prompt__list">
+        <div className={`pharmacist-prompt__list${pharmacistsLoading ? " pharmacist-prompt__list--loading" : ""}`}>
           {pharmacistsLoading ? <p className="pharmacist-prompt__loading">Đang tải danh sách dược sĩ...</p> : pharmacists.map((p) => {
             // Chỉ 2 dòng: tên, rồi nơi làm việc + mô tả ngắn gộp chung 1 dòng (cắt
             // bớt bằng ellipsis nếu quá dài) - tránh tràn ra ngoài khung danh sách.
@@ -212,4 +245,6 @@ export default function PharmacistReviewPrompt({ checkId, token, personalized = 
       )}
     </div>
   );
-}
+});
+
+export default PharmacistReviewPrompt;

@@ -12,6 +12,32 @@ from pathlib import Path
 
 VN_TZ = timezone(timedelta(hours=7))
 
+_MOJIBAKE_MARKERS = ("Ã", "Â", "â", "Ä", "Æ", "áº", "á»")
+
+
+def repair_mojibake(value):
+    """Repair UTF-8 text that a Windows hook decoded as cp1252/latin-1."""
+    if isinstance(value, dict):
+        return {key: repair_mojibake(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [repair_mojibake(item) for item in value]
+    if not isinstance(value, str) or not any(marker in value for marker in _MOJIBAKE_MARKERS):
+        return value
+
+    original_score = sum(value.count(marker) for marker in _MOJIBAKE_MARKERS)
+    best = value
+    best_score = original_score
+    for encoding in ("cp1252", "latin-1"):
+        try:
+            candidate = value.encode(encoding).decode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            continue
+        candidate_score = sum(candidate.count(marker) for marker in _MOJIBAKE_MARKERS)
+        if candidate_score < best_score:
+            best = candidate
+            best_score = candidate_score
+    return best
+
 
 def git(cmd):
     try:
@@ -167,6 +193,8 @@ def main():
         data = json.loads(raw)
     except json.JSONDecodeError:
         sys.exit(0)
+
+    data = repair_mojibake(data)
 
     tool = detect_tool(data)
     entry = normalize(data, tool)

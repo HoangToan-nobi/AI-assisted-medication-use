@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Disclaimer from "@/components/Disclaimer";
 import MaterialIcon from "@/components/MaterialIcon";
 import InteractionOverview from "@/components/graph/InteractionOverview";
 import {
@@ -123,7 +122,7 @@ function ReviewContent() {
   }
 
   return (
-    <main>
+    <main className="pharmacist-review-page">
       <div className="page-header page-header--in-content">
         <button className="page-header__back" onClick={() => router.push("/pharmacist-dashboard")} aria-label="Quay lại">
           <MaterialIcon name="arrow_back" size={22} />
@@ -215,9 +214,10 @@ function ReviewContent() {
           prescriptions={prescriptions}
           session={session}
           showReviewPrompt={false}
+          showAiSummaryAction={false}
+          graphPaneScrollable={false}
         />
       )}
-          <Disclaimer />
         </div>
 
         <div className="review-layout__sidebar">

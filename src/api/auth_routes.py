@@ -21,7 +21,7 @@ from src.db.models import (
     RefreshSession,
     User,
 )
-from src.db.session import get_db
+from src.db.session import get_db, get_db_facts
 from src.models.schemas import (
     AdminAccountStatusRequest,
     AdminDrugDataResponse,
@@ -437,7 +437,11 @@ async def reject_pharmacist(user_id: str, payload: RejectPharmacistRequest, back
 
 
 @admin_router.get("/overview", response_model=AdminOverview)
-async def admin_overview(_: User = Depends(require_role("admin")), db: Session = Depends(get_db)) -> AdminOverview:
+async def admin_overview(
+    _: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+    db_facts: Session = Depends(get_db_facts),
+) -> AdminOverview:
     global _admin_overview_cache
     now = monotonic()
     if _admin_overview_cache and now - _admin_overview_cache[0] < ADMIN_OVERVIEW_CACHE_TTL_SECONDS:
@@ -454,15 +458,23 @@ async def admin_overview(_: User = Depends(require_role("admin")), db: Session =
         ).label("pending_pharmacists"),
         select(func.count(Medication.id)).scalar_subquery().label("medications"),
         select(func.count(Product.id)).scalar_subquery().label("products"),
-        select(func.count(Interaction.id)).scalar_subquery().label("drug_interactions"),
-        select(func.count(FoodInteraction.id)).scalar_subquery().label("food_interactions"),
-        select(func.count(DiseaseInteraction.id)).scalar_subquery().label("disease_interactions"),
         select(func.count(FeedbackReport.id))
         .where(FeedbackReport.status != "resolved")
         .scalar_subquery()
         .label("open_feedback"),
     )
     stats = db.execute(statement).mappings().one()
+
+    # interactions/food_interactions/disease_interactions nam tren CockroachDB (facts
+    # DB) - khac engine voi cac bang tren, khong the gop chung 1 statement/subquery
+    # nhu truoc (xem PLAN_migration_cockroach.md).
+    facts_statement = select(
+        select(func.count(Interaction.id)).scalar_subquery().label("drug_interactions"),
+        select(func.count(FoodInteraction.id)).scalar_subquery().label("food_interactions"),
+        select(func.count(DiseaseInteraction.id)).scalar_subquery().label("disease_interactions"),
+    )
+    facts_stats = db_facts.execute(facts_statement).mappings().one()
+
     overview = AdminOverview(
         total_users=stats["total_users"] or 0,
         patients=stats["patients"] or 0,
@@ -471,9 +483,9 @@ async def admin_overview(_: User = Depends(require_role("admin")), db: Session =
         pending_pharmacists=stats["pending_pharmacists"] or 0,
         medications=stats["medications"] or 0,
         products=stats["products"] or 0,
-        drug_interactions=stats["drug_interactions"] or 0,
-        food_interactions=stats["food_interactions"] or 0,
-        disease_interactions=stats["disease_interactions"] or 0,
+        drug_interactions=facts_stats["drug_interactions"] or 0,
+        food_interactions=facts_stats["food_interactions"] or 0,
+        disease_interactions=facts_stats["disease_interactions"] or 0,
         open_feedback=stats["open_feedback"] or 0,
     )
     _admin_overview_cache = (now, overview)

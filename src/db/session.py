@@ -24,8 +24,27 @@ engine = create_engine(
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# DB "facts" (interactions/food_interactions/disease_interactions) - xem
+# PLAN_migration_cockroach.md. Khi database_url_facts để trống (dev/test), dùng lại
+# engine chính thay vì mở thêm 1 connection pool trỏ tới cùng 1 DB.
+FACTS_TABLE_NAMES = {"interactions", "food_interactions", "disease_interactions"}
+if settings.database_url_facts:
+    _facts_connect_args = (
+        {"check_same_thread": False} if settings.database_url_facts.startswith("sqlite") else {}
+    )
+    engine_facts = create_engine(
+        settings.database_url_facts,
+        connect_args=_facts_connect_args,
+        pool_pre_ping=True,
+        pool_recycle=300,
+    )
+    SessionLocalFacts = sessionmaker(autocommit=False, autoflush=False, bind=engine_facts)
+else:
+    engine_facts = engine
+    SessionLocalFacts = SessionLocal
 
-def _ensure_column(table: str, column: str, ddl_type: str) -> None:
+
+def _ensure_column(table: str, column: str, ddl_type: str, *, engine=engine) -> None:
     """Không có framework migration (chỉ create_all, không ALTER bảng đã tồn tại) -
     thêm cột thủ công 1 lần, idempotent, cho các bảng được tạo trước khi cột này
     xuất hiện trong model.
@@ -42,7 +61,9 @@ def _ensure_column(table: str, column: str, ddl_type: str) -> None:
             conn.commit()
 
 
-def _ensure_column_any_dialect(table: str, column: str, sqlite_ddl_type: str, pg_ddl_type: str) -> None:
+def _ensure_column_any_dialect(
+    table: str, column: str, sqlite_ddl_type: str, pg_ddl_type: str, *, engine=engine
+) -> None:
     """Giống _ensure_column nhưng chạy trên CẢ Postgres lẫn SQLite - _ensure_column
     bỏ qua Postgres với giả định create_all() sẽ tự thêm cột mới cho bảng cũ, nhưng
     thực ra create_all() KHÔNG BAO GIỜ ALTER bảng đã tồn tại sẵn ở bất kỳ dialect
@@ -60,7 +81,7 @@ def _ensure_column_any_dialect(table: str, column: str, sqlite_ddl_type: str, pg
             conn.commit()
 
 
-def _ensure_index(table: str, column: str, index_name: str) -> None:
+def _ensure_index(table: str, column: str, index_name: str, *, engine=engine) -> None:
     """Giống _ensure_column nhưng cho index - create_all() KHÔNG retroactively thêm
     index vào bảng đã tồn tại sẵn (khác cột, đây đúng cho cả SQLite lẫn Postgres),
     nên phải tự chạy CREATE INDEX IF NOT EXISTS 1 lần cho bảng cũ. Thiếu các index
@@ -71,9 +92,31 @@ def _ensure_index(table: str, column: str, index_name: str) -> None:
         conn.commit()
 
 
+def _purge_stale_food_disease_cache(*, engine=engine) -> None:
+    """Xoá các bản ghi food_disease_explanation_cache đã lưu TRƯỚC KHI cột
+    nguon_trich_dan_chi_tiet tồn tại (nên cột đó đang NULL) - cache không có cơ chế
+    tự làm mới, nếu không xoá thì các cạnh đã tra cứu trước đây sẽ mãi mãi không có
+    references thật dù backend đã hỗ trợ. Idempotent + tự giới hạn: sau lần dọn đầu
+    tiên, gần như mọi bản ghi mới đều có nguon_trich_dan_chi_tiet (dữ liệu DDInter
+    hiếm khi thiếu nguon_trich_dan gốc) nên lệnh này rơi về no-op ở các lần khởi
+    động sau. Chỉ xoá cache (không phải dữ liệu DDInter gốc) - lần tra cứu kế tiếp
+    tự tính lại (gọi LLM lại 1 lần cho các cạnh đã xoá)."""
+    with engine.connect() as conn:
+        conn.execute(text("DELETE FROM food_disease_explanation_cache WHERE nguon_trich_dan_chi_tiet IS NULL"))
+        conn.commit()
+
+
 def init_db() -> None:
-    """Tạo bảng nếu chưa tồn tại — gọi 1 lần khi setup (Sprint 0)."""
-    Base.metadata.create_all(bind=engine)
+    """Tạo bảng nếu chưa tồn tại — gọi 1 lần khi setup (Sprint 0).
+
+    interactions/food_interactions/disease_interactions tạo trên engine_facts
+    (CockroachDB) - các bảng còn lại tạo trên engine chính (Supabase). Xem
+    PLAN_migration_cockroach.md."""
+    main_tables = [t for name, t in Base.metadata.tables.items() if name not in FACTS_TABLE_NAMES]
+    facts_tables = [Base.metadata.tables[name] for name in FACTS_TABLE_NAMES]
+    Base.metadata.create_all(bind=engine, tables=main_tables)
+    Base.metadata.create_all(bind=engine_facts, tables=facts_tables)
+
     _ensure_column("patient_medications", "prescription_id", "TEXT REFERENCES patient_prescriptions(id)")
     _ensure_column("users", "mo_ta_ngan", "TEXT")
     _ensure_column("users", "noi_cong_tac", "VARCHAR(255)")
@@ -90,15 +133,17 @@ def init_db() -> None:
     _ensure_column("pharmacist_reviews", "thoi_gian_xac_nhan", "DATETIME")
     _ensure_column("pharmacist_reviews", "cau_hoi", "TEXT")
     _ensure_column("pharmacist_reviews", "cau_tra_loi", "TEXT")
-    _ensure_column("food_interactions", "thuc_pham_vi", "VARCHAR(255)")
-    _ensure_column("disease_interactions", "ten_benh_vi", "VARCHAR(255)")
-    _ensure_column("interactions", "mo_ta_dich", "TEXT")
-    _ensure_column("interactions", "xu_tri_dich", "TEXT")
-    _ensure_column("food_interactions", "mo_ta_dich", "TEXT")
-    _ensure_column("food_interactions", "xu_tri_dich", "TEXT")
-    _ensure_column("disease_interactions", "mo_ta_dich", "TEXT")
+    _ensure_column("food_interactions", "thuc_pham_vi", "VARCHAR(255)", engine=engine_facts)
+    _ensure_column("disease_interactions", "ten_benh_vi", "VARCHAR(255)", engine=engine_facts)
+    _ensure_column("interactions", "mo_ta_dich", "TEXT", engine=engine_facts)
+    _ensure_column("interactions", "xu_tri_dich", "TEXT", engine=engine_facts)
+    _ensure_column("food_interactions", "mo_ta_dich", "TEXT", engine=engine_facts)
+    _ensure_column("food_interactions", "xu_tri_dich", "TEXT", engine=engine_facts)
+    _ensure_column("disease_interactions", "mo_ta_dich", "TEXT", engine=engine_facts)
 
     _ensure_column_any_dialect("interaction_checks", "thuoc_da_kiem_tra", "TEXT", "JSON")
+    _ensure_column_any_dialect("food_disease_explanation_cache", "nguon_trich_dan_chi_tiet", "TEXT", "TEXT")
+    _purge_stale_food_disease_cache()
 
     _ensure_index("patient_profiles", "user_id", "idx_patient_profiles_user_id")
     _ensure_index("patient_prescriptions", "patient_id", "idx_patient_prescriptions_patient_id")
@@ -131,6 +176,18 @@ def assert_auth_schema_ready() -> None:
 def get_db() -> Session:
     """Dependency cho FastAPI route: `db: Session = Depends(get_db)`."""
     db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def get_db_facts() -> Session:
+    """Dependency cho FastAPI route: `db_facts: Session = Depends(get_db_facts)`.
+
+    Trỏ tới CockroachDB (interactions/food_interactions/disease_interactions) -
+    xem PLAN_migration_cockroach.md."""
+    db = SessionLocalFacts()
     try:
         yield db
     finally:

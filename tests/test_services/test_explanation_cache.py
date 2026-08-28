@@ -48,6 +48,9 @@ def test_save_then_lookup_cached_hits(cache_db):
         "giai_thich": "test giai thich",
         "giai_thich_duoc_si": None,
         "nguon_trich_dan": "Tổng hợp từ 1 cặp hoạt chất tương tác trong CSDL DDInter 2.0.",
+        # ProductExplanationCache không có cột này (chỉ FoodDiseaseExplanationCache
+        # có) - lookup_cached dùng getattr nên rơi về None thay vì lỗi.
+        "nguon_trich_dan_chi_tiet": None,
         "mo_ta_dich": "test mo ta",
         "xu_tri_dich": "test xu tri",
     }

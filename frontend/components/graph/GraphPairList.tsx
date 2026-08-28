@@ -11,6 +11,9 @@ export type GraphPairItem = {
   severity?: Severity;
   description: string;
   source: string;
+  // Vài mục tài liệu tham khảo gốc cho popover "Nguồn trích dẫn" (xem
+  // buildCitationReferences) - có cho cả bệnh nhân lẫn dược sĩ.
+  references?: string[];
   hasIncompletePair?: boolean;
   // Gợi ý xử trí dành cho dược sĩ (xu_tri) - chỉ có khi xem qua luồng dược sĩ,
   // backend đã tự ẩn field này với bệnh nhân nên phía trên luôn là undefined.
@@ -32,7 +35,7 @@ export default function GraphPairList({ items, onViewDetail }: GraphPairListProp
   return (
     <div className="interaction-pairs">
       {items.map((item) => (
-        <div className="interaction-pair-card" id={`interaction-pair-${item.id}`} key={item.id}>
+        <div className={`interaction-pair-card ${onViewDetail ? "interaction-pair-card--with-actions" : ""}`} id={`interaction-pair-${item.id}`} key={item.id}>
           {item.mergedPairIds?.map((id) => <span key={id} id={`interaction-pair-${id}`} />)}
           {onViewDetail && (
             <div className="tt-graph-pair__actions">
@@ -43,7 +46,7 @@ export default function GraphPairList({ items, onViewDetail }: GraphPairListProp
           )}
           <AlertCard
             thuocA={item.thuocA} thuocB={item.thuocB} severity={item.severity} description={item.description} source={item.source}
-            management={item.management} scientificDescription={item.scientificDescription}
+            management={item.management} scientificDescription={item.scientificDescription} references={item.references}
           />
           {item.hasIncompletePair && (
             <p className="tt-graph-pair__notice"><MaterialIcon name="info" size={15} /> Còn cặp chưa được phân loại mức độ trong nhóm này.</p>

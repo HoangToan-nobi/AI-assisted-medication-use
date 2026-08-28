@@ -89,6 +89,10 @@ export type FoodInteractionExplanation = {
   giai_thich: string;
   giai_thich_duoc_si?: string;
   nguon_trich_dan: string;
+  // Tài liệu tham khảo GỐC (nối bằng "|") của từng hoạt chất đã gộp vào cạnh này -
+  // khác nguon_trich_dan ở trên vốn chỉ là câu tóm tắt số lượng. Dùng với
+  // buildCitationReferences (lib/interactionGraph.ts) để hiện trong AlertCard.
+  nguon_trich_dan_chi_tiet?: string;
   mo_ta_dich?: string;
   xu_tri_dich?: string;
 };
@@ -100,6 +104,7 @@ export type DiseaseInteractionExplanation = {
   giai_thich: string;
   giai_thich_duoc_si?: string;
   nguon_trich_dan: string;
+  nguon_trich_dan_chi_tiet?: string;
   // Không có xu_tri_dich - nguồn DDInter cho tương tác bệnh nền không có trường xử trí.
   mo_ta_dich?: string;
 };
@@ -273,6 +278,17 @@ async function request<T>(
     },
   });
 
+  // Cookie CSRF có thể đã được một tab/request khác làm mới trong khi SPA vẫn
+  // giữ token cũ trong bộ nhớ. Khi backend xác nhận đúng lỗi mismatch, lấy một
+  // token mới và thử lại duy nhất một lần; không retry các lỗi 403 phân quyền.
+  if (res.status === 403 && !retried && csrfToken) {
+    const errorBody = await res.clone().json().catch(() => null);
+    if (errorBody?.detail === "CSRF token khong hop le") {
+      await ensureCsrfToken(true);
+      return request<T>(path, options, true);
+    }
+  }
+
   if (res.status === 401 && !retried && !skipRefresh && !["/api/v1/auth/login", "/api/v1/auth/refresh"].includes(path)) {
     const refreshCsrf = csrfToken || await ensureCsrfToken();
     const refreshed = await fetch(`${API_URL}/api/v1/auth/refresh`, {
@@ -307,9 +323,16 @@ function getCookie(name: string): string | undefined {
   return document.cookie.split("; ").find((part) => part.startsWith(prefix))?.slice(prefix.length);
 }
 
-async function ensureCsrfToken(): Promise<string | undefined> {
-  csrfCache ||= getCookie("medguard_csrf");
-  if (csrfCache) return csrfCache;
+async function ensureCsrfToken(forceRefresh = false): Promise<string | undefined> {
+  // Luôn ưu tiên cookie hiện tại thay vì cache cũ: endpoint /csrf hoặc một tab
+  // khác có thể đã xoay cookie sau lần request trước.
+  const cookieToken = getCookie("medguard_csrf");
+  if (!forceRefresh && cookieToken) {
+    csrfCache = cookieToken;
+    return cookieToken;
+  }
+  if (!forceRefresh && csrfCache) return csrfCache;
+  csrfCache = undefined;
   const response = await fetch(`${API_URL}/api/v1/auth/csrf`, { credentials: "include" });
   if (response.ok) csrfCache = (await response.json()).csrf_token;
   return csrfCache;

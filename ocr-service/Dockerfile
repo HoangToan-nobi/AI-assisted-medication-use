@@ -97,20 +97,31 @@ use_textline_orientation=False)"
 RUN sh /tmp/fetch_models.sh /srv/models \
     && rm /tmp/fetch_models.sh
 
-# VietOCR's vgg_transformer checkpoint contains the recognizer weights but its
-# CNN backbone is loaded separately by torchvision on first startup.  Bake that
-# exact VGG19-BN checkpoint into Torch's cache as well; otherwise an offline
-# container becomes unhealthy and silently falls back to accent-less PaddleOCR.
-RUN python -c "from torchvision.models import VGG19_BN_Weights, vgg19_bn; \
-vgg19_bn(weights=VGG19_BN_Weights.IMAGENET1K_V1)"
+# vgg_transformer's backbone is built on torchvision's OWN pretrained VGG19-BN
+# ImageNet weights (~548 MB), fetched from download.pytorch.org the FIRST time
+# the predictor is actually constructed -- separate from and in addition to
+# the vocr.vn weights fetched above. fetch_models.sh only downloads bytes to a
+# file; it never instantiates the model, so this second download was silently
+# happening on every cold start instead of at build time (found 2026-08-22
+# debugging Modal requests timing out). Construct the predictor once here so
+# both downloads are baked into the image and no request ever needs network.
+RUN python -c "import torch; \
+from vietocr.tool.config import Cfg; \
+from vietocr.tool.predictor import Predictor; \
+config = Cfg.load_config_from_name('vgg_transformer'); \
+config['device'] = 'cpu'; \
+config['weights'] = '/srv/models/vgg_transformer.pth'; \
+Predictor(config)"
 
-# Prepare the unprivileged runtime and cached Paddle models before copying the
-# frequently-changing source code.  COPY --chown below avoids another recursive
-# chown layer after every application edit.
+# Drop root: the service only ever reads its own files. Also copy /root/.cache/torch
+# (torchvision's VGG19-BN weights baked in above) to /home/appuser/.cache/torch -
+# torch resolves its cache dir from $HOME, which becomes /home/appuser once running
+# as appuser below; without this copy the baked weights would be invisible at
+# runtime and re-downloaded anyway, defeating the point of baking them in.
 RUN useradd --create-home --uid 10001 appuser \
     && cp -r /root/.paddlex /home/appuser/.paddlex 2>/dev/null || true \
     && mkdir -p /home/appuser/.cache \
-    && cp -r /root/.cache/torch /home/appuser/.cache/torch \
+    && cp -r /root/.cache/torch /home/appuser/.cache/torch 2>/dev/null || true \
     && chown -R appuser:appuser /home/appuser /srv
 
 # Keep frequently-changing files at the end of the Dockerfile.  A normal code

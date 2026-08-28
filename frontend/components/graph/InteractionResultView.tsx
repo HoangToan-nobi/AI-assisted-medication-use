@@ -11,12 +11,14 @@ type InteractionResultViewProps = {
   prescriptions: Prescription[];
   session: Session | null;
   requireLoginToReview?: boolean;
+  showReviewPrompt?: boolean;
+  showReviewAction?: boolean;
 };
 
 // Dùng ở tab "Tra cứu tương tác" (kết quả vừa tính xong): bọc InteractionOverview,
 // vốn tự hiện khung "Nhờ dược sĩ xác nhận" bên trong nó cho MỌI lần tra cứu (không
 // còn chỉ dành riêng cho tương tác nghiêm trọng như trước).
-export default function InteractionResultView({ result, prescriptions, session, requireLoginToReview = false }: InteractionResultViewProps) {
+export default function InteractionResultView({ result, prescriptions, session, requireLoginToReview = false, showReviewPrompt = true, showReviewAction = true }: InteractionResultViewProps) {
   const hasAnySevere = result.has_severe || result.has_severe_disease_interaction;
   return <>
     <aside className={`interaction-mascot-note ${hasAnySevere ? "interaction-mascot-note--alert" : ""}`}>
@@ -26,6 +28,6 @@ export default function InteractionResultView({ result, prescriptions, session, 
         <p>Thông tin chỉ mang tính tham khảo, không thay thế tư vấn chuyên môn. Không tự ý thay đổi hoặc ngừng thuốc; nên tham khảo dược sĩ hoặc chuyên gia khi cần.</p>
       </div>
     </aside>
-    <InteractionOverview result={result} prescriptions={prescriptions} session={session} requireLoginToReview={requireLoginToReview} />
+    <InteractionOverview result={result} prescriptions={prescriptions} session={session} requireLoginToReview={requireLoginToReview} showReviewPrompt={showReviewPrompt} showReviewAction={showReviewAction} />
   </>;
 }

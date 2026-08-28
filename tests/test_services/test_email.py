@@ -17,6 +17,7 @@ def test_smtp_uses_verified_tls_and_retries(monkeypatch):
         smtp_max_retries=2,
         smtp_retry_delay_seconds=0,
         app_env="test",
+        gmail_oauth_refresh_token="",
     )
     monkeypatch.setattr(email_service, "get_settings", lambda: settings)
     tls_context = object()

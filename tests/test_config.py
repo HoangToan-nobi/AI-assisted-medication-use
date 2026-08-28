@@ -17,6 +17,9 @@ def _production_settings(**overrides):
         "smtp_password": "smtp-password",
         "smtp_starttls": True,
         "smtp_ssl": False,
+        "gmail_oauth_client_id": "",
+        "gmail_oauth_client_secret": "",
+        "gmail_oauth_refresh_token": "",
         "frontend_url": "https://app.example.com",
         "cors_origins": "https://app.example.com",
     }

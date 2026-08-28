@@ -1,13 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import MaterialIcon from "@/components/MaterialIcon";
-import PharmacistReviewPrompt from "@/components/PharmacistReviewPrompt";
+import PharmacistReviewPrompt, { type PharmacistReviewPromptHandle } from "@/components/PharmacistReviewPrompt";
 import type { MedicationCheckResponse, Severity } from "@/lib/api";
 import type { Session } from "@/lib/auth";
-import { assignGroupColors, buildPrescriptionGraph, buildProductGraph, withDataOnly } from "@/lib/interactionGraph";
+import { assignGroupColors, buildCitationReferences, buildPrescriptionGraph, buildProductGraph, withDataOnly } from "@/lib/interactionGraph";
 import { drugOrigins, firstPrescriptionIndex, isCrossPrescription, mergedDrugNames, type Prescription } from "@/lib/prescription";
+import { scrollBelowStickyHeader } from "@/lib/scroll";
 import type { GraphPairItem } from "./GraphPairList";
 import InteractionDetailTabs from "./InteractionDetailTabs";
 import InteractionGraphView, { scrollToPairCard, type GraphEdgeVM, type GraphNodeVM } from "./InteractionGraphView";
@@ -51,6 +62,15 @@ type InteractionOverviewProps = {
   // bệnh nhân (audience="patient" mặc định) nhưng khung mời "nhờ dược sĩ xác nhận"
   // vô nghĩa với chính dược sĩ.
   showReviewPrompt?: boolean;
+  // Có thể ẩn riêng nút thao tác trong panel phân tích nhưng vẫn giữ khung đăng
+  // nhập/gửi yêu cầu phía dưới (landing page dùng cấu hình này).
+  showReviewAction?: boolean;
+  // Cho phép ẩn riêng nút cuộn tới phần tóm tắt. Trang dược sĩ xem hồ sơ yêu
+  // cầu đã có luồng nhận xét riêng nên không cần thao tác AI này.
+  showAiSummaryAction?: boolean;
+  // Màn xem hồ sơ yêu cầu cần hiển thị trọn khung đồ thị và chỉ cuộn trang chính,
+  // không tạo thêm một vùng cuộn lồng bên trong khung bên trái.
+  graphPaneScrollable?: boolean;
   // Landing page luôn cần hiển thị yêu cầu đăng nhập để gửi kết quả,
   // kể cả guest check không có interaction_check_id.
   requireLoginToReview?: boolean;
@@ -126,13 +146,23 @@ function renderOverviewText(
 // tra cứu độc lập của dược sĩ (audience="pharmacist") và trang dược sĩ xem xét 1
 // yêu cầu xét duyệt cụ thể (showReviewPrompt={false}, audience mặc định "patient"
 // để giọng văn y hệt bệnh nhân).
-export default function InteractionOverview({ result, prescriptions, session, audience = "patient", showReviewPrompt = audience === "patient", requireLoginToReview = false }: InteractionOverviewProps) {
+export default function InteractionOverview({ result, prescriptions, session, audience = "patient", showReviewPrompt = audience === "patient", showReviewAction = true, showAiSummaryAction = true, graphPaneScrollable = true, requireLoginToReview = false }: InteractionOverviewProps) {
+  const DEFAULT_GRAPH_PANE_PERCENT = 58;
+  const MIN_GRAPH_PANE_PERCENT = 30;
+  const MAX_GRAPH_PANE_PERCENT = 72;
   const boardMode = prescriptions.length > 1;
   // Chỉ có ý nghĩa khi boardMode: mặc định đồ thị gộp theo ĐƠN THUỐC (như cũ) -
   // bấm nút mới bung ra xem chi tiết cấp THUỐC giữa các đơn (mỗi đơn 1 màu, có chú
   // thích). Không reset về false khi đổi kết quả.
   const [showDrugLevel, setShowDrugLevel] = useState(false);
   const [selectedSeverity, setSelectedSeverity] = useState<Severity | "all">("all");
+  const graphPaneRef = useRef<HTMLElement>(null);
+  const graphSummaryRef = useRef<HTMLDivElement>(null);
+  const splitLayoutRef = useRef<HTMLDivElement>(null);
+  const splitDragActiveRef = useRef(false);
+  const pharmacistReviewRef = useRef<PharmacistReviewPromptHandle>(null);
+  const [graphPanePercent, setGraphPanePercent] = useState(DEFAULT_GRAPH_PANE_PERCENT);
+  const [splitDragActive, setSplitDragActive] = useState(false);
 
   useEffect(() => {
     setSelectedSeverity("all");
@@ -141,6 +171,84 @@ export default function InteractionOverview({ result, prescriptions, session, au
   function matchesSelectedSeverity(severity: Severity | undefined) {
     return selectedSeverity === "all" || (severity ?? "chua_phan_loai") === selectedSeverity;
   }
+
+  function scrollToGraphSummary() {
+    const pane = graphPaneRef.current;
+    const summary = graphSummaryRef.current;
+    if (!pane || !summary) return;
+    const top = pane.scrollTop + summary.getBoundingClientRect().top - pane.getBoundingClientRect().top - 20;
+    pane.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+  }
+
+  const splitBounds = useCallback(() => {
+    const width = splitLayoutRef.current?.getBoundingClientRect().width ?? 0;
+    if (width <= 0) return { min: MIN_GRAPH_PANE_PERCENT, max: MAX_GRAPH_PANE_PERCENT };
+
+    // Keep both panes usable even after an aggressive drag. On a narrower
+    // desktop the pixel minimums take priority; wider screens keep a flexible
+    // 30%-72% range.
+    const min = Math.max(MIN_GRAPH_PANE_PERCENT, (420 / width) * 100);
+    const max = Math.min(MAX_GRAPH_PANE_PERCENT, 100 - ((360 + 12) / width) * 100);
+    return { min, max: Math.max(min, max) };
+  }, []);
+
+  const resizeSplitFromClientX = useCallback((clientX: number) => {
+    const layout = splitLayoutRef.current;
+    if (!layout) return;
+    const rect = layout.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const { min, max } = splitBounds();
+    const next = ((clientX - rect.left) / rect.width) * 100;
+    setGraphPanePercent(Math.min(max, Math.max(min, next)));
+  }, [splitBounds]);
+
+  function startSplitDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    splitDragActiveRef.current = true;
+    setSplitDragActive(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    resizeSplitFromClientX(event.clientX);
+  }
+
+  function moveSplitDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!splitDragActiveRef.current) return;
+    resizeSplitFromClientX(event.clientX);
+  }
+
+  function stopSplitDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!splitDragActiveRef.current) return;
+    splitDragActiveRef.current = false;
+    setSplitDragActive(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function resizeSplitWithKeyboard(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const { min, max } = splitBounds();
+    const step = event.shiftKey ? 5 : 2;
+    let next: number | null = null;
+    if (event.key === "ArrowLeft") next = graphPanePercent - step;
+    if (event.key === "ArrowRight") next = graphPanePercent + step;
+    if (event.key === "Home") next = min;
+    if (event.key === "End") next = max;
+    if (event.key === "Enter" || event.key === " ") next = DEFAULT_GRAPH_PANE_PERCENT;
+    if (next === null) return;
+    event.preventDefault();
+    setGraphPanePercent(Math.min(max, Math.max(min, next)));
+  }
+
+  function openPharmacistReview() {
+    const opened = pharmacistReviewRef.current?.toggleList();
+    if (opened === false) return;
+  }
+
+  const scrollToPharmacistReview = useCallback(() => {
+    // useLayoutEffect của danh sách gọi hàm này sau khi DOM đã xuất hiện, nên có
+    // thể nhảy ngay một lần mà không cần polling hay requestAnimationFrame kép.
+    scrollBelowStickyHeader("pharmacist-review-list", "auto");
+  }, []);
 
   const origins = useMemo(() => drugOrigins(prescriptions), [prescriptions]);
   const dataExplanations = useMemo(() => withDataOnly(result.explanations), [result]);
@@ -242,6 +350,7 @@ export default function InteractionOverview({ result, prescriptions, session, au
       severity: e.muc_do,
       description: pickText(backendItem, audience),
       source: backendItem?.nguon_trich_dan ?? "",
+      references: buildCitationReferences(e.pairs),
       hasIncompletePair: e.hasIncompletePair,
       // Chỉ dược sĩ mới có (backend đã tự ẩn với bệnh nhân) - bản dịch nguyên văn
       // (không qua diễn giải) từ CSDL của mô tả tương tác + khuyến nghị xử trí.
@@ -280,13 +389,16 @@ export default function InteractionOverview({ result, prescriptions, session, au
   const visibleDiseaseItems = result.disease_interactions ?? [];
   const totalDetailCount = visibleRawPairItems.length + visibleFoodItems.length + visibleDiseaseItems.length;
   const hasAnySevere = result.has_severe || result.has_severe_disease_interaction;
+  const reviewPromptAvailable = showReviewPrompt && (requireLoginToReview || Boolean(result.interaction_check_id));
+  const reviewActionAvailable = showReviewAction && reviewPromptAvailable;
+  const aiSummaryActionAvailable = showAiSummaryAction && Boolean(result.overview);
   const conditionNames = (result.patient_conditions_snapshot ?? []).map(
     (condition) => condition.ten_benh_vi || condition.ten_benh
   );
 
   return (
     <>
-      {audience === "pharmacist" && hasAnySevere && (
+      {false && audience === "pharmacist" && hasAnySevere && (
         <aside className="interaction-mascot-note interaction-mascot-note--alert">
           <MediFox variant="alert" className="interaction-mascot-note__image" />
           <div>
@@ -317,43 +429,150 @@ export default function InteractionOverview({ result, prescriptions, session, au
           </div>
         </aside>
       )}
-      <section className="interaction-result panel">
-      <div className="interaction-result__header">
-        <div><p className="eyebrow">ĐỒ THỊ TƯƠNG TÁC</p><h2>{title}</h2></div>
-        <span className={hasAnySevere ? "result-pill result-pill--danger" : result.has_unclassified ? "result-pill result-pill--unknown" : "result-pill"}>
-          {hasAnySevere ? "Cần lưu ý" : result.has_unclassified ? "Chưa cập nhật" : "An toàn"}
-        </span>
-      </div>
+      <section className="interaction-result interaction-result--split">
+        <div
+          ref={splitLayoutRef}
+          id="interaction-result-layout"
+          className={`interaction-result__layout${splitDragActive ? " interaction-result__layout--resizing" : ""}`}
+          style={{ "--interaction-graph-width": `${graphPanePercent}%` } as CSSProperties}
+        >
+          <section
+            ref={graphPaneRef}
+            className={`interaction-result__pane interaction-result__pane--graph panel${graphPaneScrollable ? "" : " interaction-result__pane--graph-static"}`}
+            aria-label="Bản đồ tương tác"
+          >
+            <div className="interaction-result__header">
+              <div>
+                <p className="eyebrow">BẢN ĐỒ TƯƠNG TÁC</p>
+                <h2 className="section-heading-icon"><MaterialIcon name="hub" size={21} />{title}</h2>
+                <p className="interaction-result__subtitle">Chọn mức độ hoặc bấm vào đường nối để xem cảnh báo tương ứng.</p>
+              </div>
+              {boardMode && (
+                <button type="button" className="interaction-pairs__toggle interaction-graph-level-toggle" onClick={() => setShowDrugLevel((v) => !v)}>
+                  <MaterialIcon name={showDrugLevel ? "list_alt" : "medication"} size={17} />
+                  {showDrugLevel ? "Xem theo đơn thuốc" : "Xem chi tiết theo thuốc"}
+                </button>
+              )}
+            </div>
 
-      {boardMode && (
-        <button type="button" className="interaction-pairs__toggle interaction-graph-level-toggle" onClick={() => setShowDrugLevel((v) => !v)}>
-          <MaterialIcon name={showDrugLevel ? "list_alt" : "medication"} size={17} />
-          {showDrugLevel ? "Xem theo đơn thuốc" : "Xem chi tiết theo thuốc"}
-        </button>
-      )}
-      <InteractionGraphView nodes={nodes} edges={edges} groups={graphGroups} ariaLabel={title} />
+            <div className="interaction-result__graph-meta">
+              {graphGroups.length > 0 && (
+                <div className="tt-graph-legend" aria-label="Chú thích đơn thuốc">
+                  {graphGroups.map((group) => (
+                    <span key={group.id}>
+                      <i className="tt-graph-legend__dot" style={{ background: group.color }} />
+                      {group.label}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <SeverityCountStrip edges={productEdges} selectedSeverity={selectedSeverity} onSelect={setSelectedSeverity} />
+            </div>
 
-      <SeverityCountStrip edges={productEdges} selectedSeverity={selectedSeverity} onSelect={setSelectedSeverity} />
+            <InteractionGraphView nodes={nodes} edges={edges} groups={graphGroups} ariaLabel={title} showLegend={false} />
 
-      {result.overview && (
-        <div className="interaction-overview__summary">
-          <p className="eyebrow">TÓM TẮT TỔNG QUAN</p>
-          <p>{renderOverviewText(result.overview.giai_thich, result.overview.nhan_manh, resolveHighlightEdgeId)}</p>
-          {/* 1-3 câu liệt kê cố định (không qua LLM) thực phẩm cần tránh/bệnh nền cần
-              thận trọng/mời trao đổi dược sĩ - mỗi câu 1 đoạn riêng, xem
-              build_food_disease_warning_line. */}
-          {result.canh_bao_thuc_pham_benh_nen?.map((line, i) => <p key={i}>{line}</p>)}
+            {result.overview && (
+              <div ref={graphSummaryRef} className="interaction-overview__summary">
+                <p className="eyebrow">TÓM TẮT TỔNG QUAN</p>
+                <p>{renderOverviewText(result.overview.giai_thich, result.overview.nhan_manh, resolveHighlightEdgeId)}</p>
+                {/* 1-3 câu liệt kê cố định (không qua LLM) thực phẩm cần tránh/bệnh nền cần
+                    thận trọng/mời trao đổi dược sĩ - mỗi câu 1 đoạn riêng, xem
+                    build_food_disease_warning_line. */}
+                {result.canh_bao_thuc_pham_benh_nen?.map((line, i) => <p key={i}>{line}</p>)}
+              </div>
+            )}
+          </section>
+
+          <div
+            className="interaction-result__divider"
+            role="separator"
+            aria-label="Thay đổi độ rộng giữa đồ thị và phần phân tích"
+            aria-orientation="vertical"
+            aria-valuemin={MIN_GRAPH_PANE_PERCENT}
+            aria-valuemax={MAX_GRAPH_PANE_PERCENT}
+            aria-valuenow={Math.round(graphPanePercent)}
+            tabIndex={0}
+            title="Kéo sang trái hoặc phải để thay đổi độ rộng"
+            onPointerDown={startSplitDrag}
+            onPointerMove={moveSplitDrag}
+            onPointerUp={stopSplitDrag}
+            onPointerCancel={stopSplitDrag}
+            onDoubleClick={() => setGraphPanePercent(DEFAULT_GRAPH_PANE_PERCENT)}
+            onKeyDown={resizeSplitWithKeyboard}
+          />
+
+          <section
+            className={`interaction-result__pane interaction-result__pane--analysis panel${reviewActionAvailable ? "" : " interaction-result__pane--analysis-no-mobile-actions"}`}
+            aria-label="Phân tích kết quả tương tác"
+          >
+            <div className="interaction-result__header interaction-result__header--analysis">
+              <div>
+                <p className="eyebrow">PHÂN TÍCH KẾT QUẢ</p>
+                <h2 className="section-heading-icon"><MaterialIcon name="clinical_notes" size={21} />Vì sao hệ thống cảnh báo?</h2>
+                <p className="interaction-result__subtitle">
+                  {audience === "pharmacist"
+                    ? "Đối chiếu diễn giải chuyên môn và nguồn dữ liệu cho từng tương tác."
+                    : "Xem diễn giải tổng quan và lưu ý an toàn cho từng tương tác."}
+                </p>
+              </div>
+            </div>
+
+            <div className="interaction-result__analysis-scroll">
+              {totalDetailCount > 0 && (
+                <InteractionDetailTabs
+                  drugPairItems={pairItems}
+                  foodItems={visibleFoodItems}
+                  diseaseItems={visibleDiseaseItems}
+                  audience={audience}
+                />
+              )}
+              {totalDetailCount === 0 && allNodes.length > 0 && (
+                <div className="interaction-alert interaction-alert--empty"><MaterialIcon name="info" size={20} /><span>Không tìm thấy tương tác nào trong cơ sở dữ liệu cho lựa chọn hiện tại.</span></div>
+              )}
+            </div>
+
+            {(reviewActionAvailable || aiSummaryActionAvailable) && (
+              <div
+                className={`interaction-result__analysis-actions${reviewActionAvailable ? "" : " interaction-result__analysis-actions--summary-only"}`}
+                aria-label="Thao tác với kết quả phân tích"
+              >
+                {reviewActionAvailable && (
+                  <button
+                    type="button"
+                    className="interaction-result__analysis-action interaction-result__analysis-action--secondary"
+                    onClick={openPharmacistReview}
+                  >
+                    <MaterialIcon name="local_pharmacy" size={18} />
+                    Nhờ dược sĩ xác nhận
+                  </button>
+                )}
+                {aiSummaryActionAvailable && (
+                  <button
+                    type="button"
+                    className="interaction-result__analysis-action interaction-result__analysis-action--primary"
+                    onClick={scrollToGraphSummary}
+                  >
+                    <MaterialIcon name="auto_awesome" size={18} />
+                    AI tóm tắt
+                  </button>
+                )}
+              </div>
+            )}
+          </section>
         </div>
-      )}
+      </section>
 
-      {showReviewPrompt && (requireLoginToReview || result.interaction_check_id) && (
-        <section className="pharmacist-review-section">
+      {reviewPromptAvailable && (
+        <section id="pharmacist-review-list" className="pharmacist-review-section pharmacist-review-section--below-result">
           {session && result.interaction_check_id ? (
             <PharmacistReviewPrompt
+              ref={pharmacistReviewRef}
               checkId={result.interaction_check_id}
               token={session.accessToken}
               patientId={session.userId}
               personalized={result.is_personalized === true}
+              onListVisible={scrollToPharmacistReview}
+              hideCollapsed
             />
           ) : (
             <div className="pharmacist-login-required">
@@ -366,19 +585,6 @@ export default function InteractionOverview({ result, prescriptions, session, au
           )}
         </section>
       )}
-
-      {totalDetailCount > 0 && (
-        <InteractionDetailTabs
-          drugPairItems={pairItems}
-          foodItems={visibleFoodItems}
-          diseaseItems={visibleDiseaseItems}
-          audience={audience}
-        />
-      )}
-      {totalDetailCount === 0 && allNodes.length > 0 && (
-        <div className="interaction-alert interaction-alert--empty"><MaterialIcon name="info" size={20} /><span>Không tìm thấy tương tác nào trong cơ sở dữ liệu cho lựa chọn hiện tại.</span></div>
-      )}
-      </section>
     </>
   );
 }
