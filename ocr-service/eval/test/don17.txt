@@ -1,0 +1,6 @@
+# Bảng thuốc có 3 dòng ("Cộng khoản: 3"). Phần "Sinh hoạt"/"Ghi chú" phía dưới còn
+# nhắc Manesi B6 và Tanganil 500mg, nhưng chúng không nằm trong bảng chỉ định nên
+# không tính vào nhãn.
+Flunarizin (dưới dạng flunarizin dihydroclorid) (Fluzinstad 5)
+Paracetamol 650mg (Acetab 650)
+Sắt + folic acid (Tardyferon B9 B/30)

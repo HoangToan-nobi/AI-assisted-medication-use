@@ -1,0 +1,4 @@
+# Cẩn thận khi soát đơn này: cột bên trái liệt kê CHUYÊN KHOA của bệnh viện
+# (1 - CHẤN THƯƠNG SỌ NÃO, 2 - TIM MẠCH CAN THIỆP, 3 - NỘI TIẾT, ... 8 - XÉT NGHIỆM)
+# - có số thứ tự và tên nghe như bệnh, nhưng KHÔNG phải chẩn đoán của bệnh nhân.
+Chấn thương đầu - ngực - lưng do bị đánh

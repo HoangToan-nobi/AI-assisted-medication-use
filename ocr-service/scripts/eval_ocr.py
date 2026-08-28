@@ -31,7 +31,7 @@ import cv2  # noqa: E402
 from rapidfuzz.distance import Levenshtein  # noqa: E402
 
 from app.config import settings  # noqa: E402
-from app.services.ocr_service import OCRService  # noqa: E402
+from app.services.ocr_service import OCRService, filter_ocr_results  # noqa: E402
 from app.utils.image_utils import prepare_image  # noqa: E402
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
@@ -103,7 +103,7 @@ def read_lines(service: OCRService, image_path: Path, config: str) -> tuple[list
     items = service.recognize(prepared.array)
     elapsed = time.perf_counter() - started
 
-    kept = [i for i in items if i["confidence"] >= settings.ocr_confidence_threshold]
+    kept = filter_ocr_results(items, settings.ocr_confidence_threshold)
     if config == "vietocr":
         # Bypass arbitration: score VietOCR's raw reading wherever it produced
         # one, so the hybrid column can be judged against its own inputs.

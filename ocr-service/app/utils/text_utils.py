@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from decimal import Decimal, InvalidOperation
 from typing import Iterable
 
 # Each group collapses to a single representative during folding.
@@ -159,6 +160,64 @@ def strength_numbers(text: str) -> set[str]:
         value = float(raw)
         numbers.add(str(int(value)) if value.is_integer() else str(value))
     return numbers
+
+
+def bare_name_numbers(text: str) -> set[str]:
+    """Numbers that are not already part of an explicit strength.
+
+    Vietnamese product names often encode a dose without a unit (``Augmentin
+    625``), so those numbers remain useful aliases. A number that *does* carry a
+    unit must not be treated this way: otherwise ``Drug 1 mg`` and ``Drug 1 g``
+    both collapse to the alias ``1`` and receive the same strength score.
+    """
+    without_strengths = _STRENGTH_PATTERN.sub(" ", text or "")
+    return strength_numbers(without_strengths)
+
+
+def _decimal_text(value: Decimal) -> str:
+    """Stable, non-scientific rendering used inside comparison-only keys."""
+    rendered = format(value.normalize(), "f")
+    return rendered.rstrip("0").rstrip(".") if "." in rendered else rendered
+
+
+def strength_keys(text: str) -> set[str]:
+    """Unit-aware strength components normalized for comparison.
+
+    Masses become milligrams and volumes become millilitres, so ``1 g`` matches
+    ``1000 mg`` while ``1 g`` never matches ``1 mg``. Ratio strengths retain
+    both dimensions: ``500 mg/5 ml`` becomes ``mass:500`` + ``volume:5`` and
+    therefore cannot fully match ``500 mg + 5 mg``.
+    """
+    keys: set[str] = set()
+    for strength in _STRENGTH_PATTERN.finditer(text or ""):
+        for piece in _STRENGTH_PIECE.finditer(strength.group(0).replace(",", ".")):
+            raw_number, raw_unit = piece.group(1), piece.group(2).lower()
+            try:
+                value = Decimal(raw_number.replace(",", "."))
+            except InvalidOperation:
+                continue
+
+            unit = _UNIT_CANONICAL.get(raw_unit, raw_unit)
+            if unit == "kg":
+                dimension, value = "mass", value * Decimal("1000000")
+            elif unit == "g":
+                dimension, value = "mass", value * Decimal("1000")
+            elif unit == "mg":
+                dimension = "mass"
+            elif unit == "mcg":
+                dimension, value = "mass", value / Decimal("1000")
+            elif unit == "l":
+                dimension, value = "volume", value * Decimal("1000")
+            elif unit == "ml":
+                dimension = "volume"
+            elif unit == "IU":
+                dimension = "iu"
+            elif unit == "%":
+                dimension = "percent"
+            else:
+                dimension = unit.casefold()
+            keys.add(f"{dimension}:{_decimal_text(value)}")
+    return keys
 
 
 def unique(values: Iterable[str]) -> list[str]:

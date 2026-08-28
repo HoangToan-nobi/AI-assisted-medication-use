@@ -20,6 +20,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Protocol, Sequence
@@ -29,11 +30,12 @@ from rapidfuzz import fuzz, process
 
 from app.config import Settings, settings as default_settings
 from app.utils.text_utils import (
+    bare_name_numbers,
     confusion_fold,
     extract_strengths,
     line_windows,
     matching_key,
-    strength_numbers,
+    strength_keys,
     unique,
 )
 
@@ -145,7 +147,7 @@ class _DrugIndex:
 
     folded_names: list[str] = field(default_factory=list)
     name_numbers: list[set[str]] = field(default_factory=list)
-    strength_numbers: list[set[str]] = field(default_factory=list)
+    strength_keys: list[set[str]] = field(default_factory=list)
     folded_ingredients: list[list[str]] = field(default_factory=list)
     # Distinct ingredient vocabulary -> display form, for `possible_ingredients`.
     ingredient_vocab: dict[str, str] = field(default_factory=dict)
@@ -190,8 +192,10 @@ class DrugResolver:
         index = _DrugIndex()
         for drug in drugs:
             index.folded_names.append(confusion_fold(drug.drug_name))
-            index.name_numbers.append(strength_numbers(drug.drug_name))
-            index.strength_numbers.append(strength_numbers(drug.strength))
+            index.name_numbers.append(bare_name_numbers(drug.drug_name))
+            index.strength_keys.append(
+                strength_keys(f"{drug.drug_name} {drug.strength}")
+            )
 
             folded: list[str] = []
             for ingredient in drug.ingredients():
@@ -231,10 +235,31 @@ class DrugResolver:
         # two OCR regions ("650" / "mg") is still read as one value.
         page_text = " ".join(ocr_lines)
         detected_strengths = extract_strengths(page_text)
-        detected_numbers = {n for s in detected_strengths for n in strength_numbers(s)}
+        detected_strength_keys = strength_keys(page_text)
         possible_ingredients = self._detect_ingredients(page_text)
 
         phrases = line_windows(ocr_lines, self.settings.max_line_window)
+        # Prescription rows commonly print ``brand (ingredient)``. Score the
+        # visible brand portion separately as well as the complete auditable
+        # line; otherwise a long ingredient name dilutes a one-glyph brand OCR
+        # error and generic products crowd out the actual brand (don7:
+        # ``Spetcely 200mg (Cetpodoxime)`` -> ``Spetcefy-200``).
+        brand_heads = [
+            phrase.split("(", 1)[0].strip()
+            for phrase in phrases
+            if "(" in phrase and len(phrase.split("(", 1)[0].strip()) >= 4
+        ]
+        # A one-glyph omission in a short brand gets diluted by strength/pack
+        # text (don16: ``Aussin SR 60ml`` versus ``Atussin``) and can miss the
+        # shortlist entirely. Individual alphabetic brand-head tokens are
+        # recall-only phrases; the normal full scoring and threshold still
+        # decide whether they may be shown.
+        brand_tokens = [
+            token
+            for head in brand_heads
+            for token in re.findall(r"[A-Za-zÀ-ỹ]{5,}", head)
+        ]
+        phrases = unique([*phrases, *brand_heads, *brand_tokens])
 
         # Cheap recall pass over the whole database, then an exact rerank of
         # only the survivors.
@@ -242,11 +267,11 @@ class DrugResolver:
         shortlist = self._shortlist(coarse, possible_ingredients)
         name_scores = self._refine_name_scores(folded_phrases, shortlist)
 
-        scored: list[tuple[float, dict[str, float], int, int]] = []
+        scored: list[tuple[float, dict[str, float], int, int, int]] = []
         for i in shortlist:
             parts = {
                 "name_score": name_scores[i],
-                "strength_score": self._strength_score(i, detected_numbers),
+                "strength_score": self._strength_score(i, detected_strength_keys),
                 "ingredient_score": self._ingredient_score(i, possible_ingredients),
             }
             final = (
@@ -260,9 +285,11 @@ class DrugResolver:
             # line explicitly contains that brand.
             folded_name = self._index.folded_names[i]
             positions = [
-                phrase.find(folded_name)
+                position
                 for phrase in folded_phrases
-                if len(folded_name) >= 4 and folded_name in phrase
+                if len(folded_name) >= 4
+                for position in [self._name_position(phrase, folded_name)]
+                if position is not None
             ]
             if positions:
                 final = min(1.0, final + 0.02)
@@ -275,19 +302,30 @@ class DrugResolver:
             # 40". Measured over six real prescription rows: 3/6 correct
             # before, 6/6 after.
             earliest = min(positions) if positions else _NO_NAME_MATCH
-            scored.append((final, parts, i, earliest))
+            exact_name_length = len(folded_name) if positions else 0
+            scored.append((final, parts, i, earliest, exact_name_length))
 
         # Tie-break on name score so a strength/ingredient bonus never lets a
         # clearly worse-spelled brand overtake an exact name match, then on
         # how early the name appeared in the OCR line.
         scored.sort(
-            key=lambda item: (item[0], item[1]["name_score"], -item[3]), reverse=True
+            key=lambda item: (
+                item[0], item[1]["name_score"], -item[3], item[4]
+            ),
+            reverse=True,
         )
         top = scored[:limit]
 
         candidates = [
-            self._as_candidate(self.drugs[i], final, parts) for final, parts, i, _ in top
+            self._as_candidate(self.drugs[i], final, parts)
+            for final, parts, i, _earliest, _exact_name_length in top
         ]
+        # Thà không đề xuất gì còn hơn đề xuất bừa: một dòng OCR hỏng luôn tìm được
+        # thuốc "gần giống" trong danh mục 43.970 tên, và người dùng khó biết đó là
+        # rác. Không còn ứng viên nào thì giao diện chuyển dòng đó sang nhập tay.
+        floor = self.settings.min_candidate_score
+        if floor > 0:
+            candidates = [c for c in candidates if c["score"] >= floor]
         return {
             "candidates": candidates,
             "strengths": detected_strengths,
@@ -303,6 +341,19 @@ class DrugResolver:
         return "uncertain"
 
     # -- scoring signals ---------------------------------------------------
+
+    @staticmethod
+    def _name_position(phrase: str, drug_name: str) -> int | None:
+        """Whole-token containment position, never a substring inside a word."""
+        start = phrase.find(drug_name)
+        while start >= 0:
+            end = start + len(drug_name)
+            left_ok = start == 0 or phrase[start - 1] not in "abcdefghijklmnopqrstuvwxyz0123456789"
+            right_ok = end == len(phrase) or phrase[end] not in "abcdefghijklmnopqrstuvwxyz0123456789"
+            if left_ok and right_ok:
+                return start
+            start = phrase.find(drug_name, start + 1)
+        return None
 
     def _coarse_name_scores(self, phrases: list[str]) -> tuple[list[str], np.ndarray]:
         """Recall pass over the whole database: cheap scorers only.
@@ -331,7 +382,7 @@ class DrugResolver:
         # when the whole-line fuzzy score is diluted by the extra text.
         for phrase in folded_phrases:
             for index, drug_name in enumerate(self._index.folded_names):
-                if len(drug_name) >= 4 and drug_name in phrase:
+                if len(drug_name) >= 4 and self._name_position(phrase, drug_name) is not None:
                     scores[index] = max(scores[index], 100.0)
         return folded_phrases, scores
 
@@ -364,7 +415,10 @@ class DrugResolver:
         # complete name-column evidence as one OCR box.
         for position, index in enumerate(shortlist):
             drug_name = self._index.folded_names[index]
-            if len(drug_name) >= 4 and any(drug_name in phrase for phrase in folded_phrases):
+            if len(drug_name) >= 4 and any(
+                self._name_position(phrase, drug_name) is not None
+                for phrase in folded_phrases
+            ):
                 scores[index] = max(scores[index], 1.0)
         return scores
 
@@ -400,11 +454,19 @@ class DrugResolver:
         """
         if not detected:
             return self.settings.strength_neutral_score()
-        known = self._index.strength_numbers[index] | self._index.name_numbers[index]
-        if not known:
+        known = self._index.strength_keys[index]
+        aliases = self._index.name_numbers[index]
+        if not known and not aliases:
             # Missing data in the database is not evidence against the row.
             return self.settings.strength_neutral_score()
-        return len(detected & known) / len(detected)
+        matched = 0
+        for key in detected:
+            # Unit-aware evidence is authoritative. Only a genuinely unit-less
+            # number in the product name may act as a fallback dose alias.
+            amount = key.partition(":")[2]
+            if key in known or amount in aliases:
+                matched += 1
+        return matched / len(detected)
 
     def _ingredient_score(self, index: int, detected: list[str]) -> float:
         """Fraction of this drug's ingredients that the image confirms."""
@@ -415,7 +477,7 @@ class DrugResolver:
         return sum(1 for ing in folded if ing in wanted) / len(folded)
 
     def _detect_ingredients(self, text: str) -> list[str]:
-        """Ingredient names from the database that literally appear in the text."""
+        """Ingredient names present in text, with a guarded OCR-error fallback."""
         key = matching_key(text)
         if not key:
             return []
@@ -424,6 +486,24 @@ class DrugResolver:
             for folded, display in self._index.ingredient_vocab.items()
             if folded in key
         ]
+        # A single damaged glyph in a long ingredient should not discard strong
+        # evidence (don7: ``Cetpodoxime`` instead of ``Cefpodoxime``). Only use
+        # one high-scoring, >=8-character fuzzy match when no literal ingredient
+        # was found. Short names are intentionally excluded because a 90%
+        # partial match inside free text is not distinctive enough for them.
+        if not found:
+            long_ingredients = [
+                folded for folded in self._index.ingredient_vocab if len(folded) >= 8
+            ]
+            fuzzy = process.extract(
+                key,
+                long_ingredients,
+                scorer=fuzz.partial_ratio,
+                score_cutoff=90.0,
+                limit=1,
+            )
+            if fuzzy:
+                found.append(self._index.ingredient_vocab[fuzzy[0][0]])
         # Drop components subsumed by a longer match (e.g. "Amoxicillin" inside
         # "Amoxicillin trihydrate") to keep the reported list readable.
         found.sort(key=len, reverse=True)

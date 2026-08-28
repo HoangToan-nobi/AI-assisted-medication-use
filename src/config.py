@@ -77,7 +77,9 @@ class Settings(BaseSettings):
     # Mặc định localhost:8001 cho chạy tay trên máy (OCR né cổng 8000 của backend
     # host); docker-compose ghi đè thành http://ocr:8000 (mạng nội bộ container).
     ocr_service_url: str = "http://localhost:8001"
-    ocr_timeout_seconds: float = 45.0
+    # OCR chạy CPU có thể mất vài phút với ảnh lớn/nghiêng hoặc lần gọi đầu tiên.
+    # Đây là read timeout của backend; frontend proxy được giữ lâu hơn 10 giây.
+    ocr_timeout_seconds: float = 300.0
 
 
 @lru_cache

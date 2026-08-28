@@ -1,6 +1,11 @@
 # Pinned to the versions this service was built and tested against
 # (Python 3.12, Ubuntu 24.04, CPU).
 
+# Resolve the explicitly pinned +cpu PyTorch wheels from PyTorch's official
+# CPU index. Without this, PyPI currently selects a CUDA build and downloads
+# several gigabytes of NVIDIA libraries even though OCR_DEVICE=cpu.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 # --- API layer ---
 fastapi==0.115.6
 uvicorn[standard]==0.52.1
@@ -26,17 +31,17 @@ paddleocr==3.7.0
 # ứ ự ...` and carries no combining marks, so those characters cannot be
 # produced at any confidence. VietOCR's vocabulary covers Vietnamese in full.
 #
-# It pulls in torch (~2 GB in the image). See the ONNX note in README.md for
-# the route to dropping that if image size becomes a problem.
+# Pin the tested CPU pair. See the ONNX note in README.md for the route to
+# dropping the PyTorch runtime entirely if image size becomes a problem.
 vietocr==0.3.13
-torch>=2.2,<3
+torch==2.6.0+cpu
 # vietocr's CNN backbone (vietocr/model/backbone/vgg.py) imports
 # torchvision.models directly, but vietocr's own package metadata does not
 # declare torchvision as a dependency - without this line, VietOCR fails to
 # load with "ModuleNotFoundError: No module named 'torchvision'" and every
 # Vietnamese diacritic in the OCR output comes out wrong (falls back to
 # PaddleOCR, which has no Vietnamese recognizer at all - see README.md).
-torchvision
+torchvision==0.21.0+cpu
 # vietocr -> vietocr.tool.utils -> gdown imports "pkg_resources" unconditionally.
 # setuptools >= 81 dropped pkg_resources entirely, which breaks that import chain
 # the same way as the missing torchvision above (VietOCR fails to load, silently

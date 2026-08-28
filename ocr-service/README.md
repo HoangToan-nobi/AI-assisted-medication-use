@@ -9,6 +9,317 @@ is holding, and its output must not be fed straight into an interaction engine.
 
 ---
 
+## Báo cáo hiện trạng và nâng cấp OCR
+
+### 1. Mục tiêu của hệ thống
+
+OCR Service nhận ảnh hộp thuốc hoặc đơn thuốc tiếng Việt, trích xuất văn bản,
+phân loại loại tài liệu và đề xuất thuốc tương ứng từ cơ sở dữ liệu. Kết quả
+chỉ là **ứng viên để người dùng xác nhận**, không phải kết luận y khoa và không
+được tự động chuyển thẳng sang chức năng kiểm tra tương tác thuốc.
+
+Phạm vi của đợt rà soát và nâng cấp hiện tại:
+
+* kiểm tra khả năng nhận dạng ảnh đơn thuốc thật;
+* kiểm tra ảnh ngoài phạm vi như giao dịch ngân hàng và hóa đơn nhà hàng;
+* tìm nguyên nhân hệ thống nhận nhầm văn bản thông thường thành tên thuốc;
+* giảm thuốc gợi ý sai nhưng vẫn cố gắng giữ lại thuốc đúng;
+* gia cố xử lý ảnh, trạng thái sẵn sàng và bộ kiểm thử;
+* không huấn luyện hoặc tinh chỉnh lại mô hình OCR.
+
+### 2. Luồng xử lý hiện tại
+
+```text
+Ảnh tải lên
+  ↓
+Kiểm tra dung lượng, định dạng và số điểm ảnh sau giải mã
+  ↓
+Sửa chiều ảnh theo EXIF, chuyển RGB, thu nhỏ đúng tỉ lệ, đo độ mờ
+  ↓
+PaddleOCR phát hiện vùng chữ và tạo các đa giác bao quanh văn bản
+  ↓
+Hiệu chỉnh phối cảnh từng vùng chữ
+  ↓
+PaddleOCR và VietOCR cùng nhận dạng
+  ↓
+Hợp nhất kết quả và lọc theo bằng chứng độ tin cậy của cả hai mô hình
+  ↓
+Phân loại: hộp thuốc / đơn thuốc / không xác định
+  ↓
+Tách dòng thuốc, tên thuốc, hàm lượng và hoạt chất
+  ↓
+So khớp với cơ sở dữ liệu thuốc, loại ứng viên dưới ngưỡng
+  ↓
+Trả tối đa 3 ứng viên và yêu cầu người dùng xác nhận
+```
+
+Các bước tiền xử lý không có nhiệm vụ “đoán thuốc”. Chúng chỉ chuẩn hóa đầu
+vào để mô hình đọc tốt hơn và ngăn ảnh bất thường sử dụng quá nhiều bộ nhớ.
+Việc một ảnh có chữ như `ngày`, `tỏi` hoặc một con số không được xem là bằng
+chứng đủ để kết luận đó là đơn thuốc.
+
+### 3. Các vấn đề phát hiện trước khi nâng cấp
+
+#### 3.1. Hóa đơn thông thường có thể bị nhận thành thuốc
+
+Ảnh hóa đơn nhà hàng `check2.png` từng bị phân loại thành
+`medicine_package`, sau đó trả về các thuốc không có trong ảnh như
+`Bát trân hoàn OPC` và `Hoàn Thập toàn đại bổ` với điểm khoảng `0.59`.
+
+Nguyên nhân chính:
+
+* bộ phân loại dùng phép tìm chuỗi con quá rộng;
+* các từ thông thường như `Ngày`, `Xào Tỏi`, `Tổng`, `Rồng` và `SL` vô tình
+  chứa những mảnh từ từng được xem là tín hiệu y tế;
+* chỉ cần đủ số tín hiệu yếu là tài liệu bị chuyển sang luồng tìm thuốc;
+* ngưỡng ứng viên `0.50` cho phép kết quả có độ tương đồng thấp xuất hiện.
+
+Ảnh giao dịch ngân hàng `check.jpeg` không trả thuốc ở bản cũ, nhưng được đưa
+vào bộ kiểm thử hồi quy để bảo đảm các thay đổi sau này không làm tái xuất hiện
+lỗi tương tự.
+
+#### 3.2. Ngưỡng điểm không thể tự giải quyết toàn bộ lỗi
+
+Ngưỡng cũ `0.50` là thấp đối với dữ liệu có khoảng 44 nghìn dòng thuốc. Khi
+văn bản đầu vào không phải tên thuốc, luôn có khả năng một tên trong cơ sở dữ
+liệu giống ngẫu nhiên với một phần OCR.
+
+Ngưỡng mặc định đã được nâng lên `0.65`. Tuy nhiên đây chỉ là lớp bảo vệ cuối:
+trong bộ đánh giá mới, ứng viên sai vẫn có điểm từ `0.65` đến `0.78`. Vì vậy
+giải pháp bắt buộc phải kết hợp phân loại tài liệu, tách dòng, so khớp hàm
+lượng đúng đơn vị và ngưỡng điểm; không nên tiếp tục tăng một ngưỡng duy nhất
+để che lỗi phân loại.
+
+#### 3.3. Sai lệch giữa script đánh giá và API thật
+
+Script đánh giá cũ vẫn tìm thuốc trên mọi văn bản, không tuân theo
+`document_type` và không dùng cùng bước lọc độ tin cậy với API. Vì vậy số liệu
+từ script tốt hơn hoặc xấu hơn hệ thống thật tùy ảnh và không phản ánh đúng
+luồng production.
+
+Ví dụ, script cũ báo `138/191` thuốc đúng nhưng tạo `43` thuốc thừa, trong khi
+đo trực tiếp qua luồng tương đương API cũ chỉ có `119/191` thuốc đúng và `37`
+thuốc thừa. Script đã được sửa để dùng chung bộ lọc và quy tắc định tuyến với
+API.
+
+#### 3.4. Một số lỗi cấu trúc và dữ liệu biên
+
+* Một dòng ngày tháng như `27/07/2020` có thể bị hiểu thành dòng thuốc số 27
+  khi OCR không trả tọa độ hộp bao.
+* Nhãn đứng riêng `Bệnh kèm theo` có thể bị trả ra như tên bệnh.
+* Một kết quả VietOCR điểm thấp có thể thắng khi hợp nhất rồi làm cả vùng chữ
+  bị loại, dù PaddleOCR đọc cùng vùng với độ tin cậy cao.
+* Tiền tố quá ngắn như `ng` hoặc `ang` có thể khiến tên thuốc thật bị hiểu là
+  lịch uống; ví dụ `NAGAPOLIS`, `Ngọc linh` và `Angioten`.
+* So khớp hàm lượng chỉ dựa vào số có thể coi `1 mg` và `1 g` là giống nhau.
+* Kiểm tra ảnh lớn trước đây dựa nhiều vào cảnh báo của Pillow và chuyển ảnh
+  sang RGB trước khi thu nhỏ, tạo rủi ro sử dụng bộ nhớ quá mức.
+* Endpoint `/health` có thể trả HTTP 200 dù một mô hình quan trọng hoặc cơ sở
+  dữ liệu chưa sẵn sàng.
+
+### 4. Các thay đổi đã thực hiện
+
+#### Phân loại tài liệu
+
+* Bổ sung tín hiệu đơn thuốc rõ nghĩa như `tên thuốc`, `chỉ định dùng thuốc`.
+* Bổ sung tín hiệu loại trừ cho giao dịch ngân hàng, nhà hàng và hóa đơn.
+* Thay tìm chuỗi con bằng so khớp cụm từ theo ranh giới từ.
+* Dựa thêm vào cấu trúc thật: dòng có hàm lượng, số thứ tự, dạng bào chế và
+  lịch sử dụng.
+* Chỉ chạy resolver khi loại tài liệu cho phép; tài liệu `unknown` không được
+  đưa sang bước đoán tên thuốc.
+
+#### Hợp nhất và lọc OCR
+
+* Dùng bằng chứng độ tin cậy của cả PaddleOCR và VietOCR cho cùng một vùng.
+* Giữ vùng chữ nếu ít nhất một mô hình có bằng chứng đủ mạnh.
+* API và các script đánh giá dùng chung một hàm lọc để tránh lệch hành vi.
+
+#### Tách dòng đơn thuốc
+
+* Không coi ngày tháng, lịch uống hoặc phần chân trang là dòng thuốc.
+* Sửa việc lấy số thứ tự dòng từ hộp bao.
+* Không trả nhãn `Bệnh kèm theo` đứng riêng như một bệnh.
+* Bỏ các tiền tố lịch uống quá ngắn có thể trùng đầu tên thuốc.
+
+#### So khớp thuốc
+
+* Hàm lượng được chuẩn hóa có đơn vị: `1 g = 1000 mg`, nhưng `1 g` khác
+  `1 mg`.
+* Tỉ lệ giữ cả đơn vị khối lượng và thể tích khi so sánh.
+* Tên chính xác chỉ được tăng điểm khi khớp theo ranh giới từ.
+* Ngưỡng ứng viên mặc định tăng từ `0.50` lên `0.65`.
+
+#### An toàn và vận hành
+
+* Giới hạn tệp tải lên là 10 MB và ảnh sau giải mã là 40 triệu điểm ảnh.
+* Kiểm tra số điểm ảnh trước khi cấp phát mảng RGB/BGR lớn.
+* `/health` trả HTTP 503 nếu PaddleOCR, VietOCR đang bật hoặc cơ sở dữ liệu
+  thuốc chưa sẵn sàng.
+
+Các tệp thuộc phạm vi nâng cấp:
+
+```text
+app/config.py
+app/main.py
+app/services/drug_resolver.py
+app/services/ocr_service.py
+app/services/prescription_resolver.py
+app/utils/image_utils.py
+app/utils/text_utils.py
+scripts/eval_ocr.py
+scripts/eval_end2end.py
+scripts/eval_extraction.py
+tests/test_ocr.py
+tests/test_resolver.py
+Dockerfile
+README.md
+```
+
+### 5. Kết quả đánh giá
+
+Bộ đánh giá gồm **40 ảnh đơn thuốc thật**, chứa tổng cộng **191 lần xuất hiện
+thuốc** và **74 nhãn bệnh**. Có hai phép đo khác nhau và không được gọi thay
+tên cho nhau.
+
+#### Toàn trình có DrugResolver
+
+Số liệu dưới đây đo theo luồng tương đương API: OCR, phân loại, tách dòng rồi
+`DrugResolver` tra cứu và xếp hạng ứng viên từ cơ sở dữ liệu thuốc. Đây là
+recall sản phẩm Top-1, **không phải recall văn bản OCR thuần túy**.
+
+| Chỉ số | Bản cũ | Sau nâng cấp | Thay đổi |
+|---|---:|---:|---:|
+| Thuốc đúng ở vị trí Top 1 | 119/191 | 131/191 | +12 |
+| Recall Top 1 | 62.3% | 68.6% | +6.3 điểm % |
+| Thuốc gợi ý thừa | 37 | 12 | giảm 25 |
+| Precision | 76.3% | 91.6% | +15.3 điểm % |
+| Nhận dạng bệnh đúng | 30/74 | 30/74 | chưa thay đổi |
+| Recall nhận dạng bệnh | 40.5% | 40.5% | chưa thay đổi |
+
+#### Trích xuất trước DrugResolver
+
+`scripts/eval_extraction.py` chạy cùng OCR, phân loại và tách dòng nhưng dừng
+trước resolver. Nó lấy trực tiếp `name_texts`, không tra tên thuốc trong CSDL.
+Kết quả đo trên cùng 40 ảnh:
+
+| Chỉ số trước resolver | Thuốc | Bệnh |
+|---|---:|---:|
+| Fuzzy recall, ngưỡng 80 | 158/191 = 82.7% | 34/74 = 45.9% |
+| Exact-normalized recall | 65/191 = 34.0% | 9/74 = 12.2% |
+| Fuzzy precision | 158/180 = 87.8% | 34/63 = 54.0% |
+| CER trung bình theo nhãn | 25.9% | 97.4% |
+
+`exact-normalized` chỉ chuẩn hóa Unicode NFC, hoa/thường và khoảng trắng; nó
+vẫn phạt sai dấu và sai ký tự. Fuzzy recall chấp nhận độ giống từ 80 nên phù
+hợp để đo khả năng lấy đúng danh tính sơ bộ, nhưng không được trình bày như độ
+chính xác văn bản. CER càng thấp càng tốt.
+
+Chạy lại phép đo trước resolver:
+
+```bash
+python scripts/eval_extraction.py
+python scripts/eval_extraction.py --verbose
+```
+
+Các file nhãn phải được con người mở ảnh và xác minh. Nếu nhãn `.txt` hoặc
+`.benh.txt` vẫn là bản nháp do hệ thống tạo, toàn bộ số liệu ở trên chỉ là kết
+quả sơ bộ, chưa phải benchmark ground truth độc lập.
+
+Hai ảnh ngoài phạm vi được kiểm tra riêng:
+
+| Ảnh | Bản cũ | Sau nâng cấp |
+|---|---|---|
+| Giao dịch ngân hàng `check.jpeg` | `unknown`, không có thuốc | `unknown`, không có thuốc |
+| Hóa đơn nhà hàng `check2.png` | nhận nhầm hộp thuốc và trả thuốc sai | `unknown`, không có thuốc |
+
+Bộ unit test hiện có **124 test và đều vượt qua**. Các test mới bao phủ hóa
+đơn ngân hàng, hóa đơn nhà hàng, ảnh hộp thuốc tối giản, đơn thuốc bị cắt,
+phiếu bán thuốc, ngày tháng không có tọa độ, nhãn bệnh đứng riêng, hợp nhất độ
+tin cậy, giới hạn điểm ảnh, readiness HTTP 503 và các tên thuốc có tiền tố dễ
+nhầm với lịch uống.
+
+### 6. Cách hiểu các chỉ số
+
+* **Recall Top 1 toàn trình**: trong toàn bộ thuốc thật trên đơn, tỉ lệ mà ứng
+  viên đầu tiên sau `DrugResolver` là đúng.
+* **Recall trước resolver**: tỉ lệ tên trích trực tiếp từ OCR/tách dòng khớp
+  nhãn, không tra cứu cơ sở dữ liệu thuốc.
+* **Exact-normalized recall**: tỉ lệ văn bản giống nhãn sau chuẩn hóa trình bày
+  tối thiểu; đây là phép đo nghiêm ngặt hơn fuzzy recall.
+* **CER**: tỉ lệ ký tự cần thêm, xóa hoặc thay; càng thấp càng tốt.
+* **Precision**: trong các thuốc hệ thống đã đề xuất, tỉ lệ đề xuất đúng.
+* **Thuốc gợi ý thừa**: thuốc không tồn tại trên đơn nhưng hệ thống vẫn trả ra.
+
+Trong bài toán y tế, giảm thuốc thừa được ưu tiên vì một thuốc sai có thể dẫn
+đến kiểm tra tương tác sai. Sau nâng cấp, precision tăng mạnh trong khi recall
+không bị đánh đổi mà cũng tăng. Dù vậy, kết quả vẫn phải qua xác nhận của người
+dùng.
+
+### 7. Hạn chế còn lại và hướng phát triển
+
+* Recall Top-1 toàn trình `68.6%` chưa đủ để bỏ bước xác nhận thủ công.
+* Trước resolver, fuzzy recall thuốc đạt `82.7%` nhưng exact-normalized chỉ đạt
+  `34.0%` và CER là `25.9%`; OCR thường lấy được danh tính gần đúng nhưng văn
+  bản còn sai hoặc thiếu thành phần.
+* Vẫn còn 12 thuốc gợi ý thừa trong 40 ảnh đánh giá.
+* Trích xuất bệnh còn yếu: fuzzy recall `45.9%`, exact-normalized `12.2%` và
+  CER `97.4%` trong phép đo trước resolver.
+* Phân loại tài liệu và tách dòng hiện vẫn dựa trên luật; ảnh có bố cục mới có
+  thể tạo trường hợp biên chưa có trong test.
+* Bộ 40 ảnh còn nhỏ, chưa đại diện đủ bệnh viện, kiểu chữ viết tay, độ nghiêng,
+  ánh sáng, ảnh mờ và camera khác nhau.
+* Chưa có huấn luyện hoặc fine-tuning trên dữ liệu đơn thuốc của dự án.
+* Cần xây dựng tập validation độc lập lớn hơn trước khi tiếp tục điều chỉnh
+  ngưỡng, tránh tối ưu quá mức trên chính 40 ảnh hiện tại.
+
+Hướng ưu tiên tiếp theo:
+
+1. Gắn nhãn thêm ảnh thật và tách riêng tập phát triển, validation và test.
+2. Phân tích 60 thuốc còn bỏ sót và 12 thuốc thừa theo từng nhóm nguyên nhân.
+3. Cải thiện tách bảng/dòng và ghép vùng chữ trước khi tăng độ phức tạp của
+   matcher.
+4. Xây dựng bộ đánh giá riêng cho bệnh, liều dùng và tần suất sử dụng.
+5. Theo dõi precision, recall, độ trễ và tỉ lệ `unknown` sau mỗi thay đổi.
+6. Chỉ cân nhắc fine-tuning khi đã có dữ liệu gắn nhãn đủ lớn và quy trình đánh
+   giá chống rò rỉ dữ liệu.
+
+### 8. Chạy và kiểm thử trên localhost
+
+Để giao diện tại `http://localhost:3000` sử dụng đúng OCR vừa nâng cấp:
+
+```bash
+docker compose up -d --build ocr
+docker compose ps ocr
+docker compose logs --tail=100 ocr
+```
+
+Sau khi `/health` báo sẵn sàng, mở giao diện:
+
+```text
+http://localhost:3000
+```
+
+Có thể kiểm tra trực tiếp service OCR từ trong container:
+
+```bash
+docker compose exec ocr python -c \
+  "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/health').read().decode())"
+```
+
+Hoặc chạy một bản tách biệt tại cổng 8001 để chỉ thử API, không thay service
+OCR mà backend đang sử dụng:
+
+```bash
+docker compose run --rm -p 8001:8000 ocr
+curl -s -F "image=@/duong-dan/anh.png" \
+  http://localhost:8001/api/v1/drug/recognize
+```
+
+Việc build và chạy container local không tạo commit và không push mã nguồn.
+
+---
+
 ## Architecture
 
 ```text
@@ -222,6 +533,10 @@ curl -s http://localhost:8000/health
 to load; the process still starts so the failure is observable rather than a
 crash loop.
 
+Readiness is strict: `/health` returns HTTP 503 with `status: "error"` while
+PaddleOCR, the drug database, or an enabled VietOCR predictor is unavailable.
+This prevents Docker from routing traffic to a silently degraded replica.
+
 `vietocr_loaded` is reported separately and matters just as much: when it is
 `false`, requests still succeed but every Vietnamese diacritic in the response
 is wrong, because the PaddleOCR fallback has no codepoint for those characters.
@@ -372,10 +687,11 @@ Everything is environment-driven; defaults are in `app/config.py`.
 | Variable | Default | Meaning |
 | -------- | ------- | ------- |
 | `MAX_FILE_SIZE_BYTES` | `10485760` | Upload limit (10 MB) |
+| `MAX_INPUT_PIXELS` | `40000000` | Reject decoded images above 40 MP before allocating RGB/BGR arrays |
 | `MAX_IMAGE_DIMENSION` | `1600` | Longest side after resize; aspect ratio preserved |
 | `OCR_LANG` | `vi` | PaddleOCR language group. Affects detection only — its recognizer cannot read Vietnamese either way |
 | `OCR_DEVICE` | `cpu` | `cpu` or e.g. `gpu:0`; applies to both models |
-| `OCR_CONFIDENCE_THRESHOLD` | `0.5` | Regions below this are dropped |
+| `OCR_CONFIDENCE_THRESHOLD` | `0.5` | Drop a region only when neither recognizer has evidence at this level |
 | `OCR_ENABLE_MKLDNN` | `true` | oneDNN CPU acceleration (~4x). Needs paddlepaddle 3.2.x |
 | `OCR_DET_MODEL` | `PP-OCRv5_mobile_det` | Detection model. `PP-OCRv5_server_det` is ~2x slower for no measured gain |
 | `OCR_REC_MODEL` | `latin_PP-OCRv5_mobile_rec` | Paddle recognition; only arbitrates bare figures and capitalization |
@@ -388,9 +704,10 @@ Everything is environment-driven; defaults are in `app/config.py`.
 | `MAX_CANDIDATES` | `3` | Candidates returned |
 | `SHORTLIST_SIZE` | `200` | Rows reranked with the expensive scorer |
 | `MAX_LINE_WINDOW` | `3` | Consecutive OCR lines joined into one candidate |
-| `WEIGHT_NAME` | `0.65` | Name weight in the final score |
-| `WEIGHT_STRENGTH` | `0.20` | Strength weight |
-| `WEIGHT_INGREDIENT` | `0.15` | Ingredient weight |
+| `WEIGHT_NAME` | `0.75` | Name weight in the final score |
+| `WEIGHT_STRENGTH` | `0.15` | Unit-aware strength weight |
+| `WEIGHT_INGREDIENT` | `0.10` | Ingredient weight |
+| `MIN_CANDIDATE_SCORE` | `0.65` | Candidates below this are refused instead of shown as a guessed medicine |
 | `DRUG_HIGH_CONFIDENCE` | `0.90` | `high_confidence` threshold |
 | `DRUG_MEDIUM_CONFIDENCE` | `0.75` | `medium_confidence` threshold |
 | `EAGER_LOAD_OCR` | `true` | Load the model at startup instead of first request |
@@ -674,7 +991,9 @@ Notes:
 
 * Only `jpg`, `jpeg`, `png` and `webp` are accepted, decided by **decoding the
   bytes**, not by the client's filename or `Content-Type`.
-* Uploads are capped at 10 MB, and Pillow's decompression-bomb guard is set.
+* Uploads are capped at 10 MB and 40 million decoded pixels. The pixel limit is
+  enforced before RGB conversion, rather than relying on Pillow's warning-only
+  decompression-bomb threshold.
 * Uploaded bytes are never executed, never written to disk, and never logged.
 * Tracebacks are logged server-side and never returned to the client.
 * The container runs as a non-root user.

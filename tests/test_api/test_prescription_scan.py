@@ -7,6 +7,7 @@ src.api.routes (nơi nó được import và dùng) cho mọi ca gọi ra ngoài
 import httpx
 import pytest
 
+from src.api.routes import _scanned_diseases_from_payload, _scanned_drug_from_medication
 from tests.test_api.test_routes import _auth_headers, _register
 
 _JPEG_MAGIC = b"\xff\xd8\xff"
@@ -42,6 +43,16 @@ class _FakeAsyncClient:
         if self._raise_error:
             raise httpx.ConnectError("boom", request=None)
         return self._response
+
+
+class _EmptyDiseaseDb:
+    """Enough SQLAlchemy shape for disease payload mapping without real data."""
+
+    def query(self, *_args):
+        return self
+
+    def all(self):
+        return []
 
 
 def _mock_ocr(monkeypatch, *, response: _FakeResponse | None = None, raise_error: bool = False):
@@ -164,3 +175,99 @@ async def test_scan_prescription_maps_ocr_response(client, monkeypatch):
     assert row3["suggested_name"] is None
     assert row3["known"] is False
     assert row3["score"] == 0.0
+
+
+def test_split_diagnosis_does_not_create_a_duplicate_summary_card():
+    conditions = [
+        "I20 - Cơn đau thất ngực (BC)",
+        "J20 - Viêm phế quản cấp",
+        "K76 - Bệnh gan khác",
+        "E14 - Các thể loại đái tháo đường không xác định",
+        "E78 - Rối loạn chuyển hoá lipoprotein và tình trạng tăng lipid máu khác",
+        "I10 - Bệnh Tang huyết áp vơ cần (nguyên phát)",
+    ]
+    payload = {
+        "diagnosis": (
+            "120 - Cơn đau thất ngực (BC) J20 - Viêm phế quản cấp/"
+            "K76 - Bệnh gan khác/E14 - Các thể loại đái tháo đường không xác định/ "
+            "E78 - Rối loạn chuyển hoá lipoprotein và tình trạng tăng lipid máu khác/"
+            "110 - Bệnh Tang huyết áp vơ cần (nguyên phát)"
+        ),
+        "underlying_conditions": conditions,
+        "icd_codes": ["I20", "J20", "K76", "E14", "E78", "I10"],
+    }
+
+    diseases = _scanned_diseases_from_payload(payload, _EmptyDiseaseDb())
+
+    assert [disease.ocr_text for disease in diseases] == conditions
+    assert [disease.icd_code for disease in diseases] == payload["icd_codes"]
+
+
+def test_summary_diagnosis_whitespace_noise_does_not_create_duplicate_card():
+    conditions = [
+        "Tang sân tuyến tiến hevi N40",
+        "Nhiễm trùng hó hấp trên vị trì không xÁc đình J06",
+        "HỘI CHỨNG THẬN HƯ",
+    ]
+    payload = {
+        "diagnosis": (
+            "N40 Tang sân tuyến tiến heviN40, Nhiễm trùng hó hấp trên "
+            "vị trì không xÁc đình J06) HỘI CHỨNG THẬN HƯ"
+        ),
+        "underlying_conditions": conditions,
+        "icd_codes": ["N40", "J06"],
+    }
+
+    diseases = _scanned_diseases_from_payload(payload, _EmptyDiseaseDb())
+
+    assert [disease.ocr_text for disease in diseases] == conditions
+
+
+def test_low_score_drug_candidate_is_not_presented_as_a_suggestion():
+    scanned = _scanned_drug_from_medication({
+        "row_number": 5,
+        "ocr_drug_name": "Diapan 5mg",
+        "candidates": [
+            {"drug_name": "pms-Dexipharm 5mg", "score": 0.7206},
+            {"drug_name": "Diapan", "score": 0.61},
+        ],
+    })
+
+    assert scanned.suggested_name is None
+    assert scanned.alternatives == []
+    assert scanned.known is False
+    assert scanned.score == 0.0
+
+
+def test_distinct_primary_diagnosis_is_kept_with_underlying_conditions():
+    payload = {
+        "diagnosis": "Viêm phế quản cấp",
+        "underlying_conditions": ["Tăng huyết áp", "Đái tháo đường"],
+        "icd_codes": [],
+    }
+
+    diseases = _scanned_diseases_from_payload(payload, _EmptyDiseaseDb())
+
+    assert [disease.ocr_text for disease in diseases] == [
+        "Tăng huyết áp",
+        "Đái tháo đường",
+        "Viêm phế quản cấp",
+    ]
+
+
+def test_icd_is_read_from_its_condition_instead_of_shifted_by_list_position():
+    payload = {
+        "diagnosis": "",
+        "underlying_conditions": [
+            "E13 - Bệnh đái tháo đường sau ghép",
+            "I15 - Tăng huyết áp thứ phát",
+            "Một bệnh không in mã",
+        ],
+        # Deliberately incomplete/reversed: this must not corrupt the explicit
+        # code already printed in each condition.
+        "icd_codes": ["I15", "E13"],
+    }
+
+    diseases = _scanned_diseases_from_payload(payload, _EmptyDiseaseDb())
+
+    assert [disease.icd_code for disease in diseases] == ["E13", "I15", None]

@@ -10,8 +10,10 @@ from __future__ import annotations
 import logging
 import time
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from typing import Any
 
+import cv2
 from fastapi import FastAPI, File, Request, UploadFile
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
@@ -24,15 +26,27 @@ from app.schemas import (
     OCRResponse,
 )
 from app.services.drug_resolver import DrugResolver
-from app.services.ocr_service import OCRService, OCRUnavailableError
+from app.services.ocr_service import (
+    OCRService,
+    OCRUnavailableError,
+    filter_ocr_results,
+    recognition_agreement,
+)
 from app.services.prescription_resolver import (
     classify_document,
     extract_medication_rows,
     extract_package_name,
+    extract_package_products,
     extract_prescription_conditions,
 )
-from app.utils.image_utils import InvalidImageError, PreparedImage, prepare_image
-from app.utils.text_utils import normalize_text
+from app.utils.image_utils import (
+    InvalidImageError,
+    PreparedImage,
+    enhance_top_band,
+    prepare_image,
+    rectify_document,
+)
+from app.utils.text_utils import extract_strengths, matching_key, normalize_text
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -139,11 +153,76 @@ def _run_ocr(data: bytes) -> tuple[PreparedImage, list[dict[str, Any]]]:
         settings.max_image_dimension,
         settings.allowed_image_formats,
         settings.ocr_min_dimension,
+        settings.max_input_pixels,
     )
-    results = ocr_service.recognize(prepared.array)
-    return prepared, [
-        item for item in results if item["confidence"] >= settings.ocr_confidence_threshold
-    ]
+    results = filter_ocr_results(
+        ocr_service.recognize(prepared.array), settings.ocr_confidence_threshold
+    )
+    # A photographed sheet can be a strongly rotated trapezoid inside a much
+    # larger phone image. Axis-aligned OCR boxes then overlap vertically and a
+    # fixed page-x gate loses later row numbers. Rectify only a confidently
+    # detected bright document, OCR it as a second pass, and accept it only when
+    # the prescription structure contains more credible medication rows.
+    if classify_document(results) == "prescription":
+        rectified = rectify_document(prepared.array)
+        if rectified is not None:
+            longest = max(rectified.shape[:2])
+            if longest < settings.ocr_min_dimension:
+                scale = settings.ocr_min_dimension / longest
+                rectified = cv2.resize(
+                    rectified,
+                    (
+                        max(1, round(rectified.shape[1] * scale)),
+                        max(1, round(rectified.shape[0] * scale)),
+                    ),
+                    interpolation=cv2.INTER_LANCZOS4,
+                )
+            rectified_results = filter_ocr_results(
+                ocr_service.recognize(rectified), settings.ocr_confidence_threshold
+            )
+
+            def extraction_quality(entries: list[dict[str, Any]]) -> tuple[int, int]:
+                if classify_document(entries) != "prescription":
+                    return (0, 0)
+                rows = extract_medication_rows(entries)
+                credible = sum(
+                    bool(row.get("name_texts"))
+                    and (
+                        bool(extract_strengths(" ".join(row.get("resolver_texts") or [])))
+                        or "(" in " ".join(row.get("resolver_texts") or [])
+                    )
+                    for row in rows
+                )
+                return credible, len(rows)
+
+            if extraction_quality(rectified_results) > extraction_quality(results):
+                results = rectified_results
+                prepared = replace(
+                    prepared,
+                    array=rectified,
+                    blur_score=round(float(cv2.Laplacian(cv2.cvtColor(rectified, cv2.COLOR_BGR2GRAY), cv2.CV_64F).var()), 2),
+                    width=rectified.shape[1],
+                    height=rectified.shape[0],
+                )
+    # A diagnosis printed flush against a crop's top edge can be much fainter
+    # than the bold drug rows (eval don14). Retry only that narrow band when a
+    # prescription was recognized but no condition survived the normal pass.
+    # This keeps normal-request latency unchanged and never invents a disease:
+    # the fallback is accepted only if it reads an explicit diagnosis label.
+    if classify_document(results) == "prescription":
+        conditions = extract_prescription_conditions(results)
+        has_condition = bool(
+            conditions.get("diagnosis") or conditions.get("underlying_conditions")
+        )
+        if not has_condition:
+            fallback = filter_ocr_results(
+                ocr_service.recognize(enhance_top_band(prepared.array)),
+                settings.ocr_confidence_threshold,
+            )
+            fallback_conditions = extract_prescription_conditions(fallback)
+            if fallback_conditions.get("diagnosis") or fallback_conditions.get("underlying_conditions"):
+                results = fallback
+    return prepared, results
 
 
 async def _ocr_or_error(
@@ -218,6 +297,26 @@ def _raw_ocr_text(results: list[dict[str, Any]]) -> str:
     return "\n".join(str(item["text"]) for item in results)
 
 
+def _unreadable_reason(results: list[dict[str, Any]]) -> str | None:
+    """Why this page cannot be parsed, or ``None`` if it can.
+
+    Three refusals, in the order they can be established. Returning nothing at
+    all is the safe answer for a drug-interaction tool: a wrong medicine the
+    user cannot tell is wrong is more dangerous than an honest "unreadable".
+    """
+    if not results:
+        return "no_text_detected"
+    agreement = recognition_agreement(results)
+    floor = settings.ocr_min_agreement
+    if floor > 0 and agreement is not None and agreement < floor:
+        # Both recognizers read the page, and they disagree about what it says.
+        # Handwriting and photos too degraded to read both land here.
+        return "illegible_or_handwritten"
+    if classify_document(results) == "unknown":
+        return "not_a_medical_document"
+    return None
+
+
 def _resolve_document(results: list[dict[str, Any]]) -> tuple[str, dict[str, Any], list[dict[str, Any]]]:
     """Resolve a package as one drug or a prescription as independent rows."""
     document_type = classify_document(results)
@@ -271,6 +370,34 @@ def _resolve_document(results: list[dict[str, Any]]) -> tuple[str, dict[str, Any
             "icd_codes": conditions["icd_codes"],
         }, medications
 
+    if document_type == "unknown":
+        # Ảnh không phải giấy tờ thuốc: không đề xuất gì, để tầng trên báo cho
+        # người dùng chụp lại. Cố khớp bừa ở đây nguy hiểm hơn là trả về rỗng.
+        return document_type, {
+            "candidates": [],
+            "status": "uncertain",
+            "strengths": [],
+            "possible_ingredients": [],
+        }, []
+
+    # One photo can show several blisters. Resolve each printed object on its
+    # own; joining them produces a single confident-looking answer that hides
+    # every other medicine in the frame.
+    products = extract_package_products(results)
+    if len(products) >= 2:
+        multi = _resolve_package_products(products, results)
+        if len(multi) >= 2:
+            information = drug_resolver.resolve([item["text"] for item in results])
+            scores = [m["candidates"][0]["score"] for m in multi if m["candidates"]]
+            return document_type, {
+                "candidates": [],
+                # As with a prescription, the photo is only as certain as its
+                # least certain product.
+                "status": drug_resolver.status_for(min(scores)) if scores else "uncertain",
+                "strengths": information["strengths"],
+                "possible_ingredients": information["possible_ingredients"],
+            }, multi
+
     package_name_items = extract_package_name(results)
     package_name_texts = [item["text"] for item in package_name_items]
     name_resolution = drug_resolver.resolve(package_name_texts or [item["text"] for item in results])
@@ -299,6 +426,75 @@ def _resolve_document(results: list[dict[str, Any]]) -> tuple[str, dict[str, Any
     return document_type, resolution, [medication]
 
 
+def _resolve_package_products(
+    products: list[dict[str, Any]], results: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """One medication per distinct product shown in a packaging photo.
+
+    A cluster becomes a product only with independent evidence that it is a
+    medicine: a printed strength on the object, or a catalogue match. Without
+    that gate a marketing headline or a manufacturer stamp becomes a "drug".
+    The OCR text is still reported for a product that carries a strength but
+    matches nothing, so a medicine missing from the catalogue stays visible
+    instead of disappearing.
+    """
+    medications: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for product in products:
+        texts = product["texts"]
+        if not texts:
+            continue
+        resolution = drug_resolver.resolve(texts)
+        candidates = resolution["candidates"]
+        top = candidates[0] if candidates else None
+        # Evidence gate. A manufacturer logo also finds a catalogue neighbour:
+        # ``GLOMED`` resolves to ``Glomelid`` (Nalidixic acid) at 0.680, while
+        # every genuine product measured on real packaging scored 0.807-1.000.
+        # 0.75 sits in that gap and is already this project's suggestion
+        # threshold. A cluster that matches nothing is still admitted when the
+        # object carries a printed strength, so a medicine missing from the
+        # catalogue stays visible instead of vanishing.
+        if top is not None:
+            if float(top.get("score") or 0.0) < settings.drug_medium_confidence:
+                continue
+        elif not product["has_strength"]:
+            continue
+        # One product can be printed twice on the same sheet -- a leaflet shows
+        # its brand in the header and the ingredient on the pack shot. Those
+        # resolve to different rows of the catalogue but the same active
+        # ingredient, so identity is the ingredient when there is one.
+        identity = matching_key(" ".join(texts))
+        if top is not None:
+            identity = matching_key(top.get("active_ingredient") or "") or top["drug_id"]
+        if identity in seen:
+            continue
+        seen.add(identity)
+        name_items = product["name_items"]
+        confidences = [i["confidence"] for i in name_items if i.get("confidence") is not None]
+        joined = " ".join(texts)
+        medications.append({
+            "row_number": len(medications) + 1,
+            "ocr_text": joined,
+            "ocr_drug_name": joined,
+            "ocr_name": joined,
+            "ocr_drug_name_refined": joined,
+            "ocr_drug_confidence": round(sum(confidences) / len(confidences), 4) if confidences else None,
+            "detected_information": {
+                "strengths": resolution["strengths"],
+                "possible_ingredients": resolution["possible_ingredients"],
+            },
+            "diagnosis": "",
+            "underlying_conditions": [],
+            "icd_codes": [],
+            "candidates": candidates,
+            "database_matches": (
+                candidates if candidates and candidates[0].get("score", 0) >= 0.75 else []
+            ),
+            "requires_confirmation": True,
+        })
+    return medications
+
+
 def _build_recognition_response(
     prepared: PreparedImage,
     results: list[dict[str, Any]],
@@ -307,13 +503,21 @@ def _build_recognition_response(
 ) -> dict[str, Any]:
     """Build one recognition payload; shared by single and batch endpoints."""
     raw_text = _raw_ocr_text(results)
-    document_type, resolution, medications = _resolve_document(results)
+    reason = _unreadable_reason(results)
+    if reason is not None:
+        document_type, resolution, medications = "unknown", {
+            "candidates": [], "status": "uncertain",
+            "strengths": [], "possible_ingredients": [],
+        }, []
+    else:
+        document_type, resolution, medications = _resolve_document(results)
     finished = time.perf_counter()
     return {
         "success": True,
         "raw_text": raw_text,
         "normalized_text": normalize_text(raw_text),
         "document_type": document_type,
+        "unreadable_reason": reason,
         "ocr_results": results,
         "detected_information": {
             "strengths": resolution["strengths"],
@@ -351,9 +555,11 @@ def _json_error_payload(response: JSONResponse) -> dict[str, Any]:
 
 
 @app.get("/health", response_model=HealthResponse, tags=["system"])
-async def health() -> dict[str, Any]:
-    return {
-        "status": "ok",
+async def health() -> Any:
+    vietocr_ready = not ocr_service.vietocr_enabled or ocr_service.vietocr_loaded
+    ready = ocr_service.loaded and drug_resolver.loaded and vietocr_ready
+    payload = {
+        "status": "ok" if ready else "error",
         "ocr_model_loaded": ocr_service.loaded,
         "drug_database_loaded": drug_resolver.loaded,
         "drug_count": len(drug_resolver.drugs),
@@ -364,6 +570,9 @@ async def health() -> dict[str, Any]:
         "vietocr_loaded": ocr_service.vietocr_loaded,
         "vietocr_error": ocr_service.vietocr_error,
     }
+    if not ready:
+        return JSONResponse(status_code=503, content=payload)
+    return payload
 
 
 @app.post(
