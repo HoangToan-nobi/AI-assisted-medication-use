@@ -467,7 +467,7 @@ async def admin_overview(
 
     # interactions/food_interactions/disease_interactions nam tren CockroachDB (facts
     # DB) - khac engine voi cac bang tren, khong the gop chung 1 statement/subquery
-    # nhu truoc (xem PLAN_migration_cockroach.md).
+    # nhu truoc (xem docs/database-split.md).
     facts_statement = select(
         select(func.count(Interaction.id)).scalar_subquery().label("drug_interactions"),
         select(func.count(FoodInteraction.id)).scalar_subquery().label("food_interactions"),

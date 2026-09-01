@@ -16,7 +16,7 @@ def test_lookup_disease_interactions_filters_by_disease_ids_and_keeps_fallback(m
     Base.metadata.create_all(bind=engine)
     # DiseaseInteraction sống trên "facts DB" riêng (CockroachDB) kể từ khi tách DB -
     # trỏ SessionLocalFacts về cùng engine test để hàm đọc đúng dữ liệu vừa seed,
-    # thay vì gõ vào facts DB thật (xem PLAN_migration_cockroach.md).
+    # thay vì gõ vào facts DB thật (xem docs/database-split.md).
     monkeypatch.setattr(
         food_disease_lookup, "SessionLocalFacts", sessionmaker(autocommit=False, autoflush=False, bind=engine)
     )

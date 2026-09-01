@@ -173,7 +173,7 @@ def _input_product_names(case: dict) -> set[str]:
 def _edge_source(edge: dict) -> str:
     """Nguồn để chấm cho 1 cạnh (product_explanations/food_interactions/
     disease_interactions item) - dùng mo_ta_dich/xu_tri_dich NGAY TRÊN edge, không
-    dùng case["nguon"] tĩnh trong dataset. Lý do (01/09, xem eval/results/report.md):
+    dùng case["nguon"] tĩnh trong dataset. Lý do (01/09, xem docs/evaluation.md):
     case["nguon"] chỉ chụp lại đúng 1 dòng DDInter tại lúc build dataset, ứng với 1
     hoạt chất "đại diện" - nhưng khi sản phẩm có NHIỀU hoạt chất, giai_thich thật của
     app gộp nội dung từ NHIỀU dòng DDInter (xem nguon_trich_dan "Tổng hợp từ N hoạt

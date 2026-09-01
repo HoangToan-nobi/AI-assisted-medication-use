@@ -8,7 +8,7 @@ giống hệt cách product_explanations/overview được tính ở rollup_expl
 
 FoodInteraction/DiseaseInteraction nằm trên CockroachDB (facts DB), Medication nằm
 trên Supabase (DB chính) - 2 DB vật lý khác nhau nên không JOIN được trong 1 câu SQL
-nữa (xem PLAN_migration_cockroach.md). Tra riêng từng DB rồi ghép tên bằng dict
+nữa (xem docs/database-split.md). Tra riêng từng DB rồi ghép tên bằng dict
 trong Python - giữ nguyên ngữ nghĩa INNER JOIN cũ (bỏ dòng nào không khớp được
 medication_id, phòng dữ liệu facts tham chiếu tới medication_id đã xoá/đổi)."""
 

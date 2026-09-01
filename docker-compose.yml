@@ -36,8 +36,11 @@ services:
       - "8000"
     volumes:
       # Dùng chung đúng 1 file CSV với scripts/import_products.py để candidates
-      # OCR trả về luôn là products.ten_thuoc hợp lệ - xem data/raw/README hoặc
-      # ocr-service/INTEGRATION.md. File này gitignore, phải tự đặt vào trước.
+      # OCR trả về luôn là products.ten_thuoc hợp lệ - xem mục "Updating drugs.csv"
+      # trong ocr-service/README.md. File này gitignore (data/raw/*.csv), phải xin
+      # từ team và đặt vào trước: THIẾU file này thì ocr /health trả error, compose
+      # treo ở "depends_on: service_healthy" và backend không bao giờ khởi động.
+      # Chạy không cần OCR: docker compose up --no-deps backend frontend
       - ./data/raw/thuoc_final_project.csv:/srv/app/data/thuoc_final_project.csv:ro
     restart: unless-stopped
     # Không khai báo healthcheck ở đây - dùng lại đúng HEALTHCHECK đã có sẵn trong

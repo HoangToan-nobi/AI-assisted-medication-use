@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """ETL: nap 61 hoat chat con thieu trong bang medications (Supabase) so voi
-merged_ddinter.db - da phat hien tu PLAN_migration_cockroach.md (viec doc lap,
+merged_ddinter.db - da phat hien tu docs/database-split.md (viec doc lap,
 chua lam) va xac nhan lai cu the khi doi chieu file thuoc_final_project.csv
 (2026-08-22): 28/61 hoat chat nay bi chinh file san pham tham chieu toi nhung
 khong khop duoc medication_id vi chua co trong medications.
 
 CHI dung medications - KHONG dong toi interactions/food_interactions/
 disease_interactions (da nam tren CockroachDB tu sau khi tach DB, xem
-PLAN_migration_cockroach.md - script nay dung SessionLocal/engine chinh, dung
+docs/database-split.md - script nay dung SessionLocal/engine chinh, dung
 cho medications, KHONG dung cho 3 bang facts do).
 
 Idempotent (upsert theo Drug_ID = medications.id) - chay lai an toan.

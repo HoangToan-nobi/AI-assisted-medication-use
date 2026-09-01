@@ -25,7 +25,7 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # DB "facts" (interactions/food_interactions/disease_interactions) - xem
-# PLAN_migration_cockroach.md. Khi database_url_facts để trống (dev/test), dùng lại
+# docs/database-split.md. Khi database_url_facts để trống (dev/test), dùng lại
 # engine chính thay vì mở thêm 1 connection pool trỏ tới cùng 1 DB.
 FACTS_TABLE_NAMES = {"interactions", "food_interactions", "disease_interactions"}
 if settings.database_url_facts:
@@ -111,7 +111,7 @@ def init_db() -> None:
 
     interactions/food_interactions/disease_interactions tạo trên engine_facts
     (CockroachDB) - các bảng còn lại tạo trên engine chính (Supabase). Xem
-    PLAN_migration_cockroach.md."""
+    docs/database-split.md."""
     main_tables = [t for name, t in Base.metadata.tables.items() if name not in FACTS_TABLE_NAMES]
     facts_tables = [Base.metadata.tables[name] for name in FACTS_TABLE_NAMES]
     Base.metadata.create_all(bind=engine, tables=main_tables)
@@ -186,7 +186,7 @@ def get_db_facts() -> Session:
     """Dependency cho FastAPI route: `db_facts: Session = Depends(get_db_facts)`.
 
     Trỏ tới CockroachDB (interactions/food_interactions/disease_interactions) -
-    xem PLAN_migration_cockroach.md."""
+    xem docs/database-split.md."""
     db = SessionLocalFacts()
     try:
         yield db

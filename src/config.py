@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     model_name: str = "deepseek-chat"
     # Giảm từ 0.7 -> 0.3 (01/09, sau khi metric consistency + subagent-judge cho
     # thấy 0.7 khiến LLM thỉnh thoảng "sáng tạo" thêm câu khuyên xử trí/liều lượng
-    # mà 2/3 lần sinh lại không có - eval/results/final_report.md mục Consistency).
+    # mà 2/3 lần sinh lại không có - docs/evaluation.md mục Consistency).
     # Vẫn > 0 để giữ chút đa dạng cách diễn đạt (tránh lặp y hệt 1 câu công thức,
     # xem docstring SAFETY_RULES/style prompt trong tone_prompt.py/rollup_explain.py)
     # nhưng giảm mạnh biên độ "phăng" ra ngoài nguồn.
@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     # DB "facts" (interactions/food_interactions/disease_interactions) - CockroachDB
     # tách riêng khỏi DB chính vì đây là 3 bảng chiếm >95% dung lượng và Supabase free
     # tier chỉ có 0.5GB. Rỗng -> fallback dùng database_url (dev/test không bắt buộc
-    # phải có CockroachDB). Xem PLAN_migration_cockroach.md.
+    # phải có CockroachDB). Xem docs/database-split.md.
     database_url_facts: str = ""
 
     # Auth (token HMAC tự ký - xem src/services/auth.py; đổi secret_key khi deploy that)

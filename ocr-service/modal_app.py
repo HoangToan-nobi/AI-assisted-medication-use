@@ -1,7 +1,7 @@
 """Deploy ocr-service len Modal (serverless, scale-to-zero, free trong han muc
-$30/thang credit cua goi Starter) - xem C:\\Users\\Quan\\Documents\\AIthucchien\\
-Projects\\HUONG_DAN_DEPLOY_THU_CONG.md cho boi canh quyet dinh (vi sao chon Modal
-thay vi HF Spaces/Render private service).
+$30/thang credit cua goi Starter). Chon Modal thay vi HF Spaces/Render private
+service vi image ~4 GB + ~2 GB RAM luc chay vuot goi free cua hai ben do, va
+scale-to-zero khien dich vu chi ton credit khi that su co anh gui len.
 
 Tai su dung NGUYEN Dockerfile hien co qua Image.from_dockerfile - khong doi logic
 OCR/model, chi them 1 lop entrypoint de Modal chay duoc dung service da co.
