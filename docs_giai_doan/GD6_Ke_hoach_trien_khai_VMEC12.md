@@ -1,6 +1,15 @@
 # GIAI ĐOẠN 6: KẾ HOẠCH TRIỂN KHAI THEO GIAI ĐOẠN
 ## Đề tài VMEC-12 — MedGuard AI
 
+
+> **Ghi chú cập nhật 01/09/2026:** đây là tài liệu giai đoạn, giữ nguyên để đối chiếu
+> quá trình. Vị trí file deliverable đã đổi theo yêu cầu BTC: sơ đồ kiến trúc →
+> [`../docs/architecture.md`](../docs/architecture.md), nhật ký tuần →
+> [`../docs/journal.md`](../docs/journal.md), worklog → [`../docs/worklog.md`](../docs/worklog.md),
+> báo cáo đánh giá → [`../docs/evaluation.md`](../docs/evaluation.md). Dữ liệu mô phỏng
+> (`data/seed/`) đã được thay hoàn toàn bằng DDInter 2.0 thật, và phần đánh giá LLM dùng
+> LLM-as-judge + soát tay thay cho RAGAS như dự kiến ban đầu.
+
 > Tài liệu này nối tiếp GD1–GD5 (đã có trên nhánh `origin/feature/medguard-agent-sprint1`) và quyết định dùng dữ liệu thật **DDInter 2.0** (1503 thuốc, 15140 cặp tương tác) thay cho seed mô phỏng — chốt trong phiên làm việc trước. Mỗi giai đoạn phụ thuộc giai đoạn trước, đặc biệt Giai đoạn 1→2→3 phải theo đúng thứ tự vì code agent/API phụ thuộc trực tiếp vào schema dữ liệu.
 
 ---

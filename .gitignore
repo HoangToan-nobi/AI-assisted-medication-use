@@ -50,6 +50,9 @@ htmlcov/
 .coverage
 coverage.xml
 
+# File khoa tam cua MS Office khi mo pptx/docx
+~$*
+
 # Docker
 docker-compose.override.yml
 
@@ -80,10 +83,11 @@ eval/results/runs/
 .cursor/
 *.zip
 
-# Eval — chỉ track báo cáo chính thức (final_report.md), 2 bản judge_summary và
-# số liệu judge của đợt heldout/claude_full. Phiếu chấm tay, biên bản hiệu chỉnh
-# giữa 2 người chấm và bản nháp cũ giữ trên máy, không đưa vào git.
-eval/results/report.md
+# Eval — chỉ track báo cáo chính thức (results/report.md, đúng đường dẫn BTC yêu
+# cầu), 2 bản judge_summary và số liệu judge của đợt heldout/claude_full. Phiếu
+# chấm tay, biên bản hiệu chỉnh giữa 2 người chấm và bản nháp cũ (31/08, chấm bằng
+# DeepSeek-reasoner) giữ trên máy, không đưa vào git.
+eval/results/_draft_report_*.md
 eval/results/manual_test_cases.md
 eval/results/judge_summary.md
 eval/results/judge_completeness.json

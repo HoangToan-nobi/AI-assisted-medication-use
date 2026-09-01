@@ -1,9 +1,12 @@
 # Báo cáo đánh giá chất lượng đầu ra LLM — MediCheck (VMEC-12)
 
-> Cập nhật 01/09/2026. Đối tượng đánh giá: **đoạn giải thích tương tác thuốc do LLM sinh
-> ra** (luồng `/products/check`) — không đánh giá OCR, xếp hạng mức độ, chuẩn hoá tên hay
-> giao diện.
+> Deliverable #10 · cập nhật 01/09/2026. Đối tượng đánh giá: **đoạn giải thích tương tác
+> thuốc do LLM sinh ra** (luồng `/products/check`) — không đánh giá OCR, xếp hạng mức độ,
+> chuẩn hoá tên hay giao diện. Đánh giá OCR nằm trong [`../ocr-service/README.md`](../ocr-service/README.md)
+> và slide 12 của [`pitch-deck.pdf`](pitch-deck.pdf).
 >
+> Bộ công cụ chấm, dataset và số liệu judge gốc: [`../eval/`](../eval/) —
+> cách chạy lại ở [`../eval/harness/README.md`](../eval/harness/README.md).
 > Đây là báo cáo chính thức, thay cho bản nháp 31/08 (chấm bằng DeepSeek-reasoner) —
 > bản đó giữ ngoài git, không còn trong repo.
 
@@ -218,6 +221,10 @@ Chấm điểm: 4 rubric trong `eval/harness/rubrics/`, chạy qua các phiên C
 (mỗi lô ~14 case), gộp kết quả bằng `_aggregate()` của `eval/harness/judge.py`.
 
 ## P.5 File dữ liệu
+
+Các đường dẫn dưới đây tính từ gốc repo. Thư mục `eval/results/runs/` và các phiếu chấm
+tay bị gitignore (dung lượng lớn, chứa dữ liệu chấm thô) — giữ trên máy nhóm, số liệu tổng
+hợp đã nằm trong `eval/results/judge_*.json` và `scorecard_auto.json` đang track trong git.
 
 | Nội dung | Đường dẫn |
 |---|---|

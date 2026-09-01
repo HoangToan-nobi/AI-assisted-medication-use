@@ -1,8 +1,8 @@
 # Worklog — Team VMEC-12 (MediCheck)
 
 > Nhật ký công việc theo ngày, dựng từ lịch sử commit thật của repo
-> (`git log --all --no-merges`), đã gộp danh tính trùng qua [`.mailmap`](.mailmap).
-> Giai đoạn: **2026-07-28 → 2026-08-28** · **135 commit** trên **23 ngày làm việc**.
+> (`git log --all --no-merges`), đã gộp danh tính trùng qua [`.mailmap`](../.mailmap).
+> Giai đoạn: **2026-07-28 → 2026-09-01** · **143 commit** trên **24 ngày làm việc**.
 
 Phạm vi lấy là **mọi nhánh**, không riêng nhánh phát triển chính — 8 commit vẫn nằm
 trên nhánh riêng chưa merge (cột Status ghi `nhánh riêng`), chủ yếu là OCR service và
@@ -14,13 +14,13 @@ trùng tiêu đề trong cùng một ngày thì vẫn giữ đủ cả hai.
 Cột `Time` để trống có chủ đích: nhóm không bấm giờ theo từng task trong lúc làm, nên
 điền số giờ lúc này sẽ là số bịa. Khối lượng thực tế phản ánh qua số commit mỗi ngày.
 
-Nhật ký tuần (mục tiêu, khó khăn, bài học): [JOURNAL.md](JOURNAL.md).
+Nhật ký tuần (mục tiêu, khó khăn, bài học): [journal.md](journal.md).
 
 ## Tổng hợp theo thành viên
 
 | Thành viên | Vai trò | Commit | Ngày có commit | Còn trên nhánh riêng |
 |---|---|---:|---:|---:|
-| Đàm Lê Minh Quân | Backend, AI agent, data | 81 | 18 | — |
+| Đàm Lê Minh Quân | Backend, AI agent, data | 89 | 19 | — |
 | Nguyễn Thị Tuyết Mai | Frontend, design, data | 28 | 9 | 1 |
 | Lê Thị Linh | Frontend, design, data | 19 | 10 | 1 |
 | Hoàng Sỹ Toàn | PM, OCR, data | 7 | 4 | 6 |
@@ -366,5 +366,23 @@ Nhật ký tuần (mục tiêu, khó khăn, bài học): [JOURNAL.md](JOURNAL.md
 | Hoàng Sỹ Toàn | Delete ocr-service/INTEGRATION.md | ✅ Done · nhánh riêng | `1ae54ee` | — |
 
 **Tổng kết ngày:** 2 commit (Toàn); tập trung vào OCR service, cấu hình/hạ tầng, backend/agent.
+
+---
+
+### 2026-09-01
+
+| Member | Task | Status | Output | Time |
+|--------|------|--------|--------|------|
+| Đàm Lê Minh Quân | fix(agent): siết guardrail và chặn rò thông tin xử trí sau đợt đánh giá LLM | ✅ Done | `3372198` | — |
+| Đàm Lê Minh Quân | docs(deliverables): bổ sung Live URL, sơ đồ kiến trúc và worklog theo yêu cầu BTC | ✅ Done | `1af2a6d` | — |
+| Đàm Lê Minh Quân | docs(architecture): đồng bộ tài liệu kiến trúc với hệ thống production | ✅ Done | `5970e1b` | — |
+| Đàm Lê Minh Quân | docs(eval): đưa harness, dataset và kết quả đánh giá vào repo | ✅ Done | `1e5611d` | — |
+| Đàm Lê Minh Quân | chore(frontend): xóa 3 file ảnh rác bị commit nhầm | ✅ Done | `2eb720a` | — |
+| Đàm Lê Minh Quân | docs(eval): rút gọn eval/results còn báo cáo chính thức và số liệu gốc | ✅ Done | `d32f489` | — |
+| Đàm Lê Minh Quân | docs(eval): gỡ 2 file theo dõi tiến độ khỏi git | ✅ Done | `0113f93` | — |
+| Đàm Lê Minh Quân | docs(eval): sửa link cuối trỏ vào STATUS.md đã gỡ | ✅ Done | `6697405` | — |
+
+**Tổng kết ngày:** 8 commit (Quân); chốt đợt đánh giá LLM (135 case tối ưu + 40 case
+held-out), vá guardrail theo lỗi tìm được, và đưa 10 deliverable về đúng vị trí BTC yêu cầu.
 
 ---

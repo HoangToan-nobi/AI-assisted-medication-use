@@ -19,8 +19,9 @@
 
 ## Sản phẩm trong video
 
-Bản chạy thật, không phải mockup — dùng CSDL DDInter 2.0 đầy đủ (1.503 hoạt chất /
-15.140 cặp tương tác) và DeepSeek sinh giải thích tiếng Việt.
+Bản chạy thật, không phải mockup — dùng CSDL DDInter 2.0 đầy đủ (160.227 cặp tương tác
+thuốc–thuốc trên 1.939 hoạt chất, 7.672 cảnh báo thuốc–bệnh nền, 803 thuốc–thực phẩm) và
+DeepSeek sinh giải thích tiếng Việt.
 
 Tự trải nghiệm cùng luồng đó tại **https://ai20k-c3-team005-medicheck.vercel.app**
 (trang chủ có ô tra cứu khách, không cần đăng ký).

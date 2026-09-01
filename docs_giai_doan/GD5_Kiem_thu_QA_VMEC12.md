@@ -1,6 +1,15 @@
 # GIAI ĐOẠN 5: KIỂM THỬ (QA/TESTING)
 ## Đề tài VMEC-12 — MedGuard AI
 
+
+> **Ghi chú cập nhật 01/09/2026:** đây là tài liệu giai đoạn, giữ nguyên để đối chiếu
+> quá trình. Vị trí file deliverable đã đổi theo yêu cầu BTC: sơ đồ kiến trúc →
+> [`../docs/architecture.md`](../docs/architecture.md), nhật ký tuần →
+> [`../docs/journal.md`](../docs/journal.md), worklog → [`../docs/worklog.md`](../docs/worklog.md),
+> báo cáo đánh giá → [`../docs/evaluation.md`](../docs/evaluation.md). Dữ liệu mô phỏng
+> (`data/seed/`) đã được thay hoàn toàn bằng DDInter 2.0 thật, và phần đánh giá LLM dùng
+> LLM-as-judge + soát tay thay cho RAGAS như dự kiến ban đầu.
+
 ---
 
 ## 1. Test Plan tổng quan
