@@ -4,18 +4,20 @@
 
 ## Link
 
-**https://www.youtube.com/watch?v=mrw6JcRn0yU** (3 phút)
+**https://youtu.be/844Ecl_U9LQ?si=Gy8pFp7SL9-43fOg**
 
-[![MediCheck MVP Demo](https://img.youtube.com/vi/mrw6JcRn0yU/maxresdefault.jpg)](https://www.youtube.com/watch?v=mrw6JcRn0yU)
+[![MediCheck MVP Demo](https://img.youtube.com/vi/844Ecl_U9LQ/maxresdefault.jpg)](https://www.youtube.com/watch?v=844Ecl_U9LQ)
 
 ## Nội dung theo mốc thời gian
 
-| Mốc | Nội dung |
-|---|---|
-| `00:00` | Giới thiệu tổng quan — bài toán tương tác thuốc và cách MediCheck giải quyết |
-| `00:10` | Luồng bệnh nhân: nhập biệt dược → agent tra DDInter → kết quả xếp hạng mức độ kèm trích dẫn |
-| `01:35` | Luồng dược sĩ: nhận yêu cầu review, xem đầy đủ thông tin xử trí, xác nhận (human-in-the-loop) |
-| `02:30` | Tính năng bổ trợ: quét đơn thuốc bằng OCR, lịch sử kiểm tra, hồ sơ bệnh nền |
+| Mốc     | Nội dung                               |
+| ------- | -------------------------------------- |
+| `00:00` | Giới thiệu bài toán & MediCheck        |
+| `00:34` | Luồng dành cho bệnh nhân               |
+| `01:55` | Luồng dành cho dược sĩ                 |
+| `02:33` | Hồ sơ, lịch sử & thông báo             |
+| `02:55` | Human-in-the-Loop & nguyên tắc an toàn |
+| `03:36` | Hướng phát triển MediCheck             |
 
 ## Sản phẩm trong video
 
