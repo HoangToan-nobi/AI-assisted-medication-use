@@ -298,15 +298,18 @@ Danh sách endpoint đầy đủ + request/response schema: [http://localhost:80
 
 ## Demo (MVP)
 
-Xem video giới thiệu và quy trình hoạt động các luồng tra cứu (3 phút) trên YouTube:
+Xem video giới thiệu và quy trình hoạt động các luồng tra cứu trên YouTube:
 
-[![MediCheck MVP Demo](https://img.youtube.com/vi/mrw6JcRn0yU/maxresdefault.jpg)](https://www.youtube.com/watch?v=mrw6JcRn0yU)
+[![MediCheck MVP Demo](https://img.youtube.com/vi/844Ecl_U9LQ/maxresdefault.jpg)](https://youtu.be/844Ecl_U9LQ?si=Gy8pFp7SL9-43fOg)
 
-> ⏱️ **Nội dung video:**
-> - `00:00` - Giới thiệu tổng quan
-> - `00:10` - Luồng Bệnh nhân chính
-> - `01:35` - Luồng Dược sĩ chính
-> - `02:30` - Tính năng bổ trợ
+### 🎬 Nội dung video
+
+- [00:00](https://www.youtube.com/watch?v=844Ecl_U9LQ) — Giới thiệu bài toán & MediCheck
+- [00:34](https://www.youtube.com/watch?v=844Ecl_U9LQ&t=34s) — Luồng dành cho bệnh nhân
+- [01:55](https://www.youtube.com/watch?v=844Ecl_U9LQ&t=115s) — Luồng dành cho dược sĩ
+- [02:33](https://www.youtube.com/watch?v=844Ecl_U9LQ&t=153s) — Hồ sơ, lịch sử & thông báo
+- [02:55](https://www.youtube.com/watch?v=844Ecl_U9LQ&t=175s) — Human-in-the-Loop & nguyên tắc an toàn
+- [03:36](https://www.youtube.com/watch?v=844Ecl_U9LQ&t=216s) — Hướng phát triển MediCheck
 
 ## Live URL
 
