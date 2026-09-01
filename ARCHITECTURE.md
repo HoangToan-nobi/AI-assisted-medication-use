@@ -4,7 +4,7 @@
 
 MediCheck là hệ thống hỗ trợ kiểm tra tương tác thuốc cho bệnh nhân và dược sĩ. Người dùng nhập tên biệt dược trên giao diện Next.js; backend FastAPI phân giải biệt dược thành hoạt chất, sau đó chạy LangGraph Agent để chuẩn hóa, tra cứu dữ liệu DDInter 2.0, xếp hạng mức độ và sinh giải thích tiếng Việt.
 
-Kết quả được kiểm tra bằng guardrail, tổng hợp theo cấp hoạt chất và cấp thuốc, trả về frontend dưới dạng JSON. Với luồng bệnh nhân, kết quả kiểm tra được lưu vào SQLite để xem lại lịch sử và phục vụ quy trình dược sĩ xác nhận.
+Kết quả được kiểm tra bằng guardrail, tổng hợp theo cấp hoạt chất và cấp thuốc, trả về frontend dưới dạng JSON. Với luồng bệnh nhân, kết quả kiểm tra được lưu vào database (Postgres trên Neon) để xem lại lịch sử và phục vụ quy trình dược sĩ xác nhận.
 
 ## 2. Kiến trúc hệ thống
 
@@ -32,7 +32,7 @@ flowchart TB
         GUARD["Guardrail Node"]
     end
 
-    subgraph DATA["Tầng dữ liệu - SQLite / SQLAlchemy"]
+    subgraph DATA["Tầng dữ liệu - Postgres (Neon) / SQLAlchemy"]
         MEDS["medications & medication_aliases"]
         PRODUCTS["products & product_ingredients"]
         INTERACTIONS["interactions<br/>DDInter 2.0"]
@@ -198,6 +198,38 @@ flowchart TD
 
 ## 6. Deployment Architecture
 
+### 6.1 Production
+
+Bản đang chạy thật: **https://ai20k-c3-team005-medicheck.vercel.app**
+
+```mermaid
+flowchart LR
+    USER(["Người dùng"])
+    VERCEL["Frontend — Next.js<br/>Vercel"]
+    API["Backend — FastAPI<br/>PaaS"]
+    NEON[("Postgres — Neon<br/>nhánh main")]
+    DS[["DeepSeek Chat API"]]
+    OCR[["OCR Service"]]
+
+    USER -->|HTTPS| VERCEL
+    VERCEL -->|"rewrite /api/:path*"| API
+    API --> NEON
+    API --> DS
+    API --> OCR
+```
+
+Trình duyệt không gọi thẳng backend. `frontend/next.config.js` rewrite `/api/:path*`
+sang `NEXT_PUBLIC_API_URL` ở tầng server, nên domain production chỉ lộ một origin duy
+nhất — cookie phiên vì thế là same-site.
+
+Backend chạy free tier nên **request đầu tiên sau thời gian không dùng mất 30-60 giây**
+(cold start); các request sau dưới 1 giây.
+
+Deploy tự động qua `.github/workflows/cd.yml`, kích hoạt khi push nhánh
+`feature/production` (thêm `[skip ci]` vào commit message để bỏ qua).
+
+### 6.2 Local (Docker Compose)
+
 ```mermaid
 flowchart LR
     subgraph DOCKER["Docker Compose"]
@@ -205,7 +237,7 @@ flowchart LR
         BACKEND["Backend container<br/>FastAPI :8000"]
     end
 
-    DB["Host volume<br/>data/app.db"]
+    DB["Host volume<br/>data/app.db (SQLite)"]
     LLM["DeepSeek API"]
 
     FRONTEND -->|"HTTP REST"| BACKEND
@@ -213,13 +245,16 @@ flowchart LR
     BACKEND --> LLM
 ```
 
-`docker-compose.yml` chạy hai service là `frontend` và `backend`. Database SQLite nằm trên host và được mount vào backend; vì vậy `docker compose down` không xóa file `data/app.db`.
+`docker-compose.yml` chạy hai service `frontend` và `backend`. Bản local dùng SQLite
+mount từ host, nên `docker compose down` không xóa `data/app.db`. Muốn chạy local mà
+vẫn dùng dữ liệu chung của team thì trỏ `DATABASE_URL` sang Neon.
 
 ## 7. Security
 
 - API key chỉ lưu trong `.env`, không commit vào Git.
 - Mật khẩu được hash trước khi lưu vào database.
-- API dùng Bearer JWT để xác định người dùng.
+- Phiên đăng nhập dùng JWT đặt trong cookie `HttpOnly` (access + refresh có xoay vòng),
+  không lưu trong `localStorage`; kèm CSRF token cookie cho các request thay đổi dữ liệu.
 - Role-based access control giới hạn endpoint bệnh nhân và dược sĩ.
 - Pydantic kiểm tra request/response schema.
 - CORS được cấu hình trong `src/main.py`.
@@ -233,9 +268,9 @@ flowchart LR
 | Backend      | FastAPI                         | Async, có Swagger tự động và tích hợp tốt với Pydantic               |
 | Frontend     | Next.js 14                      | App Router, TypeScript và phù hợp xây dựng giao diện nhiều vai trò   |
 | Agent        | LangGraph                       | Quản lý state và pipeline nhiều node rõ ràng                         |
-| Database     | SQLite + SQLAlchemy             | Đơn giản cho MVP local, dữ liệu DDInter được truy vấn trực tiếp      |
+| Database     | Postgres (Neon) + SQLAlchemy    | Dùng chung cho cả team và production; SQLite còn lại cho dev offline |
 | LLM          | DeepSeek qua `langchain-openai` | Sinh giải thích tiếng Việt với API tương thích OpenAI                |
-| Deployment   | Docker Compose                  | Chạy frontend và backend nhất quán trên máy demo                     |
+| Deployment   | Vercel + PaaS + Neon            | Live URL public; Docker Compose giữ lại cho chạy local và máy demo   |
 | Human review | Pharmacist review workflow      | Kết quả cảnh báo được dược sĩ xem xét trong quy trình hỗ trợ an toàn |
 
 ## 9. Giới hạn hiện tại
