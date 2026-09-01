@@ -18,7 +18,7 @@ Bộ công cụ đánh giá phần LLM sinh giải thích tương tác thuốc. 
 | 4 | `human_sheet.py` — phiếu an toàn + calibration CSV | ✅ (code) — chưa chạy |
 | 5 | viết lại `../results/report.md` | 🔄 bản nháp (metric tự động + findings) |
 
-**➡️ Chạy tiếp: xem [`../STATUS.md`](../STATUS.md).**
+**➡️ Phương pháp và kết quả đầy đủ: xem [`../results/final_report.md`](../results/final_report.md).**
 
 ## Biến môi trường
 
