@@ -289,12 +289,12 @@ Danh sách endpoint đầy đủ + request/response schema: [http://localhost:80
 
 ## Team
 
-| Thành viên | Vai trò | MSSV |
+| Thành viên | Vai trò chính | MSSV |
 |---|---|---|
-| Nguyễn Thị Tuyết Mai | Data, designer, frontend | 2A202601693
-| Lê Thị Linh | Data, designer, frontend | 2A202601441
-| Hoàng Sỹ Toàn (Leader) | Data, PM, OCR | 2A202601273
-| Đàm Lê Minh Quân | Data, Backend, AI agent | 2A202601451
+| Nguyễn Thị Tuyết Mai | Full-stack, Product Features & Data | 2A202601693
+| Lê Thị Linh | Frontend, UI/UX & Documentation | 2A202601441
+| Hoàng Sỹ Toàn (Leader) | PM, AI/OCR & Data | 2A202601273
+| Đàm Lê Minh Quân | Backend, AI Agent, DevOps & System Integration | 2A202601451
 
 ## Demo (MVP)
 
