@@ -15,7 +15,9 @@ Hệ thống kiểm tra **3 loại tương tác**, số liệu CSDL production (
 
 **AI không tự chẩn đoán, không tự khuyên đổi/ngừng thuốc — mọi cảnh báo chỉ mang tính tham khảo.**
 
-🔗 **Dùng thử:** https://ai20k-c3-team005-medicheck.vercel.app · 🎬 **Video demo:** https://www.youtube.com/watch?v=mrw6JcRn0yU
+🔗 **Dùng thử:** https://ai20k-c3-team005-medicheck.vercel.app 
+
+🎬 **Video demo:** [https://www.youtube.com/watch?v=mrw6JcRn0yU](https://youtu.be/844Ecl_U9LQ?si=ImpH3Ft8t3XGg8lT)
 
 ## 10 Deliverables
 
