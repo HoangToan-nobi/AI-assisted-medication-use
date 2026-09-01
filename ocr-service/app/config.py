@@ -35,6 +35,11 @@ class Settings:
     max_batch_images: int = field(
         default_factory=lambda: _env_int("MAX_BATCH_IMAGES", 5)
     )
+    # Compressed byte size does not bound decoded memory. A mostly blank PNG can
+    # be only a few MB on disk yet expand to hundreds of MB as RGB/BGR arrays.
+    max_input_pixels: int = field(
+        default_factory=lambda: _env_int("MAX_INPUT_PIXELS", 40_000_000)
+    )
     # Formats are validated from the decoded image itself, never the filename.
     allowed_image_formats: frozenset[str] = frozenset({"JPEG", "PNG", "WEBP"})
 
@@ -113,6 +118,14 @@ class Settings:
         default_factory=lambda: _env_int("OCR_TORCH_THREADS", min(8, os.cpu_count() or 4))
     )
 
+    # Below this Paddle/VietOCR agreement the page is reported as unreadable
+    # instead of being parsed. Measured on eval/: 64 of 65 printed prescriptions
+    # score 0.885-1.000 and the one unreadable photo scores 0.323, so this sits
+    # in a 0.56-wide gap. Set 0 to disable the check.
+    ocr_min_agreement: float = field(
+        default_factory=lambda: _env_float("OCR_MIN_AGREEMENT", 0.65)
+    )
+
     # --- Drug resolver -----------------------------------------------------
     drugs_csv_path: Path = field(
         default_factory=lambda: Path(os.getenv("DRUGS_CSV_PATH", str(DEFAULT_DRUGS_CSV)))
@@ -129,6 +142,17 @@ class Settings:
     )
     weight_ingredient: float = field(
         default_factory=lambda: _env_float("WEIGHT_INGREDIENT", 0.10)
+    )
+
+    # Dưới ngưỡng này, dòng OCR được coi là KHÔNG khớp được thuốc nào và service
+    # không đề xuất gì cả. Không có nó, một dòng chữ rác vẫn kéo về được một thuốc
+    # tên ngắn nào đó trong danh mục ("Turbe", "Viễn chí", "Nang gelatin rỗng size 2").
+    #
+    # Trên 40 đơn thật, 0.50 không loại thêm được dòng sai nào còn tồn tại. 0.65
+    # loại 25/43 dòng thừa và mất 3/138 dòng đúng; trong ứng dụng y tế, trả rỗng để
+    # người dùng nhập tay an toàn hơn một đề xuất sai. Đặt 0 để tắt.
+    min_candidate_score: float = field(
+        default_factory=lambda: _env_float("MIN_CANDIDATE_SCORE", 0.65)
     )
 
     drug_high_confidence: float = field(

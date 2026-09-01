@@ -23,6 +23,7 @@ import logging
 import re
 import threading
 from difflib import SequenceMatcher
+from statistics import median
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -61,9 +62,66 @@ _FIGURES_ONLY = re.compile(r"[\d+\-*/%.,:=()]+")
 # nothing may be copied between them. See _restore_case for the measurements.
 _AGREEMENT_FLOOR = 0.65
 
+# Fewer regions than this and the median says more about noise than about the
+# page, so legibility is reported as unknown rather than guessed.
+_MIN_AGREEMENT_REGIONS = 8
+
 
 class OCRUnavailableError(RuntimeError):
     """Raised when the OCR model could not be loaded."""
+
+
+def confidence_evidence(item: dict[str, Any]) -> float:
+    """Best glyph evidence available for deciding whether a region survives.
+
+    The displayed ``confidence`` belongs to the recognizer whose text won. The
+    other recognizer can still prove that the region itself is real: a low-prob
+    VietOCR reading of ``ĐƠN THUỐC`` must not be discarded when Paddle detected
+    the same region at 0.99 but could only spell it ``DON THUC``.
+    """
+    values = (
+        item.get("confidence"),
+        item.get("paddle_confidence"),
+        item.get("vietocr_confidence"),
+    )
+    return max(float(value) for value in values if value is not None)
+
+
+def recognition_agreement(items: Iterable[dict[str, Any]]) -> float | None:
+    """How closely PaddleOCR and VietOCR read the same regions. ``None`` if unknown.
+
+    The two recognizers are independent and were both trained on printed text.
+    On print they converge: Paddle's reading differs from VietOCR's only by the
+    diacritics it cannot emit, which ``_fold`` removes before comparing. On
+    handwriting, or on a photo too degraded to read, each model hallucinates
+    something different and the similarity collapses.
+
+    Measured over the 65 printed prescriptions in eval/: 64 score a median of
+    0.885-1.000, while eval/end2end/don40 -- a 349x336 photo whose OCR returns
+    strings like ``CÓNG VIỆN CHO RAY`` -- scores 0.323. The floor lives in that
+    gap. Returns ``None`` when VietOCR did not run or too few regions carry
+    both readings to judge.
+    """
+    ratios = [
+        SequenceMatcher(
+            None,
+            OCRService._fold(str(item["paddle_text"])),
+            OCRService._fold(str(item["vietocr_text"])),
+            autojunk=False,
+        ).ratio()
+        for item in items
+        if item.get("paddle_text") and item.get("vietocr_text")
+    ]
+    if len(ratios) < _MIN_AGREEMENT_REGIONS:
+        return None
+    return float(median(ratios))
+
+
+def filter_ocr_results(
+    items: Iterable[dict[str, Any]], threshold: float
+) -> list[dict[str, Any]]:
+    """Shared production/evaluation confidence gate."""
+    return [item for item in items if confidence_evidence(item) >= threshold]
 
 
 class OCRService:
@@ -162,7 +220,20 @@ class OCRService:
                 if self.torch_threads > 0:
                     torch.set_num_threads(self.torch_threads)
 
-                config = Cfg.load_config_from_name(self.vietocr_model)
+                # ``Cfg.load_config_from_name`` tải YAML cấu hình từ vocr.vn MỖI LẦN
+                # khởi động. Weights đã được nướng sẵn vào image, nhưng bước tải
+                # config này thì chưa - nên chỉ cần mất mạng đúng lúc container lên
+                # là VietOCR chết, và tệ hơn: lỗi bị nhớ lại (_vietocr_error) nên nó
+                # không bao giờ thử lại dù mạng có sau đó. Gặp thật trong lúc đo:
+                # service tụt về PaddleOCR latin và đọc "ĐƠN THUỐC" thành "DON THUC".
+                local_config = Path(__file__).resolve().parents[1] / "data" / f"{self.vietocr_model}.yml"
+                if local_config.is_file():
+                    config = Cfg.load_config_from_file(str(local_config))
+                else:
+                    logger.warning(
+                        "Không thấy config VietOCR tại %s; phải tải qua mạng", local_config
+                    )
+                    config = Cfg.load_config_from_name(self.vietocr_model)
                 config["device"] = "cuda:0" if self.device.startswith("gpu") else "cpu"
                 # vietocr's downloader caches into tempfile.gettempdir(), so a
                 # container re-fetches ~150 MB from vocr.vn on every restart and
@@ -512,6 +583,8 @@ class OCRService:
                 # Kept for the eval harness; OCRItem drops them on serialization.
                 item["paddle_text"] = paddle_text
                 item["vietocr_text"] = viet_text
+                item["paddle_confidence"] = round(paddle_conf, 4)
+                item["vietocr_confidence"] = viet_prob
 
     # -- inference ---------------------------------------------------------
 

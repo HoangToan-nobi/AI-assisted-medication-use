@@ -9,11 +9,13 @@ import pytest
 from app.config import Settings
 from app.services.drug_resolver import CsvDrugRepository, Drug, DrugResolver
 from app.utils.text_utils import (
+    bare_name_numbers,
     confusion_fold,
     extract_strengths,
     line_windows,
     matching_key,
     normalize_text,
+    strength_keys,
     strength_numbers,
     strip_diacritics,
 )
@@ -140,6 +142,21 @@ def test_strength_numbers_normalizes_for_comparison():
     assert strength_numbers("2.50 mg") == {"2.5"}
 
 
+def test_strength_keys_are_unit_aware_and_convert_equivalent_masses():
+    assert strength_keys("1 g") == strength_keys("1000 mg") == {"mass:1000"}
+    assert strength_keys("1 g") != strength_keys("1 mg")
+
+
+def test_ratio_strength_keeps_mass_and_volume_dimensions_separate():
+    assert strength_keys("500 mg/5 ml") == {"mass:500", "volume:5"}
+    assert strength_keys("500 mg + 5 mg") == {"mass:500", "mass:5"}
+
+
+def test_only_unitless_product_numbers_become_strength_aliases():
+    assert bare_name_numbers("Augmentin 625") == {"625"}
+    assert bare_name_numbers("Example 1 g") == set()
+
+
 # --------------------------------------------------------------------------
 # Candidate generation (Phase 5)
 # --------------------------------------------------------------------------
@@ -191,6 +208,37 @@ def test_repository_is_swappable_without_touching_the_resolver():
     result = resolver.resolve(["TESTAM0L", "500mg"])
 
     assert result["candidates"][0]["drug_id"] == "99"
+
+
+def test_longer_exact_brand_wins_when_scores_and_position_are_tied():
+    class InMemoryRepository:
+        def load(self):
+            return [
+                Drug(id="1", drug_name="Augmex"),
+                Drug(id="2", drug_name="Augmex Duo"),
+            ]
+
+    resolver = DrugResolver(InMemoryRepository())
+    result = resolver.resolve(["AUGMEX DUO 1G"])
+
+    assert result["candidates"][0]["drug_name"] == "Augmex Duo"
+
+
+def test_short_brand_with_one_missing_glyph_survives_pack_text_shortlist():
+    class InMemoryRepository:
+        def load(self):
+            return [
+                Drug(id="1", drug_name="Atussin", active_ingredient="Dextromethorphan"),
+                Drug(id="2", drug_name="Dextromethorphan", active_ingredient="Dextromethorphan"),
+            ]
+
+    resolver = DrugResolver(InMemoryRepository())
+    result = resolver.resolve([
+        "Aussin SR 60ml (hết hàng)",
+        "Dextromethorphan, chlopheniramin",
+    ])
+
+    assert "Atussin" in names(result)
 
 
 def test_registry_csv_layout_is_supported(tmp_path):
@@ -280,6 +328,43 @@ def test_ingredient_signal_recovers_an_unreadable_brand(resolver):
     assert "Plavix 75" in names(result)
 
 
+def test_one_glyph_ingredient_error_recovers_the_matching_brand():
+    class Repository:
+        def load(self):
+            return [
+                Drug(
+                    id="1",
+                    drug_name="Spetcefy-200",
+                    active_ingredient="Cefpodoxime",
+                    strength="200 mg",
+                ),
+                Drug(
+                    id="2",
+                    drug_name="Vilerm 200mg tablet",
+                    active_ingredient="Cefpodoxime",
+                    strength="200 mg",
+                ),
+                Drug(
+                    id="3",
+                    drug_name="Cefpodoxime 200mg",
+                    active_ingredient="Cefpodoxime",
+                    strength="200 mg",
+                ),
+                Drug(
+                    id="4",
+                    drug_name="Dipesalox 200mg",
+                    active_ingredient="Cefpodoxime",
+                    strength="200 mg",
+                ),
+            ]
+
+    resolver = DrugResolver(Repository())
+    result = resolver.resolve(["Spetcely 200mg (Cetpodoxime)"])
+
+    assert result["possible_ingredients"] == ["Cefpodoxime"]
+    assert result["candidates"][0]["drug_name"] == "Spetcefy-200"
+
+
 # --------------------------------------------------------------------------
 # Status / confidence rules
 # --------------------------------------------------------------------------
@@ -307,6 +392,11 @@ def test_status_thresholds_follow_config(resolver):
     assert resolver.status_for(0.95) == "high_confidence"
     assert resolver.status_for(0.80) == "medium_confidence"
     assert resolver.status_for(0.74) == "uncertain"
+
+
+def test_exact_name_containment_requires_token_boundaries():
+    assert DrugResolver._name_position("xxxx hapacoi 6so", "hapacoi 6so") == 5
+    assert DrugResolver._name_position("superoresolplus", "oresol") is None
 
 
 # --------------------------------------------------------------------------
@@ -382,8 +472,9 @@ def test_brand_at_the_front_of_a_row_outranks_the_generic_behind_it(sample_csv):
         candidates = resolver.resolve(["YESOM 40 40mg (Esomeprazol 40mg)"])["candidates"]
 
         assert candidates[0]["drug_name"] == "Yesom 40"
-        # The tie-break must not invent a score gap; both are still exact matches.
-        assert candidates[0]["score"] == pytest.approx(candidates[1]["score"])
+        # Yesom is a whole token at the front. The generic is embedded in a
+        # longer ``Esomeprazol 40mg`` token, so it remains a weaker alternative.
+        assert candidates[0]["score"] > candidates[1]["score"]
 
 
 def test_position_tie_break_does_not_override_a_better_score(sample_csv):

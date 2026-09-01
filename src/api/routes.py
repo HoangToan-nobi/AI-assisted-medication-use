@@ -61,7 +61,11 @@ from src.models.schemas import (
     UpdatePatientProfileRequest,
     UpdatePharmacistProfileRequest,
 )
-from src.services.disease_search import match_diseases_in_phrase, rank_disease_matches
+from src.services.disease_search import (
+    match_diseases_in_phrase,
+    normalize_disease_search_text,
+    rank_disease_matches,
+)
 from src.services.food_disease_explain import (
     build_disease_interaction_explanations,
     build_food_disease_warning_line,
@@ -743,8 +747,21 @@ def _looks_like_image(data: bytes) -> bool:
 
 def _scanned_drug_from_medication(item: dict) -> ScannedDrug:
     candidates = item.get("candidates") or []
-    top = candidates[0] if candidates else None
-    alternatives = [c["drug_name"] for c in candidates[1:3] if c.get("drug_name")]
+    # The OCR service returns low-score rows for audit/debug, but the review UI
+    # must not present a random 0.72 match as a recommendation (real failures:
+    # Thymorosin -> Intaxel, Diapan -> Dexipharm). Apply the same 0.75 boundary
+    # already used by ``known`` to every displayed candidate.
+    top_candidate = candidates[0] if candidates else None
+    top = (
+        top_candidate
+        if top_candidate and float(top_candidate.get("score") or 0.0) >= 0.75
+        else None
+    )
+    alternatives = [
+        candidate["drug_name"]
+        for candidate in candidates[1:3]
+        if candidate.get("drug_name")
+    ] if top else []
     return ScannedDrug(
         row_number=item.get("row_number"),
         ocr_text=item.get("ocr_drug_name") or item.get("ocr_text") or "",
@@ -763,6 +780,37 @@ _MAX_DISEASE_CANDIDATES = 4
 # thuộc insuline"), trong khi tên trong CSDL ngắn hơn - nên đây chỉ là ngưỡng loại
 # bỏ rác, không phải ngưỡng "đúng". Người dùng vẫn phải tự chọn.
 _ICD_PATTERN = re.compile(r"^[A-Z]\d{1,3}(?:\.\d+)?$")
+_ICD_IN_CONDITION_PATTERN = re.compile(
+    r"(?<![A-Z0-9])([A-Z]\d{1,3}(?:\.\d+)?)(?![A-Z0-9])",
+    re.IGNORECASE,
+)
+
+
+def _condition_content_key(value: str) -> str:
+    """Normalize one OCR condition and remove a leading ICD-like token.
+
+    OCR service deliberately preserves the raw combined diagnosis for audit,
+    while also returning its split conditions.  Removing only the leading code
+    lets us prove that a split condition is already contained in that raw text,
+    even when Paddle read I20 as 120.
+    """
+    key = normalize_disease_search_text(value)
+    return re.sub(r"^(?:[a-z1il]\d{2}(?:\.\d+)?)\s*", "", key).strip()
+
+
+def _diagnosis_is_summary_of_conditions(diagnosis: str, conditions: list[str]) -> bool:
+    """True only when every split condition is represented by diagnosis."""
+    if len(conditions) < 2:
+        return False
+    # OCR boxes may insert/remove whitespace at joins (``heviN40`` versus
+    # ``hevi N40``). Whitespace carries no disease identity; compare compact
+    # keys so a raw combined diagnosis is not appended as a duplicate UI card.
+    diagnosis_key = re.sub(r"\s+", "", normalize_disease_search_text(diagnosis))
+    content_keys = [
+        re.sub(r"\s+", "", _condition_content_key(condition))
+        for condition in conditions
+    ]
+    return all(len(key) >= 3 and key in diagnosis_key for key in content_keys)
 
 
 def _scanned_diseases_from_payload(payload: dict, db: Session) -> list[ScannedDisease]:
@@ -773,7 +821,12 @@ def _scanned_diseases_from_payload(payload: dict, db: Session) -> list[ScannedDi
     """
     condition_texts: list[str] = list(payload.get("underlying_conditions") or [])
     diagnosis = (payload.get("diagnosis") or "").strip()
-    if diagnosis:
+    # A multi-line diagnosis is returned twice on purpose by ocr-service: once
+    # as the raw combined string for audit and once as individual conditions for
+    # matching. Do not create a seventh duplicate UI card. A genuinely distinct
+    # primary diagnosis is still appended when conditions came from a separate
+    # "Bệnh kèm theo" field.
+    if diagnosis and not _diagnosis_is_summary_of_conditions(diagnosis, condition_texts):
         condition_texts.append(diagnosis)
     if not condition_texts:
         return []
@@ -783,6 +836,16 @@ def _scanned_diseases_from_payload(payload: dict, db: Session) -> list[ScannedDi
     icd_codes = [
         code for code in (payload.get("icd_codes") or []) if _ICD_PATTERN.match(str(code).upper())
     ]
+    embedded_codes = []
+    for text in condition_texts:
+        match = _ICD_IN_CONDITION_PATTERN.search(text)
+        embedded_codes.append(match.group(1).upper() if match else None)
+    # Positional fallback is safe only when no condition carries its own code
+    # and both list lengths agree.  Otherwise one missed OCR code shifts every
+    # following disease, as happened with E13/I15 on don1.
+    use_positional_codes = (
+        not any(embedded_codes) and len(icd_codes) == len(condition_texts)
+    )
 
     all_diseases = db.query(Disease).all()
     results: list[ScannedDisease] = []
@@ -803,7 +866,10 @@ def _scanned_diseases_from_payload(payload: dict, db: Session) -> list[ScannedDi
         results.append(
             ScannedDisease(
                 ocr_text=text,
-                icd_code=icd_codes[index] if index < len(icd_codes) else None,
+                icd_code=(
+                    embedded_codes[index]
+                    or (icd_codes[index] if use_positional_codes else None)
+                ),
                 suggested=candidates[0] if candidates else None,
                 alternatives=candidates[1:],
             )

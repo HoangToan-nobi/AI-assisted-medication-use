@@ -74,3 +74,8 @@ out/
 eval/results/runs/
 .vercel
 .env*
+
+# Ảnh đơn thuốc chứa thông tin bệnh nhân (họ tên, CCCD, BHYT, số điện thoại).
+# Không bao giờ được đưa lên git: đã push là nằm vĩnh viễn trong lịch sử.
+.cursor/
+*.zip

@@ -50,6 +50,10 @@ class OCRResponse(BaseModel):
     raw_text: str = Field(description="OCR output exactly as returned, never repaired.")
     normalized_text: str = Field(description="Unicode/whitespace-normalized copy.")
     document_type: Literal["medicine_package", "prescription", "unknown"] = "unknown"
+    # Why nothing could be proposed. ``None`` whenever the page was readable.
+    unreadable_reason: Literal[
+        "no_text_detected", "illegible_or_handwritten", "not_a_medical_document"
+    ] | None = None
     ocr_drug_name: str = ""
     ocr_drug_names: list[dict] = Field(default_factory=list)
     ocr_results: list[OCRItem]
@@ -105,6 +109,10 @@ class DrugRecognitionResponse(BaseModel):
     raw_text: str
     normalized_text: str
     document_type: Literal["medicine_package", "prescription", "unknown"] = "unknown"
+    # Why nothing could be proposed. ``None`` whenever the page was readable.
+    unreadable_reason: Literal[
+        "no_text_detected", "illegible_or_handwritten", "not_a_medical_document"
+    ] | None = None
     ocr_results: list[OCRItem]
     detected_information: DetectedInformation
     candidates: list[DrugCandidate]

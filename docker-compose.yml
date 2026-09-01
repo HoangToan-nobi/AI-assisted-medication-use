@@ -11,6 +11,7 @@ services:
       - .env
     environment:
       - OCR_SERVICE_URL=http://ocr:8000
+      - OCR_TIMEOUT_SECONDS=300
     volumes:
       - ./data:/app/data
       - ./src:/app/src
@@ -51,7 +52,13 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      # Frontend gọi API bằng đường dẫn tương đối (lib/api.ts: API_URL = ""), Next
+      # rewrite /api/* sang biến này Ở PHÍA SERVER - tức từ bên trong container
+      # frontend, nơi localhost:8000 là chính nó chứ không phải backend. Phải dùng
+      # tên service trong mạng compose, để "localhost" thì mọi lệnh gọi API đều
+      # ECONNREFUSED và trình duyệt nhận 500. Chạy tay ngoài docker thì next.config
+      # tự lùi về http://localhost:8000, vẫn đúng.
+      - NEXT_PUBLIC_API_URL=http://backend:8000
       - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - WATCHPACK_POLLING=true
     volumes:

@@ -1,0 +1,1 @@
+# Chẩn đoán trên ảnh bị che (bôi mờ thông tin cá nhân) - không gán được.
