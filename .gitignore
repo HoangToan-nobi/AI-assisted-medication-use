@@ -69,5 +69,8 @@ out/
 # AI logs — tracked structure, ignored content
 .ai-log/*.jsonl
 .ai-log/archive/
+
+# Eval — track harness/datasets/report, ignore run outputs (capture.jsonl, per-case JSON)
+eval/results/runs/
 .vercel
 .env*

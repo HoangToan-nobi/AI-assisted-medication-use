@@ -9,13 +9,22 @@ await LLM xen giữa lúc đọc cache và lúc ghi cache; nếu dùng chung 1 S
 nhiều coroutine bị xen kẽ như vậy, Session (vốn không an toàn với kiểu dùng xen kẽ
 này) có thể dính state lẫn lộn giữa các coroutine."""
 
+import os
+
 from sqlalchemy.exc import IntegrityError
 
 from src.db.session import SessionLocal
 
 
 def lookup_cached(model_cls: type, **filters) -> dict | None:
-    """Trả về dict các field của bản ghi khớp filters, hoặc None nếu cache miss."""
+    """Trả về dict các field của bản ghi khớp filters, hoặc None nếu cache miss.
+
+    Khi EVAL_NO_CACHE=1 (chế độ đánh giá - xem eval/PLAN.md): luôn coi như cache miss
+    để mỗi lần chạy đều gọi LLM thật (cần cho metric consistency và cho "cold run").
+    save_cached vẫn ghi bình thường; IntegrityError khi cặp đã tồn tại đã được nuốt.
+    """
+    if os.environ.get("EVAL_NO_CACHE") == "1":
+        return None
     with SessionLocal() as db:
         row = db.query(model_cls).filter_by(**filters).first()
         if row is None:

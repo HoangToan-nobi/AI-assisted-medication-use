@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import re
 import time
 from datetime import date, datetime
@@ -429,8 +430,18 @@ async def _run_product_check(
         if not med.get("khong_du_du_lieu")
     ]
     _t_food_lookup = time.perf_counter()
-    food_rows = lookup_food_interactions(valid_medication_ids, db)
-    disease_rows = lookup_disease_interactions(valid_medication_ids, db, disease_ids=disease_ids)
+    # Chế độ đánh giá (eval/PLAN.md): bỏ nhánh thực phẩm/bệnh nền không liên quan tới
+    # case đang chấm - mỗi thuốc kéo theo hàng chục edge/call LLM. Giá trị: "both"/"1"
+    # (bỏ cả hai), "food", "disease". Không set -> chạy đầy đủ như thật.
+    _eval_skip = os.environ.get("EVAL_SKIP_FOOD_DISEASE", "")
+    food_rows = (
+        [] if _eval_skip in ("1", "both", "food")
+        else lookup_food_interactions(valid_medication_ids, db)
+    )
+    disease_rows = (
+        [] if _eval_skip in ("1", "both", "disease")
+        else lookup_disease_interactions(valid_medication_ids, db, disease_ids=disease_ids)
+    )
     logger.info("[timing] food_disease_lookup (SQL): %.3fs", time.perf_counter() - _t_food_lookup)
 
     # 4 nhánh sinh giải thích HOÀN TOÀN không phụ thuộc lẫn nhau - kể cả overview giờ

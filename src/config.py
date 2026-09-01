@@ -27,7 +27,13 @@ class Settings(BaseSettings):
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
     model_name: str = "deepseek-chat"
-    llm_temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    # Giảm từ 0.7 -> 0.3 (01/09, sau khi metric consistency + subagent-judge cho
+    # thấy 0.7 khiến LLM thỉnh thoảng "sáng tạo" thêm câu khuyên xử trí/liều lượng
+    # mà 2/3 lần sinh lại không có - eval/results/final_report.md mục Consistency).
+    # Vẫn > 0 để giữ chút đa dạng cách diễn đạt (tránh lặp y hệt 1 câu công thức,
+    # xem docstring SAFETY_RULES/style prompt trong tone_prompt.py/rollup_explain.py)
+    # nhưng giảm mạnh biên độ "phăng" ra ngoài nguồn.
+    llm_temperature: float = Field(default=0.3, ge=0.0, le=2.0)
 
     # Database
     database_url: str = "sqlite:///./data/app.db"

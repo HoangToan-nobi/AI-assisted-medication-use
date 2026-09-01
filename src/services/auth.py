@@ -8,10 +8,9 @@ import time
 from datetime import datetime, timedelta
 from typing import Any
 
+import httpx
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
-from google.auth.transport import requests as google_requests
-from google.oauth2 import id_token as google_id_token
 from sqlalchemy.orm import Session
 
 from src.config import get_settings
@@ -195,17 +194,57 @@ def revoke_refresh_session(db: Session, raw: str | None) -> None:
         db.commit()
 
 
-def verify_google_credential(credential: str) -> dict[str, Any]:
+def _truthy(value: Any) -> bool:
+    return value is True or value == "true"
+
+
+async def verify_google_credential(credential: str) -> dict[str, Any]:
+    """credential o day la OAuth2 access token (google.accounts.oauth2), khong
+    phai ID token JWT nua - doi tu google.accounts.id/renderButton() sang tu ve
+    nut dang nhap rieng (widget cua Google luon co vien sang trong iframe,
+    khong the CSS/ghi de duoc do gioi han same-origin, xem finding UI 01/09).
+
+    Access token la chuoi mo (opaque), khong xac minh offline bang chu ky nhu
+    JWT duoc - phai goi 2 API cua Google:
+      1. tokeninfo - xac minh token con hop le VA dung cho dung client_id cua
+         app nay (aud phai khop client_id, tuong duong check "aud" cua JWT
+         truoc day) - buoc bat buoc de tranh access token cua app Google KHAC
+         bi chap nhan nham.
+      2. userinfo - lay them ho_ten/anh dai dien (tokeninfo khong tra ve)."""
     client_id = get_settings().google_client_id
     if not client_id:
         raise ValueError("Google Sign-In chua duoc cau hinh")
-    claims = google_id_token.verify_oauth2_token(credential, google_requests.Request(), client_id)
-    if claims.get("iss") not in {"accounts.google.com", "https://accounts.google.com"}:
-        raise ValueError("Google issuer khong hop le")
-    if claims.get("aud") != client_id or not claims.get("email_verified"):
-        raise ValueError("Tai khoan Google chua duoc xac minh")
-    if not claims.get("sub") or not claims.get("email"):
-        raise ValueError("Google token thieu thong tin bat buoc")
+    async with httpx.AsyncClient(timeout=10) as client:
+        try:
+            tokeninfo_resp = await client.get(
+                "https://oauth2.googleapis.com/tokeninfo",
+                params={"access_token": credential},
+            )
+        except httpx.RequestError as exc:
+            raise ValueError("Khong the xac minh Google access token (loi mang)") from exc
+        if tokeninfo_resp.status_code != 200:
+            raise ValueError("Access token Google khong hop le hoac da het han")
+        claims = tokeninfo_resp.json()
+        if claims.get("aud") != client_id:
+            raise ValueError("Google issuer khong hop le")
+        if not _truthy(claims.get("email_verified")):
+            raise ValueError("Tai khoan Google chua duoc xac minh")
+        if not claims.get("sub") or not claims.get("email"):
+            raise ValueError("Google token thieu thong tin bat buoc")
+
+        try:
+            userinfo_resp = await client.get(
+                "https://www.googleapis.com/oauth2/v3/userinfo",
+                headers={"Authorization": f"Bearer {credential}"},
+            )
+            if userinfo_resp.status_code == 200:
+                profile = userinfo_resp.json()
+                if profile.get("sub") == claims["sub"]:
+                    claims.setdefault("name", profile.get("name"))
+                    claims.setdefault("picture", profile.get("picture"))
+        except httpx.RequestError:
+            pass  # ho_ten/anh dai dien la tuy chon - khong chan dang nhap neu loi
+
     return claims
 
 

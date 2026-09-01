@@ -15,7 +15,7 @@ from src.db.models import FoodDiseaseExplanationCache
 from src.services.explanation_cache import lookup_cached, save_cached
 from src.services.llm import ainvoke_llm
 from src.services.rollup_explain import _severity_rank, _tone_fields, literal_merge_translate
-from src.services.tone_prompt import SAFETY_RULES
+from src.services.tone_prompt import SAFETY_RULES, strip_management_sentences
 
 _MAX_TEXT_CHARS = 1500
 
@@ -31,6 +31,18 @@ def _truncate(text: str | None, max_chars: int) -> str:
     if len(text) <= max_chars:
         return text
     return text[:max_chars] + "... (đã rút gọn)"
+
+
+# DiseaseInteraction (DDSI) không có cột xu_tri riêng (nguồn DDInter cho bệnh nền
+# không có trường Management) - câu mang tính xử trí đôi khi bị DDInter trộn thẳng
+# vào Interaction/mo_ta (vd "Therapy should be suspended if..."). Đưa nguyên mo_ta
+# này vào prompt sẽ khiến LLM "trung thành với nguồn" nhưng vô tình lộ xử trí -
+# xác nhận qua case dis-nang-006/dis-nhe-019/dis-trung_binh-018 (eval/results/
+# report.md Finding 15). Lọc câu ở tầng dữ liệu TRƯỚC khi đưa vào prompt, thay vì
+# chỉ dặn LLM đừng dùng - không sửa mo_ta gốc trong DB, chỉ lọc bản đưa vào prompt.
+# Hàm dùng chung `strip_management_sentences` (tone_prompt.py) - giờ áp dụng luôn
+# cho cả food (xem _food_edge_user_prompt), không chỉ disease. Xem docstring hàm
+# đó để biết vì sao mở rộng.
 
 
 def _edge_key(product: str, name: str) -> str:
@@ -105,7 +117,10 @@ _FD_STYLE_PATIENT = (
     "phức tạp của dữ liệu gốc: cơ chế đơn giản thì viết 2 câu ngắn (~50-70 "
     "từ); dữ liệu có nhiều hoạt chất góp phần hoặc nhiều cơ chế/yếu tố nguy "
     "cơ thì viết 3-4 câu (~90-130 từ) để giải thích đủ ý, không cắt bớt "
-    "thông tin quan trọng chỉ để cho ngắn. Mỗi câu là 1 ý, viết câu đơn, "
+    "thông tin quan trọng chỉ để cho ngắn - nếu nguồn liệt kê từ 3 điều kiện/"
+    "yếu tố nguy cơ/hậu quả trở lên, PHẢI nêu tên đủ TẤT CẢ (có thể liệt kê "
+    "ngắn gọn trong 1 câu), không chỉ chọn 1-2 cái nổi bật nhất rồi bỏ qua "
+    "phần còn lại. Mỗi câu là 1 ý, viết câu đơn, "
     "không cần từ nối cầu kỳ - nhưng ý câu sau phải liên quan trực tiếp và "
     "làm rõ thêm cho ý câu trước (VD: câu nêu rủi ro xong thì câu tiếp theo "
     "giải thích vì sao xảy ra), không viết những ý rời rạc, không ăn nhập "
@@ -125,7 +140,10 @@ _FD_STYLE_PHARMACIST = (
     "Giọng khoa học, chuyên nghiệp, súc tích. Độ dài co giãn theo độ phức "
     "tạp của dữ liệu gốc: cơ chế đơn giản thì viết 2 câu (~40-50 từ); nhiều "
     "hoạt chất góp phần hoặc nhiều cơ chế cần gộp thì viết 3 câu (~70-90 "
-    "từ), không cắt bớt thông tin quan trọng chỉ để cho ngắn. Mỗi câu 1 ý, "
+    "từ), không cắt bớt thông tin quan trọng chỉ để cho ngắn - nếu nguồn liệt "
+    "kê từ 3 điều kiện/yếu tố nguy cơ/hậu quả trở lên, PHẢI nêu tên đủ TẤT CẢ "
+    "(có thể liệt kê ngắn gọn trong 1 câu), không chỉ chọn 1-2 cái nổi bật "
+    "nhất rồi bỏ qua phần còn lại. Mỗi câu 1 ý, "
     "viết câu đơn - nhưng ý câu sau phải liên quan trực tiếp và làm rõ thêm "
     "cho ý câu trước, không viết những ý rời rạc, không ăn nhập với nhau. "
     "Nếu Mô tả CSDL có số liệu cụ thể quan trọng thể hiện mức độ tác động "
@@ -182,15 +200,23 @@ _UNCLASSIFIED_DISEASE_EDGE_MESSAGE = (
 )
 
 
-def _food_edge_user_prompt(product: str, food: str, muc_do: str, contributing_rows: list[dict]) -> str:
+def _food_edge_user_prompt(
+    product: str, food: str, muc_do: str, contributing_rows: list[dict], audience: str
+) -> str:
+    # Xử trí CSDL chỉ đưa cho audience=pharmacist - xem lý do ở
+    # rollup_explain.py::_product_user_prompt (cùng finding, cùng cách sửa).
+    include_xu_tri = audience == "pharmacist"
     lines = [f"Thuốc: {product}", f"Thực phẩm: {food}", f"Mức độ nghiêm trọng cao nhất: {muc_do}", ""]
     lines.append("Các mô tả tương tác hoạt chất có thật giữa thuốc này và thực phẩm này (CSDL DDInter 2.0):")
     for row in contributing_rows[:_MAX_CONTRIBUTING_ROWS]:
-        lines.append(
+        mo_ta_filtered = strip_management_sentences(row.get("mo_ta"))
+        block = (
             f"- Hoạt chất {row.get('hoat_chat')} (mức {row.get('muc_do')}):\n"
-            f"  Mô tả CSDL: {_truncate(row.get('mo_ta'), _MAX_TEXT_CHARS)}\n"
-            f"  Xử trí CSDL: {_truncate(row.get('xu_tri'), _MAX_TEXT_CHARS) or '(không có)'}"
+            f"  Mô tả CSDL: {_truncate(mo_ta_filtered, _MAX_TEXT_CHARS)}"
         )
+        if include_xu_tri:
+            block += f"\n  Xử trí CSDL: {_truncate(row.get('xu_tri'), _MAX_TEXT_CHARS) or '(không có)'}"
+        lines.append(block)
     lines.append("")
     lines.append(
         "Hãy viết đoạn giải thích theo đúng hướng dẫn đã nêu, bằng tiếng Việt, tổng "
@@ -203,9 +229,10 @@ def _disease_edge_user_prompt(product: str, disease: str, muc_do: str, contribut
     lines = [f"Thuốc: {product}", f"Bệnh nền: {disease}", f"Mức độ nghiêm trọng cao nhất: {muc_do}", ""]
     lines.append("Các mô tả tương tác hoạt chất có thật giữa thuốc này và bệnh nền này (CSDL DDInter 2.0):")
     for row in contributing_rows[:_MAX_CONTRIBUTING_ROWS]:
+        mo_ta_filtered = strip_management_sentences(row.get("mo_ta"))
         lines.append(
             f"- Hoạt chất {row.get('hoat_chat')} (mức {row.get('muc_do')}):\n"
-            f"  Mô tả CSDL: {_truncate(row.get('mo_ta'), _MAX_TEXT_CHARS)}"
+            f"  Mô tả CSDL: {_truncate(mo_ta_filtered, _MAX_TEXT_CHARS)}"
         )
     lines.append("")
     lines.append(
@@ -250,7 +277,10 @@ async def _explain_food_edge(edge: dict, audience: str) -> dict:
         ainvoke_llm(
             [
                 {"role": "system", "content": _food_edge_system_prompt(audience)},
-                {"role": "user", "content": _food_edge_user_prompt(product, food, muc_do, edge["contributing_rows"])},
+                {
+                    "role": "user",
+                    "content": _food_edge_user_prompt(product, food, muc_do, edge["contributing_rows"], audience),
+                },
             ]
         ),
         literal_merge_translate(edge["contributing_rows"], include_xu_tri=True),

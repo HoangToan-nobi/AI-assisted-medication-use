@@ -24,26 +24,62 @@ def test_argon2_and_legacy_password_verification():
     assert auth.password_needs_rehash(legacy)
 
 
-def test_google_claim_validation(monkeypatch):
+class _FakeResponse:
+    def __init__(self, status_code: int, payload: dict):
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+
+class _FakeAsyncClient:
+    """Gia lap httpx.AsyncClient - tra ve tokeninfo_resp cho goi
+    oauth2.googleapis.com/tokeninfo, userinfo_resp (mac dinh rong/200) cho goi
+    www.googleapis.com/oauth2/v3/userinfo. verify_google_credential() goi ca 2
+    API that qua tokeninfo + userinfo, khong con verify JWT offline nua."""
+
+    def __init__(self, tokeninfo_resp: _FakeResponse, userinfo_resp: _FakeResponse | None = None):
+        self.tokeninfo_resp = tokeninfo_resp
+        self.userinfo_resp = userinfo_resp or _FakeResponse(200, {})
+
+    def __call__(self, *args, **kwargs):
+        return self
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def get(self, url, params=None, headers=None):
+        if "tokeninfo" in url:
+            return self.tokeninfo_resp
+        return self.userinfo_resp
+
+
+@pytest.mark.asyncio
+async def test_google_claim_validation(monkeypatch):
     monkeypatch.setattr(auth, "get_settings", lambda: SimpleNamespace(google_client_id="client-123"))
-    valid = {"sub": "subject", "email": "user@gmail.com", "email_verified": True, "aud": "client-123", "iss": "https://accounts.google.com"}
-    monkeypatch.setattr(auth.google_id_token, "verify_oauth2_token", lambda *_: valid.copy())
-    assert auth.verify_google_credential("credential")["sub"] == "subject"
+    valid = {"sub": "subject", "email": "user@gmail.com", "email_verified": True, "aud": "client-123"}
+
+    monkeypatch.setattr(auth.httpx, "AsyncClient", _FakeAsyncClient(_FakeResponse(200, valid.copy())))
+    assert (await auth.verify_google_credential("access-token"))["sub"] == "subject"
 
     for changed in (
         {"aud": "wrong"},
-        {"iss": "https://attacker.invalid"},
         {"email_verified": False},
         {"sub": None},
     ):
         claims = valid | changed
-        monkeypatch.setattr(auth.google_id_token, "verify_oauth2_token", lambda *_, claims=claims: claims)
+        monkeypatch.setattr(auth.httpx, "AsyncClient", _FakeAsyncClient(_FakeResponse(200, claims)))
         with pytest.raises(ValueError):
-            auth.verify_google_credential("credential")
+            await auth.verify_google_credential("access-token")
 
-    monkeypatch.setattr(auth.google_id_token, "verify_oauth2_token", lambda *_: (_ for _ in ()).throw(ValueError("expired or bad signature")))
+    # Access token het han/khong hop le -> Google tra ve status != 200.
+    monkeypatch.setattr(auth.httpx, "AsyncClient", _FakeAsyncClient(_FakeResponse(400, {})))
     with pytest.raises(ValueError):
-        auth.verify_google_credential("credential")
+        await auth.verify_google_credential("access-token")
 
 
 def test_action_and_refresh_tokens_reject_stale_concurrent_claims(tmp_path):

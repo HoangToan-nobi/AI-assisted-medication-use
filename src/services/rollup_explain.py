@@ -131,11 +131,18 @@ async def literal_merge_translate(
     system_prompt = (
         _LITERAL_MERGE_SYSTEM_PROMPT_WITH_XU_TRI if include_xu_tri else _LITERAL_MERGE_SYSTEM_PROMPT_MO_TA_ONLY
     )
+    # temperature=0: đây là bản dịch bám sát nghĩa gốc (không sáng tạo/diễn giải lại
+    # như giai_thich) - dùng chung temperature=0.7 mặc định sẽ khiến bản dịch trôi
+    # nghĩa giữa các lần sinh dù cùng 1 nguồn (rà soát kiến trúc 01/09 trước eval
+    # quy mô lớn - gia thuyết đã ghi từ PLAN.md, chưa từng được xử lý). Đây là bản
+    # dịch dược sĩ dùng làm trích dẫn tin cậy nên cần ổn định/nhất quán hơn văn tổng
+    # hợp giai_thich (vẫn giữ 0.7 để đa dạng cách nói).
     response = await ainvoke_llm(
         [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": "\n\n".join(lines)},
-        ]
+        ],
+        temperature=0,
     )
     return _literal_merge_parse(response.content or "")
 
@@ -222,7 +229,10 @@ _PRODUCT_STYLE_PATIENT = (
     "giãn theo độ phức tạp của dữ liệu gốc: cơ chế đơn giản thì viết 2 câu "
     "ngắn (~50-70 từ); dữ liệu có nhiều cặp hoạt chất hoặc nhiều cơ chế/yếu tố "
     "nguy cơ thì viết 3-4 câu (~90-130 từ) để giải thích đủ ý, không cắt bớt "
-    "thông tin quan trọng chỉ để cho ngắn. Mỗi câu là 1 ý, viết câu đơn, không "
+    "thông tin quan trọng chỉ để cho ngắn - nếu nguồn liệt kê từ 3 điều kiện/"
+    "yếu tố nguy cơ/hậu quả trở lên, PHẢI nêu tên đủ TẤT CẢ (có thể liệt kê "
+    "ngắn gọn trong 1 câu), không chỉ chọn 1-2 cái nổi bật nhất rồi bỏ qua "
+    "phần còn lại. Mỗi câu là 1 ý, viết câu đơn, không "
     "cần từ nối cầu kỳ - nhưng ý câu sau phải liên quan trực tiếp và làm rõ "
     "thêm cho ý câu trước (VD: câu nêu rủi ro xong thì câu tiếp theo giải "
     "thích vì sao xảy ra), không viết những ý rời rạc, không ăn nhập với "
@@ -243,7 +253,10 @@ _PRODUCT_STYLE_PHARMACIST = (
     "Phần dược sĩ: giọng khoa học, chuyên nghiệp, súc tích. Độ dài co giãn "
     "theo độ phức tạp của dữ liệu gốc: cơ chế đơn giản thì viết 2 câu (~40-50 "
     "từ); nhiều cặp hoạt chất hoặc nhiều cơ chế cần gộp thì viết 3 câu (~70-90 "
-    "từ), không cắt bớt thông tin quan trọng chỉ để cho ngắn. Mỗi câu 1 ý, "
+    "từ), không cắt bớt thông tin quan trọng chỉ để cho ngắn - nếu nguồn liệt "
+    "kê từ 3 điều kiện/yếu tố nguy cơ/hậu quả trở lên, PHẢI nêu tên đủ TẤT CẢ "
+    "(có thể liệt kê ngắn gọn trong 1 câu), không chỉ chọn 1-2 cái nổi bật "
+    "nhất rồi bỏ qua phần còn lại. Mỗi câu 1 ý, "
     "viết câu đơn - nhưng ý câu sau phải liên quan trực tiếp và làm rõ thêm "
     "cho ý câu trước, không viết những ý rời rạc, không ăn nhập với nhau. "
     "Nếu Mô tả CSDL có số liệu cụ thể quan trọng thể hiện mức độ tác động "
@@ -305,18 +318,27 @@ def _product_citation(pair_count: int) -> str:
     return f"Tổng hợp từ {pair_count} cặp hoạt chất tương tác trong CSDL DDInter 2.0."
 
 
-def _product_user_prompt(product_a: str, product_b: str, contributing_pairs: list[dict]) -> str:
+def _product_user_prompt(product_a: str, product_b: str, contributing_pairs: list[dict], audience: str) -> str:
     # Không đưa "mức độ nghiêm trọng cao nhất" riêng - contributing_pairs đã sort
     # nặng nhất trước (xem build_product_edges) nên cặp đầu tiên dưới đây LUÔN
     # trùng đúng mức đó, đưa thêm 1 dòng riêng chỉ lặp lại vô ích.
+    #
+    # Xử trí CSDL CHỈ đưa vào cho audience=pharmacist - trước đây đưa cho cả patient
+    # rồi trông chờ prompt (SAFETY_RULES) tự loại bỏ khi viết, nhưng eval phát hiện
+    # LLM không tuân thủ 100% (case dd-nang-016, dd-nang-001, dd-trung_binh-027 - xem
+    # eval/results/report.md Finding 15/14) - chặn từ gốc, không đưa dữ liệu vào thay
+    # vì chỉ dặn đừng dùng.
+    include_xu_tri = audience == "pharmacist"
     lines = [f"Cặp thuốc: {product_a} + {product_b}", ""]
     lines.append("Các cặp hoạt chất góp phần (CSDL DDInter 2.0, tiếng Anh):")
     for pair in contributing_pairs[:_MAX_CONTRIBUTING_PAIRS]:
-        lines.append(
+        block = (
             f"- Hoạt chất {pair.get('thuoc_a')} + {pair.get('thuoc_b')} (mức {pair.get('muc_do')}):\n"
-            f"  Mô tả CSDL: {_truncate(pair.get('mo_ta'), 800)}\n"
-            f"  Xử trí CSDL: {_truncate(pair.get('xu_tri'), 800) or '(không có)'}"
+            f"  Mô tả CSDL: {_truncate(pair.get('mo_ta'), 800)}"
         )
+        if include_xu_tri:
+            block += f"\n  Xử trí CSDL: {_truncate(pair.get('xu_tri'), 800) or '(không có)'}"
+        lines.append(block)
     lines.append("")
     lines.append("Hãy trả lời đúng 2 phần theo định dạng đã nêu, bằng tiếng Việt, không thêm dữ kiện nào ngoài đó.")
     return "\n".join(lines)
@@ -363,7 +385,7 @@ async def _explain_product_edge(edge: dict, audience: str) -> dict:
             {"role": "system", "content": _product_system_prompt(audience)},
             {
                 "role": "user",
-                "content": _product_user_prompt(product_a, product_b, edge["contributing_pairs"]),
+                "content": _product_user_prompt(product_a, product_b, edge["contributing_pairs"], audience),
             },
         ]
     )

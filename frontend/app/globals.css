@@ -3329,6 +3329,38 @@ html[data-theme="dark"] .bottom-nav.sidebar {
 .interaction-search__input input:focus {
   box-shadow: none;
 }
+/* Thủ phạm thật: rule dùng chung "input:not([type=checkbox]):focus" (áp cho
+   TOÀN BỘ input trên trang, độ ưu tiên cao hơn rule phía trên vì có thêm
+   [data-theme=dark]/:not()) đang tự vẽ box-shadow 3-4px trực tiếp lên chính
+   thẻ <input> bên trong - không phải lên khung bao ngoài. Ghi đè bằng
+   !important, nhắm đúng input trong khung tìm thuốc. */
+.interaction-search__input input:focus,
+.interaction-search__input input:not([type="checkbox"]):focus {
+  box-shadow: none !important;
+  border-color: transparent !important;
+  outline: 0 !important;
+}
+/* Highlight khi bấm vào ô tìm thuốc - vẽ ĐÚNG 1 LẦN ở khung ngoài (không phải
+   khung ngoài lẫn input bên trong đều tự vẽ box-shadow riêng như bản gốc, dẫn
+   đến 2 vòng sáng chồng lệch nhau trông như "khung kỳ quặc"). Input bên trong
+   đã tắt hẳn box-shadow riêng ở rule phía trên. */
+.interaction-search__input {
+  border-color: #d5dfed !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.interaction-search__input:focus-within {
+  border-color: #6f89c2 !important;
+  box-shadow: 0 0 0 3px rgba(79, 111, 186, 0.18) !important;
+}
+html[data-theme="dark"] .interaction-search__input {
+  border-color: #405b80 !important;
+}
+html[data-theme="dark"] .interaction-search__input:focus-within {
+  border-color: #83a9e8 !important;
+  box-shadow: 0 0 0 3px rgba(110, 153, 226, 0.28) !important;
+}
 .interaction-search__input button {
   min-height: unset;
   padding: 5px;
@@ -6095,10 +6127,25 @@ html[data-theme="dark"] .ocr-scan-row__unmatched {
   max-height: 240px;
   overflow-y: auto;
   padding: 6px;
-  background: #fff;
-  border: 1px solid #c7d8ef;
+  background: var(--surface-container-high);
+  border: 1px solid var(--outline-variant);
   border-radius: 10px;
-  box-shadow: 0 10px 24px rgba(20, 40, 80, 0.14);
+  box-shadow: var(--shadow-overlay);
+  scrollbar-width: thin;
+  scrollbar-color: var(--outline-variant) transparent;
+}
+.prescription-panel__import-menu::-webkit-scrollbar {
+  width: 6px;
+}
+.prescription-panel__import-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+.prescription-panel__import-menu::-webkit-scrollbar-thumb {
+  background: var(--outline-variant);
+  border-radius: 999px;
+}
+.prescription-panel__import-menu::-webkit-scrollbar-thumb:hover {
+  background: var(--outline);
 }
 .prescription-panel__import-menu li {
   display: flex;
@@ -6110,11 +6157,12 @@ html[data-theme="dark"] .ocr-scan-row__unmatched {
   cursor: pointer;
 }
 .prescription-panel__import-menu li:hover {
-  background: #eef4fc;
+  background: var(--surface-container-highest);
 }
 .prescription-panel__import-menu li strong {
   display: block;
   font-size: 13px;
+  color: var(--on-surface);
 }
 .prescription-panel__import-menu li small {
   color: var(--on-surface-variant);
@@ -6452,8 +6500,20 @@ html[data-theme="dark"] .ocr-scan-row__unmatched {
   border: 1px solid #d3dfef;
   border-radius: 6px;
   box-shadow: none;
-  font-size: 12px;
+  /* Root cause (đã dựng lại đúng CSS thật bằng Chrome để soi pixel, không phải
+     đoán): trình duyệt mặc định "line-height: normal" cho <button>, KHÔNG kế
+     thừa line-height: 1.47 của body như div/span thường. Với line-height sít
+     đó, dấu huyền của "Ồ" (chồng lên dấu mũ, nhô cao hơn chữ hoa thường) bị đẩy
+     ra ngoài khung dòng - và .citation-trigger__text bên dưới có overflow:
+     hidden (bắt buộc để làm "…" khi tên thuốc dài) nên cắt luôn phần đỉnh dấu
+     huyền đó, trông như mất dấu ("NGUỒN" -> "NGUÔN"). Set line-height rõ ràng ở
+     đây là fix thật; font-size/case-feature chỉ là cải thiện phụ, không phải
+     nguyên nhân chính. */
+  font-size: 15px;
   font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+  font-feature-settings: "case" 1;
 }
 .citation-trigger__text {
   display: block;
@@ -6504,9 +6564,12 @@ html[data-theme="dark"] .ocr-scan-row__unmatched {
   display: block;
   margin-bottom: 7px;
   color: #5b789c;
-  font-size: 10px;
+  /* Cùng lý do với .citation-trigger (xem comment ở đó) - tăng hẳn lên cho 2
+     dấu mũ+huyền trên "Ồ" tách rõ, không dính lại thành 1 dấu. */
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.1em;
+  font-feature-settings: "case" 1;
 }
 .citation-popover strong {
   display: block;

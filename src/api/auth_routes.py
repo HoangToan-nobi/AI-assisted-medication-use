@@ -259,16 +259,16 @@ async def login(payload: LoginRequest, response: Response, request: Request, db:
     return _auth_result(user, access)
 
 
-def _verified_google(credential: str) -> dict:
+async def _verified_google(credential: str) -> dict:
     try:
-        return verify_google_credential(credential)
+        return await verify_google_credential(credential)
     except ValueError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 
 @router.post("/google")
 async def google_login(payload: GoogleCredentialRequest, response: Response, db: Session = Depends(get_db)):
-    claims = _verified_google(payload.credential)
+    claims = await _verified_google(payload.credential)
     identity = db.query(AuthIdentity).filter_by(provider="google", subject=claims["sub"]).first()
     if identity:
         user = db.get(User, identity.user_id)
@@ -286,7 +286,7 @@ async def google_login(payload: GoogleCredentialRequest, response: Response, db:
 
 @router.post("/google/complete-registration")
 async def google_complete_registration(payload: GoogleRegistrationRequest, response: Response, db: Session = Depends(get_db)):
-    claims = _verified_google(payload.credential)
+    claims = await _verified_google(payload.credential)
     _validate_pharmacist_fields(payload.vai_tro, payload.so_chung_chi_hanh_nghe, payload.noi_cong_tac)
     email = normalize_email(claims["email"])
     if db.query(AuthIdentity).filter_by(provider="google", subject=claims["sub"]).first():
@@ -319,7 +319,7 @@ async def google_complete_registration(payload: GoogleRegistrationRequest, respo
 
 @router.post("/google/link")
 async def google_link(payload: GoogleLinkRequest, response: Response, request: Request, db: Session = Depends(get_db)):
-    claims = _verified_google(payload.credential)
+    claims = await _verified_google(payload.credential)
     email = normalize_email(claims["email"])
     key = f"{request.client.host if request.client else 'unknown'}:{email}"
     _enforce_rate_limit(db, "google_link_failed", key, 5, 15)

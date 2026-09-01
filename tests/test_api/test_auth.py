@@ -28,7 +28,7 @@ async def auth_env(monkeypatch):
 
     app.dependency_overrides[get_db] = override_db
 
-    def fake_google(credential: str):
+    async def fake_google(credential: str):
         if credential == "invalid-google-token-value":
             raise ValueError("Google token không hợp lệ")
         suffix = credential.rsplit("-", 1)[-1]
