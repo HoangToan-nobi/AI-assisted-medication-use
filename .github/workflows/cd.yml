@@ -1,8 +1,12 @@
 name: CD
 
+# Tat auto-deploy: workflow KHONG con chay khi push nua, chi chay khi bam tay
+# "Run workflow" trong tab Actions (workflow_dispatch). Muon bat lai auto-deploy
+# thi bo comment khoi "push" ben duoi.
 on:
-  push:
-    branches: [feature/production]
+  workflow_dispatch:
+  # push:
+  #   branches: [feature/production]
 
 jobs:
   test:

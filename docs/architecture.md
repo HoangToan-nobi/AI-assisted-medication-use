@@ -149,9 +149,11 @@ flowchart LR
   ở tầng server nên production chỉ lộ một origin, cookie phiên là same-site.
 - Backend chạy free tier → **request đầu sau thời gian nghỉ mất 30–60 giây** (cold start),
   các request sau dưới 1 giây.
-- CI/CD: push nhánh `feature/production` → GitHub Actions (self-hosted runner của BTC)
-  chạy ruff + pytest → build image lên GHCR + deploy hook Render → `vercel deploy --prod`
-  ([`.github/workflows/cd.yml`](../.github/workflows/cd.yml)).
+- CI: mọi push/PR chạy ruff + pytest trên self-hosted runner của BTC
+  ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)).
+- CD: build image lên GHCR + deploy hook Render + `vercel deploy --prod`
+  ([`.github/workflows/cd.yml`](../.github/workflows/cd.yml)). Auto-deploy theo push
+  **đang tắt** — chạy tay bằng "Run workflow" trong tab Actions để tránh deploy ngoài ý muốn.
 - Local: `docker compose up --build` chạy `frontend` (:3000), `backend` (:8000) và `ocr`
   (chỉ mạng nội bộ). Thiếu `data/raw/thuoc_final_project.csv` thì `ocr` không healthy và
   backend không khởi động — chạy `docker compose up --no-deps backend frontend` để bỏ OCR.
@@ -179,7 +181,7 @@ flowchart LR
 | LLM | DeepSeek qua API tương thích OpenAI | Giải thích tiếng Việt, chi phí thấp; `temperature=0.3` sau kết quả eval |
 | Database | Supabase + CockroachDB | Dùng chung cho cả team; tách bảng tra cứu vì quota free tier |
 | OCR | Service riêng trên Modal | Image ~4 GB, ~2 GB RAM; scale-to-zero nên chỉ tốn credit khi có ảnh |
-| Deploy | Vercel + Render | Live URL public, deploy tự động từ nhánh `feature/production` |
+| Deploy | Vercel + Render | Live URL public; pipeline deploy chạy tay từ nhánh `feature/production` |
 | An toàn | Human-in-the-loop | Cảnh báo chỉ đáng tin sau khi dược sĩ xác nhận |
 
 ## 9. Giới hạn hiện tại
