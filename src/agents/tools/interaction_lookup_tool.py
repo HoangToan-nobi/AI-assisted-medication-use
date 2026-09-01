@@ -4,7 +4,7 @@ import json
 from langchain_core.tools import tool
 
 from src.db.models import Interaction, Medication
-from src.db.session import SessionLocal
+from src.db.session import SessionLocal, SessionLocalFacts
 
 
 @tool
@@ -23,6 +23,7 @@ def interaction_lookup(medication_ids: list[str]) -> str:
         Nếu không tìm thấy, trả về "khong_du_du_lieu": true cho cặp đó.
     """
     db = SessionLocal()
+    db_facts = SessionLocalFacts()
     try:
         results = []
         for id_1, id_2 in itertools.combinations(medication_ids, 2):
@@ -33,7 +34,7 @@ def interaction_lookup(medication_ids: list[str]) -> str:
             ten_b = med_b.ten_chuan_hoa if med_b else id_b
 
             interaction = (
-                db.query(Interaction)
+                db_facts.query(Interaction)
                 .filter_by(medication_a_id=id_a, medication_b_id=id_b)
                 .first()
             )
@@ -69,3 +70,4 @@ def interaction_lookup(medication_ids: list[str]) -> str:
         return json.dumps(results, ensure_ascii=False)
     finally:
         db.close()
+        db_facts.close()

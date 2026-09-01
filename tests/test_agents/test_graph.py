@@ -96,9 +96,13 @@ async def test_lookup_node_finds_severe_interaction():
 
 
 # TC-N04: lookup_node không bịa tương tác khi 2 thuốc thật không có cặp trong CSDL.
-# Cap Ethanol+Acetaminophen dung truoc day da co du lieu that (muc "nang") sau khi
-# data/raw duoc nap them nhieu nhom ATC hon (B/D/P/V&R...) - doi sang cap
-# Amoxicillin+Acetaminophen, da xac minh hien khong co dong nao trong interactions.
+# Da 2 lan phai doi cap "thuc" dung de test (Ethanol+Acetaminophen roi
+# Amoxicillin+Acetaminophen) vi moi lan nap them du lieu that (mo rong ATC, roi
+# migrate_to_cockroach.py gop merged_ddinter.db tu 70.424 len 160.227 cap - xem
+# docs/database-split.md) lai vo tinh lam cap dang dung "co du lieu that". Dung
+# 1 medication_id gia (khong ton tai) thay vi 1 cap thuoc that de test nay khong con
+# phu thuoc vao tinh trang du lieu con thieu tai 1 thoi diem - se luon dung du DB co
+# mo rong bao nhieu di nua.
 @_requires_real_data
 @pytest.mark.asyncio
 async def test_lookup_node_no_data_for_unknown_pair():
@@ -112,9 +116,9 @@ async def test_lookup_node_no_data_for_unknown_pair():
                     "khong_du_du_lieu": False,
                 },
                 {
-                    "ten_goc": "paracetamol",
-                    "ten_chuan": "Acetaminophen",
-                    "medication_id": ACETAMINOPHEN_ID,
+                    "ten_goc": "thuoc khong ton tai",
+                    "ten_chuan": "ThuocKhongTonTai",
+                    "medication_id": "DDInter_KHONG_TON_TAI",
                     "khong_du_du_lieu": False,
                 },
             ]
@@ -201,9 +205,8 @@ async def test_rank_node_flags_unclassified():
 
 # TC-N06: explain_node luôn gán nguon_trich_dan không rỗng cho mỗi giải thích.
 @pytest.mark.asyncio
-async def test_explain_node_always_has_citation(monkeypatch, mock_llm):
-    monkeypatch.setattr("src.agents.nodes.explain_node.ainvoke_llm", mock_llm.ainvoke)
-
+async def test_explain_node_always_has_citation():
+    # explain_node không còn gọi LLM (chỉ giữ field cấu trúc) - không cần mock nữa.
     result = await explain_node(
         {
             "ranked_results": [
@@ -224,14 +227,10 @@ async def test_explain_node_always_has_citation(monkeypatch, mock_llm):
     assert explanations[0]["nguon_trich_dan"]
 
 
-# TC-N11: explain_node trả câu cố định cho mức "chua_phan_loai", KHÔNG gọi LLM.
+# TC-N11: explain_node trả câu cố định cho mức "chua_phan_loai" - node này không
+# còn gọi LLM ở bất kỳ nhánh nào (xem TC-N06 test_explain_node_always_has_citation).
 @pytest.mark.asyncio
-async def test_explain_node_unclassified_skips_llm(monkeypatch):
-    async def _fail_if_called(*args, **kwargs):
-        raise AssertionError("explain_node khong duoc goi LLM cho muc chua_phan_loai")
-
-    monkeypatch.setattr("src.agents.nodes.explain_node.ainvoke_llm", _fail_if_called)
-
+async def test_explain_node_unclassified_skips_llm():
     result = await explain_node(
         {
             "ranked_results": [

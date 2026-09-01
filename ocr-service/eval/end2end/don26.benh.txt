@@ -1,0 +1,6 @@
+I20 - Cơn đau thắt ngực
+J20 - Viêm phế quản cấp
+K76 - Bệnh gan khác
+E14 - Các thể loại đái tháo đường không xác định
+E78 - Rối loạn chuyển hóa lipoprotein và tình trạng tăng lipid máu khác
+I10 - Bệnh tăng huyết áp vô căn (nguyên phát)

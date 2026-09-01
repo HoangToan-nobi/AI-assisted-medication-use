@@ -36,15 +36,50 @@ def main() -> None:
     print("Tao bang tren Postgres (theo dung models.py hien tai)...")
     Base.metadata.create_all(bind=dst_engine)
 
+    # SQLite khong ep FK theo mac dinh nen data cu co the co ban ghi mo coi (vd user
+    # test da bi xoa nhung con don thuoc/thong bao tro toi id do). Postgres ep FK
+    # cung nen phai loc bo truoc khi insert, neu khong se ForeignKeyViolation giua
+    # chung va rollback toan bo transaction.
+    valid_ids: dict[str, set] = {}
+
     with src_engine.connect() as src_conn, dst_engine.begin() as dst_conn:
         for table in Base.metadata.sorted_tables:
             rows = [dict(row._mapping) for row in src_conn.execute(table.select())]
             if not rows:
                 print(f"  {table.name}: 0 dong, bo qua")
+                valid_ids[table.name] = set()
                 continue
-            for i in range(0, len(rows), _CHUNK_SIZE):
-                dst_conn.execute(table.insert(), rows[i : i + _CHUNK_SIZE])
-            print(f"  {table.name}: da copy {len(rows)} dong")
+
+            fk_checks = [
+                (col.name, fk.column.table.name)
+                for col in table.columns
+                for fk in col.foreign_keys
+                if fk.column.table.name in valid_ids
+            ]
+            kept = []
+            skipped = 0
+            for row in rows:
+                ok = True
+                for col_name, parent_table in fk_checks:
+                    val = row.get(col_name)
+                    if val is not None and val not in valid_ids[parent_table]:
+                        ok = False
+                        break
+                if ok:
+                    kept.append(row)
+                else:
+                    skipped += 1
+
+            for i in range(0, len(kept), _CHUNK_SIZE):
+                dst_conn.execute(table.insert(), kept[i : i + _CHUNK_SIZE])
+
+            pk_col = list(table.primary_key.columns)[0].name if table.primary_key.columns else None
+            valid_ids[table.name] = {row[pk_col] for row in kept} if pk_col else set()
+
+            msg = f"  {table.name}: da copy {len(kept)} dong"
+            if skipped:
+                msg += f" (BO QUA {skipped} dong mo coi - FK tro toi ban ghi khong ton tai)"
+            print(msg)
 
     print("Xong. Kiem tra lai bang cach tro DATABASE_URL cua app sang Postgres nay va chay thu.")
 

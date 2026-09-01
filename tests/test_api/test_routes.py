@@ -2,6 +2,7 @@ import uuid
 
 import pytest
 
+from src.db.models import User
 from src.db.session import SessionLocal
 
 
@@ -33,10 +34,17 @@ async def _register(client, ho_ten: str, vai_tro: str) -> dict:
     email = _unique_email(vai_tro)
     response = await client.post(
         "/api/v1/auth/register",
-        json={"ho_ten": ho_ten, "email": email, "mat_khau": "matkhau123", "vai_tro": vai_tro},
+        json={"ho_ten": ho_ten, "email": email, "mat_khau": "matkhau-password-123", "vai_tro": vai_tro, **({"so_chung_chi_hanh_nghe": "TEST-CCHN", "noi_cong_tac": "Test hospital"} if vai_tro == "pharmacist" else {})},
     )
-    assert response.status_code == 201, response.text
-    return response.json()
+    assert response.status_code == 202, response.text
+    with SessionLocal() as db:
+        user = db.query(User).filter_by(email_normalized=email).one()
+        user.email_verified_at = __import__("datetime").datetime.utcnow()
+        user.account_status = "active"
+        db.commit()
+    login = await client.post("/api/v1/auth/login", json={"email": email, "mat_khau": "matkhau-password-123"})
+    assert login.status_code == 200, login.text
+    return login.json()
 
 
 def _auth_headers(token: str) -> dict:
@@ -52,15 +60,19 @@ async def test_register_and_login(client):
         json={
             "ho_ten": "Co Lan",
             "email": email,
-            "mat_khau": "matkhau123",
+            "mat_khau": "matkhau-password-123",
             "vai_tro": "patient",
         },
     )
-    assert register_resp.status_code == 201
-    assert register_resp.json()["vai_tro"] == "patient"
+    assert register_resp.status_code == 202
+    with SessionLocal() as db:
+        user = db.query(User).filter_by(email_normalized=email).one()
+        user.email_verified_at = __import__("datetime").datetime.utcnow()
+        user.account_status = "active"
+        db.commit()
 
     login_resp = await client.post(
-        "/api/v1/auth/login", json={"email": email, "mat_khau": "matkhau123"}
+        "/api/v1/auth/login", json={"email": email, "mat_khau": "matkhau-password-123"}
     )
     assert login_resp.status_code == 200
     assert login_resp.json()["access_token"]
@@ -80,11 +92,8 @@ async def test_medications_check_requires_auth(client):
 
 # TC-A03: bệnh nhân kiểm tra tương tác - cặp thật mức "nang", response KHÔNG có xu_tri (pharmacist-only).
 @pytest.mark.asyncio
-async def test_check_medications_severe_pair_hides_pharmacist_fields(client, monkeypatch, mock_llm):
-    # Mức "nang" (khác chua_phan_loai) đi qua nhánh gọi LLM thật trong explain_node -
-    # mock lại để test không phụ thuộc DEEPSEEK_API_KEY thật.
-    monkeypatch.setattr("src.agents.nodes.explain_node.ainvoke_llm", mock_llm.ainvoke)
-
+async def test_check_medications_severe_pair_hides_pharmacist_fields(client):
+    # explain_node không còn gọi LLM (chỉ giữ field cấu trúc) - không cần mock nữa.
     patient = await _register(client, "Benh nhan A", "patient")
     headers = _auth_headers(patient["access_token"])
 
@@ -242,114 +251,151 @@ async def test_search_medications_matches_alias(client):
 
 
 @pytest.mark.asyncio
-async def test_pharmacist_receives_review_request_and_can_review(monkeypatch, mock_llm):
-    monkeypatch.setattr("src.agents.nodes.explain_node.ainvoke_llm", mock_llm.ainvoke)
+async def test_pharmacist_receives_review_request_and_can_review(client):
+    patient = await _register(client, "Benh nhan C", "patient")
+    pharmacist = await _register(client, "Duoc si D", "pharmacist")
+    patient_headers = _auth_headers(patient["access_token"])
+    pharmacist_headers = _auth_headers(pharmacist["access_token"])
 
-    from httpx import ASGITransport, AsyncClient
+    check_resp = await client.post(
+        "/api/v1/medications/check",
+        json={"medications": ["warfarin", "asp"]},
+        headers=patient_headers,
+    )
+    assert check_resp.status_code == 200
+    check_id = check_resp.json()["interaction_check_id"]
+    request_resp = await client.post(
+        f"/api/v1/checks/{check_id}/pharmacists/{pharmacist['user_id']}/request_review",
+        json={"gui_kem_ho_so": True},
+        headers=patient_headers,
+    )
+    assert request_resp.status_code == 201
 
-    from src.main import app
+    # Dược sĩ được yêu cầu xem chi tiết đầy đủ - CÓ xu_tri (pharmacist-only).
+    detail_resp = await client.get(
+        f"/api/v1/pharmacist/reviews/{check_id}", headers=pharmacist_headers
+    )
+    assert detail_resp.status_code == 200
+    detail = detail_resp.json()
+    assert any("xu_tri" in e for e in detail["explanations"])
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        patient = await _register(client, "Benh nhan C", "patient")
-        pharmacist = await _register(client, "Duoc si D", "pharmacist")
-        patient_headers = _auth_headers(patient["access_token"])
-        pharmacist_headers = _auth_headers(pharmacist["access_token"])
+    # Xác nhận review -> trạng thái "đã xác nhận".
+    review_resp = await client.post(
+        "/api/v1/pharmacist/reviews",
+        json={"interaction_check_id": check_id, "ghi_chu": "Da tu van benh nhan"},
+        headers=pharmacist_headers,
+    )
+    assert review_resp.status_code == 200
+    assert review_resp.json()["trang_thai_xac_nhan"] == "da_xac_nhan"
 
-        # Bệnh nhân tự kiểm tra một cặp thuốc thật mức "nang".
-        check_resp = await client.post(
+    final_resp = await client.get("/api/v1/pharmacist/requests", headers=pharmacist_headers)
+    assert final_resp.json()[0]["trang_thai_xac_nhan"] == "da_xac_nhan"
+
+    # Xác nhận xong -> bệnh nhân có 1 thông báo mới, chưa đọc, nhắc tên dược sĩ.
+    notif_resp = await client.get(
+        f"/api/v1/patients/{patient['user_id']}/notifications", headers=patient_headers
+    )
+    assert notif_resp.status_code == 200
+    notifications = notif_resp.json()
+    assert len(notifications) == 1
+    assert notifications[0]["da_doc"] is False
+    assert "Duoc si D" in notifications[0]["noi_dung"]
+    assert notifications[0]["interaction_check_id"] == check_id
+
+    # Đánh dấu đã đọc -> phản ánh đúng ở lần gọi lại.
+    mark_resp = await client.post(
+        f"/api/v1/patients/{patient['user_id']}/notifications/{notifications[0]['id']}/read",
+        headers=patient_headers,
+    )
+    assert mark_resp.status_code == 204
+    notif_resp2 = await client.get(
+        f"/api/v1/patients/{patient['user_id']}/notifications", headers=patient_headers
+    )
+    assert notif_resp2.json()[0]["da_doc"] is True
+
+    # Bệnh nhân khác không xem được thông báo của người khác.
+    other_patient = await _register(client, "Benh nhan khac 2", "patient")
+    forbidden_notif_resp = await client.get(
+        f"/api/v1/patients/{patient['user_id']}/notifications",
+        headers=_auth_headers(other_patient["access_token"]),
+    )
+    assert forbidden_notif_resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_patient_profile_sharing_is_optional_and_does_not_gate_interaction_review(client):
+    patient = await _register(client, "Benh nhan rieng tu", "patient")
+    pharmacist = await _register(client, "Duoc si quyen rieng tu", "pharmacist")
+    patient_headers = _auth_headers(patient["access_token"])
+    pharmacist_headers = _auth_headers(pharmacist["access_token"])
+
+    profile_resp = await client.patch(
+        f"/api/v1/patients/{patient['user_id']}/profile",
+        json={
+            "ngay_sinh": "1992-03-04",
+            "benh_nen_ghi_chu": "Tang huyet ap",
+            "di_ung_thuoc": "Penicillin",
+        },
+        headers=patient_headers,
+    )
+    assert profile_resp.status_code == 200
+
+    async def create_check() -> str:
+        response = await client.post(
             "/api/v1/medications/check",
             json={"medications": ["warfarin", "asp"]},
             headers=patient_headers,
         )
-        assert check_resp.status_code == 200
-        check_id = check_resp.json()["interaction_check_id"]
+        assert response.status_code == 200
+        return response.json()["interaction_check_id"]
 
-        # Dược sĩ chưa nhận được request nào.
-        before_resp = await client.get("/api/v1/pharmacist/requests", headers=pharmacist_headers)
-        assert before_resp.status_code == 200
-        assert len(before_resp.json()) == 0
+    private_check_id = await create_check()
+    private_request = await client.post(
+        f"/api/v1/checks/{private_check_id}/pharmacists/{pharmacist['user_id']}/request_review",
+        json={"gui_kem_ho_so": False},
+        headers=patient_headers,
+    )
+    assert private_request.status_code == 201
 
-        # Bệnh nhân gửi yêu cầu review - lần này chọn TỰ NHẬP thông tin (trường hợp
-        # tra cứu hộ người khác), không gửi kèm hồ sơ cá nhân của chính mình.
-        req_resp = await client.post(
-            f"/api/v1/checks/{check_id}/pharmacists/{pharmacist['user_id']}/request_review",
-            json={
-                "gui_kem_ho_so": False,
-                "ten_nguoi_duoc_kiem_tra": "Nguoi than cua benh nhan",
-                "ngay_sinh_nhap_tay": "1990-01-01",
-                "ghi_chu_nhap_tay": "Di ung penicillin",
-            },
-            headers=patient_headers,
-        )
-        assert req_resp.status_code == 201
+    requests = (await client.get("/api/v1/pharmacist/requests", headers=pharmacist_headers)).json()
+    private_summary = next(item for item in requests if item["check_id"] == private_check_id)
+    assert private_summary["patient_name"] == "Người dùng ẩn danh"
+    assert private_summary["gui_kem_ho_so"] is False
 
-        # Dược sĩ thấy request, kèm đúng ngữ cảnh tự nhập ở trên.
-        after_resp = await client.get("/api/v1/pharmacist/requests", headers=pharmacist_headers)
-        after = after_resp.json()
-        assert len(after) == 1
-        assert after[0]["check_id"] == check_id
-        assert after[0]["trang_thai_xac_nhan"] == "cho_xac_nhan"
-        assert after[0]["gui_kem_ho_so"] is False
-        assert after[0]["ten_nguoi_duoc_kiem_tra"] == "Nguoi than cua benh nhan"
-        assert after[0]["ghi_chu_nhap_tay"] == "Di ung penicillin"
+    # Không chia sẻ hồ sơ vẫn cho dược sĩ xem đầy đủ kết quả của chính lần tra cứu.
+    interaction_resp = await client.get(
+        f"/api/v1/pharmacist/reviews/{private_check_id}", headers=pharmacist_headers
+    )
+    assert interaction_resp.status_code == 200
+    assert "explanations" in interaction_resp.json()
 
-        # Dược sĩ khác không xem được chi tiết.
-        other_pharmacist = await _register(client, "Duoc si khac", "pharmacist")
-        forbidden_resp = await client.get(
-            f"/api/v1/pharmacist/reviews/{check_id}",
-            headers=_auth_headers(other_pharmacist["access_token"]),
-        )
-        assert forbidden_resp.status_code == 403
+    private_profile_resp = await client.get(
+        f"/api/v1/pharmacist/reviews/{private_check_id}/patient-profile",
+        headers=pharmacist_headers,
+    )
+    assert private_profile_resp.status_code == 403
 
-        # Dược sĩ được yêu cầu xem chi tiết đầy đủ - CÓ xu_tri (pharmacist-only).
-        detail_resp = await client.get(
-            f"/api/v1/pharmacist/reviews/{check_id}", headers=pharmacist_headers
-        )
-        assert detail_resp.status_code == 200
-        detail = detail_resp.json()
-        assert any("xu_tri" in e for e in detail["explanations"])
+    # Endpoint hồ sơ chung cũng không thể dùng để đi vòng qua lựa chọn riêng tư.
+    direct_profile_resp = await client.get(
+        f"/api/v1/patients/{patient['user_id']}/profile", headers=pharmacist_headers
+    )
+    assert direct_profile_resp.status_code == 403
 
-        # Xác nhận review -> trạng thái "đã xác nhận".
-        review_resp = await client.post(
-            "/api/v1/pharmacist/reviews",
-            json={"interaction_check_id": check_id, "ghi_chu": "Da tu van benh nhan"},
-            headers=pharmacist_headers,
-        )
-        assert review_resp.status_code == 200
-        assert review_resp.json()["trang_thai_xac_nhan"] == "da_xac_nhan"
+    shared_check_id = await create_check()
+    shared_request = await client.post(
+        f"/api/v1/checks/{shared_check_id}/pharmacists/{pharmacist['user_id']}/request_review",
+        json={"gui_kem_ho_so": True},
+        headers=patient_headers,
+    )
+    assert shared_request.status_code == 201
 
-        final_resp = await client.get("/api/v1/pharmacist/requests", headers=pharmacist_headers)
-        assert final_resp.json()[0]["trang_thai_xac_nhan"] == "da_xac_nhan"
-
-        # Xác nhận xong -> bệnh nhân có 1 thông báo mới, chưa đọc, nhắc tên dược sĩ.
-        notif_resp = await client.get(
-            f"/api/v1/patients/{patient['user_id']}/notifications", headers=patient_headers
-        )
-        assert notif_resp.status_code == 200
-        notifications = notif_resp.json()
-        assert len(notifications) == 1
-        assert notifications[0]["da_doc"] is False
-        assert "Duoc si D" in notifications[0]["noi_dung"]
-        assert notifications[0]["interaction_check_id"] == check_id
-
-        # Đánh dấu đã đọc -> phản ánh đúng ở lần gọi lại.
-        mark_resp = await client.post(
-            f"/api/v1/patients/{patient['user_id']}/notifications/{notifications[0]['id']}/read",
-            headers=patient_headers,
-        )
-        assert mark_resp.status_code == 204
-        notif_resp2 = await client.get(
-            f"/api/v1/patients/{patient['user_id']}/notifications", headers=patient_headers
-        )
-        assert notif_resp2.json()[0]["da_doc"] is True
-
-        # Bệnh nhân khác không xem được thông báo của người khác.
-        other_patient = await _register(client, "Benh nhan khac 2", "patient")
-        forbidden_notif_resp = await client.get(
-            f"/api/v1/patients/{patient['user_id']}/notifications",
-            headers=_auth_headers(other_patient["access_token"]),
-        )
-        assert forbidden_notif_resp.status_code == 403
+    shared_profile_resp = await client.get(
+        f"/api/v1/pharmacist/reviews/{shared_check_id}/patient-profile",
+        headers=pharmacist_headers,
+    )
+    assert shared_profile_resp.status_code == 200
+    assert shared_profile_resp.json()["ho_ten"] == "Benh nhan rieng tu"
+    assert shared_profile_resp.json()["di_ung_thuoc"] == "Penicillin"
 
 
 # TC-A07: hồ sơ cá nhân dược sĩ - tự sửa được, người khác không sửa được.

@@ -39,8 +39,7 @@
 }
 
 .landing-nav a.active {
-  border-bottom: 2px solid var(--primary);
-  padding-bottom: 4px;
+  color: var(--primary);
 }
 
 .landing-hero {

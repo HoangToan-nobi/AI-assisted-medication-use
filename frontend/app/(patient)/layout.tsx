@@ -8,22 +8,32 @@ import MaterialIcon from "@/components/MaterialIcon";
 import NotificationBell from "@/components/NotificationBell";
 import { clearSession, getSession, onSessionUpdated, type Session } from "@/lib/auth";
 import Link from "next/link";
+import { useMediAlert } from "@/components/MediAlertProvider";
+import ThemeModeToggle from "@/components/ThemeModeToggle";
+import { getMe, logout as logoutApi } from "@/lib/api";
+import { saveSession, sessionFromAuth } from "@/lib/auth";
 
 export default function PatientLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const { toast } = useMediAlert();
   const pathname = usePathname();
   const [session, setSession] = useState<Session | null>(null);
   const [checked, setChecked] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
-    const current = getSession();
-    if ((!current || current.vaiTro !== "patient") && pathname !== "/interaction") {
-      router.replace("/");
-      return;
-    }
-    setSession(current);
-    setChecked(true);
+    let active = true;
+    getMe().then((auth) => {
+      if (!active) return;
+      const current = sessionFromAuth(auth); saveSession(current);
+      if (current.vaiTro !== "patient" && pathname !== "/interaction") router.replace("/");
+      setSession(current);
+    }).catch(() => {
+      clearSession();
+      if (pathname !== "/interaction") router.replace("/");
+      else setSession(null);
+    }).finally(() => { if (active) setChecked(true); });
+    return () => { active = false; };
   }, [router]);
 
   useEffect(() => onSessionUpdated(() => setSession(getSession())), []);
@@ -35,8 +45,13 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
   }
   if (!session) return null;
 
-  function logout() {
+  const fullName = session.hoTen.trim() || "Người dùng MediCheck";
+  const avatarLetter = fullName.split(/\s+/).pop()?.charAt(0).toUpperCase() || "M";
+
+  async function logout() {
+    await logoutApi().catch(() => undefined);
     clearSession();
+    toast({ title: "Đã đăng xuất", message: "Hẹn gặp lại bạn tại MediCheck.", tone: "info" });
     router.replace("/");
   }
 
@@ -44,8 +59,21 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
     <div className={`app-shell app-shell--with-nav ${sidebarCollapsed ? "app-shell--sidebar-collapsed" : ""}`}>
       <header className="patient-header">
         <div className="patient-header__actions" style={{ marginLeft: "auto" }}>
+          <ThemeModeToggle />
           <NotificationBell patientId={session.userId} token={session.accessToken} />
-          <Link className="patient-header__name" href="/profile" title="Hồ sơ của tôi">{session.hoTen}</Link>
+          <Link
+            className="patient-header__identity"
+            href="/profile"
+            aria-label={`Hồ sơ của ${fullName}`}
+            aria-describedby="patient-header-name-tooltip"
+          >
+            <span className="patient-header__avatar" aria-hidden="true">
+              {avatarLetter}
+            </span>
+            <span className="patient-header__tooltip" id="patient-header-name-tooltip" role="tooltip">
+              {fullName}
+            </span>
+          </Link>
           <button className="icon-btn" onClick={logout} aria-label="Đăng xuất" title="Đăng xuất">
             <MaterialIcon name="logout" size={20} />
           </button>

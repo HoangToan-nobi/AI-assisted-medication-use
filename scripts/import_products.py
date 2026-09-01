@@ -22,14 +22,23 @@ Usage:
 import csv
 import json
 import sys
+import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from sqlalchemy import bindparam, insert, update
 
 from src.db.models import Medication, Product, ProductIngredient
 from src.db.session import SessionLocal, init_db
 
 RAW_CSV = Path(__file__).resolve().parent.parent / "data" / "raw" / "thuoc_final_project.csv"
+
+# ~41k dong: lam tung dong 1 (SELECT + INSERT/UPDATE + DELETE + INSERT rieng le) tung
+# do mat hang chuc phut vi moi dong la vai round-trip mang toi Supabase (~150k+ tong
+# cong). Batch lai theo dung bai hoc rut ra tu migrate_to_cockroach.py (xem
+# docs/database-split.md) - it round-trip hon nhieu, cung 1 ket qua cuoi.
+_SQL_BATCH = 1000
 
 
 def load_rows() -> list[dict]:
@@ -49,56 +58,6 @@ def load_rows() -> list[dict]:
 
 def build_medication_id_set(db) -> set[str]:
     return {m.id for m in db.query(Medication.id).all()}
-
-
-def get_or_create_product(db, ten_thuoc: str, is_duoc_lieu: bool) -> Product:
-    product = db.query(Product).filter_by(ten_thuoc=ten_thuoc).first()
-    if product is None:
-        product = Product(
-            ten_thuoc=ten_thuoc,
-            is_duoc_lieu=is_duoc_lieu,
-            nguon_du_lieu="VMEC12 crawl",
-        )
-        db.add(product)
-        db.flush()
-    else:
-        product.is_duoc_lieu = is_duoc_lieu
-    return product
-
-
-def sync_ingredients(
-    db, product: Product, ingredients: list[dict], medication_ids: set[str]
-) -> tuple[int, int]:
-    """Ghi de toan bo ProductIngredient cua 1 Product theo CSV hien tai (idempotent)."""
-    db.query(ProductIngredient).filter_by(product_id=product.id).delete()
-
-    matched, unmatched = 0, 0
-    seen: set[str] = set()
-    for ing in ingredients:
-        ten = (ing.get("ten") or "").strip()
-        if not ten or ten.lower() in seen:
-            continue
-        seen.add(ten.lower())
-
-        ddinter_id = ing.get("ddinter_id")
-        medication_id = ddinter_id if ddinter_id in medication_ids else None
-        if medication_id:
-            matched += 1
-        else:
-            unmatched += 1
-
-        db.add(
-            ProductIngredient(
-                product_id=product.id,
-                ten_hoat_chat_raw=ten,
-                ten_hoat_chat_clean=ten,
-                medication_id=medication_id,
-            )
-        )
-    return matched, unmatched
-
-
-_SQL_BATCH = 500
 
 
 def delete_stale_products(db, current_names: set[str]) -> int:
@@ -133,11 +92,28 @@ def main() -> None:
         medication_ids = build_medication_id_set(db)
         print(f"  -> {len(medication_ids)} hoat chat trong CSDL")
 
-        print("Nap products + ingredients...")
+        print("Nap product hien co (de biet dong nao moi, dong nao thuc su can cap nhat)...")
+        existing_ids: dict[str, str] = {}
+        existing_is_duoc_lieu: dict[str, bool] = {}
+        for ten_thuoc, pid, is_duoc_lieu in db.query(
+            Product.ten_thuoc, Product.id, Product.is_duoc_lieu
+        ).all():
+            existing_ids[ten_thuoc] = pid
+            existing_is_duoc_lieu[ten_thuoc] = is_duoc_lieu
+        print(f"  -> {len(existing_ids)} product da co san")
+
+        # Gom tat ca thay doi trong bo nho truoc, chi ghi xuong DB theo batch - thay
+        # cho cach cu (1 dong CSV = vai round-trip mang rieng le, ~41k dong -> hang
+        # chuc phut). Ket qua cuoi cung giong het ban cu (upsert theo ten_thuoc, giu
+        # nguyen id cu, ghi de toan bo ingredient theo CSV hien tai).
+        new_products: list[dict] = []
+        update_products: list[dict] = []
+        all_ingredients: list[dict] = []
+        current_names: set[str] = set()
         total_matched, total_unmatched = 0, 0
         products_with_data = 0
-        current_names: set[str] = set()
-        for i, row in enumerate(rows, start=1):
+
+        for row in rows:
             ten_thuoc = row["Ten_thuoc"].strip()
             current_names.add(ten_thuoc)
             is_duoc_lieu = (row.get("Is_Duoc_Lieu") or "").strip() == "True"
@@ -146,17 +122,89 @@ def main() -> None:
             except json.JSONDecodeError:
                 ingredients = []
 
-            product = get_or_create_product(db, ten_thuoc, is_duoc_lieu)
-            matched, unmatched = sync_ingredients(db, product, ingredients, medication_ids)
+            product_id = existing_ids.get(ten_thuoc)
+            if product_id is None:
+                product_id = str(uuid.uuid4())
+                existing_ids[ten_thuoc] = product_id
+                new_products.append(
+                    {
+                        "id": product_id,
+                        "ten_thuoc": ten_thuoc,
+                        "is_duoc_lieu": is_duoc_lieu,
+                        "nguon_du_lieu": "VMEC12 crawl",
+                    }
+                )
+            elif existing_is_duoc_lieu.get(ten_thuoc) != is_duoc_lieu:
+                # Chi update khi THUC SU khac gia tri hien co - tranh executemany bulk
+                # UPDATE hang chuc nghin dong khong can thiet (da gap treo that khi chay
+                # UPDATE hang loat qua connection pooler cua Supabase, xem ghi chu lenh
+                # UPDATE ben duoi).
+                update_products.append({"pid": product_id, "is_duoc_lieu": is_duoc_lieu})
+
+            matched, unmatched = 0, 0
+            seen: set[str] = set()
+            for ing in ingredients:
+                ten = (ing.get("ten") or "").strip()
+                if not ten or ten.lower() in seen:
+                    continue
+                seen.add(ten.lower())
+
+                ddinter_id = ing.get("ddinter_id")
+                medication_id = ddinter_id if ddinter_id in medication_ids else None
+                if medication_id:
+                    matched += 1
+                else:
+                    unmatched += 1
+
+                all_ingredients.append(
+                    {
+                        "id": str(uuid.uuid4()),
+                        "product_id": product_id,
+                        "ten_hoat_chat_raw": ten,
+                        "ten_hoat_chat_clean": ten,
+                        "medication_id": medication_id,
+                    }
+                )
             total_matched += matched
             total_unmatched += unmatched
             if matched > 0:
                 products_with_data += 1
-            if i % 2000 == 0:
-                db.commit()
-                print(f"  ... {i}/{len(rows)}")
 
+        print(f"  -> {len(new_products)} product moi, {len(update_products)} product can cap nhat")
+
+        print("Ghi product moi...")
+        for i in range(0, len(new_products), _SQL_BATCH):
+            db.execute(insert(Product), new_products[i : i + _SQL_BATCH])
+            db.commit()
+            print(f"  ... {min(i + _SQL_BATCH, len(new_products))}/{len(new_products)}")
+
+        print("Cap nhat product cu (is_duoc_lieu)...")
+        # Core-level update (khong phai update(Product) o tang ORM) - tranh bulk-update
+        # cua ORM doi tham so phai dat ten dung "id" (khoa chinh) thay vi "pid".
+        update_stmt = (
+            Product.__table__.update()
+            .where(Product.__table__.c.id == bindparam("pid"))
+            .values(is_duoc_lieu=bindparam("is_duoc_lieu"))
+        )
+        for i in range(0, len(update_products), _SQL_BATCH):
+            db.execute(update_stmt, update_products[i : i + _SQL_BATCH])
+            db.commit()
+            print(f"  ... {min(i + _SQL_BATCH, len(update_products))}/{len(update_products)}")
+
+        print("Xoa toan bo ingredient cu (se nap lai het theo CSV hien tai)...")
+        # 1 lenh DELETE khong dieu kien, khong phai 45 lenh DELETE...IN theo batch id (moi
+        # lenh co the phai full-scan neu product_id khong co index) - nhanh hon nhieu, va
+        # dung ngu nghia vi toan bo all_ingredients sap ghi lai tu dau cho MOI product hien
+        # co; product nao la "stale" se bi delete_stale_products xoa het (ca Product lan
+        # ProductIngredient con lai, neu co) ngay sau day.
+        db.query(ProductIngredient).delete(synchronize_session=False)
         db.commit()
+
+        print("Ghi ingredient moi...")
+        for i in range(0, len(all_ingredients), _SQL_BATCH):
+            db.execute(insert(ProductIngredient), all_ingredients[i : i + _SQL_BATCH])
+            db.commit()
+            print(f"  ... {min(i + _SQL_BATCH, len(all_ingredients))}/{len(all_ingredients)}")
 
         print("Xoa product cu khong con trong file moi...")
         deleted = delete_stale_products(db, current_names)

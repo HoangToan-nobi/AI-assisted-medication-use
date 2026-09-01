@@ -18,6 +18,7 @@ type InteractionGraphViewProps = {
   edges: GraphEdgeVM[];
   groups: GraphGroup[];
   ariaLabel: string;
+  showLegend?: boolean;
 };
 
 const NODE_RADIUS = 7;
@@ -29,7 +30,9 @@ function truncateLabel(label: string, max = 7): string {
 // Bấm vào 1 cạnh không drill-down xuống cấp dưới nữa (đó là việc của nút "Xem chi
 // tiết" trên từng thẻ giải thích) - chỉ cuộn tới đúng thẻ giải thích tương ứng và
 // nháy viền vàng để người dùng dễ nhận ra, tái dùng class ".interaction-pair-card--focused" đã có sẵn.
-function scrollToPairCard(edgeId: string) {
+// Export để InteractionOverview.tsx dùng lại cho việc bấm cụm từ nhấn mạnh trong
+// đoạn tóm tắt tổng quan (cùng hành vi cuộn + nháy viền, không viết lại lần 2).
+export function scrollToPairCard(edgeId: string) {
   const target = document.getElementById(`interaction-pair-${edgeId}`);
   if (!target) return;
   target.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -37,7 +40,7 @@ function scrollToPairCard(edgeId: string) {
   window.setTimeout(() => target.classList.remove("interaction-pair-card--focused"), 1600);
 }
 
-export default function InteractionGraphView({ nodes, edges, groups, ariaLabel }: InteractionGraphViewProps) {
+export default function InteractionGraphView({ nodes, edges, groups, ariaLabel, showLegend = true }: InteractionGraphViewProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hovered, setHovered] = useState<Hovered | null>(null);
   const [tooltip, setTooltip] = useState<{ left: number; top: number; content: string; below: boolean; background?: string } | null>(null);
@@ -205,7 +208,7 @@ export default function InteractionGraphView({ nodes, edges, groups, ariaLabel }
         })}
       </svg>
       {tooltip && <GraphTooltip left={tooltip.left} top={tooltip.top} below={tooltip.below} background={tooltip.background}>{tooltip.content}</GraphTooltip>}
-      {groups.length > 0 && (
+      {showLegend && groups.length > 0 && (
         <div className="tt-graph-legend">
           {groups.map((g) => <span key={g.id}><i className="tt-graph-legend__dot" style={{ background: g.color }} /> {g.label}</span>)}
         </div>

@@ -8,7 +8,8 @@ on:
 
 jobs:
   lint-and-test:
-    runs-on: ubuntu-latest
+    # Runner BTC (shared, FIFO) thay vi ubuntu-latest - xem comment trong cd.yml
+    runs-on: self-hosted
 
     steps:
       - uses: actions/checkout@v4
@@ -26,7 +27,15 @@ jobs:
         run: ruff check src/ tests/
 
       - name: Run tests
-        run: pytest tests/ -v --tb=short
+        # DATABASE_URL: xem comment tuong ung trong cd.yml
+        run: |
+          rm -f ci_test.db
+          pytest tests/ -v --tb=short
         env:
           APP_ENV: test
           OPENAI_API_KEY: test-key
+          # get_llm() (src/services/llm.py) doc DEEPSEEK_API_KEY, khong phai
+          # OPENAI_API_KEY - thieu bien nay se loi "Missing credentials".
+          DEEPSEEK_API_KEY: test-key
+          DATABASE_URL: sqlite:///./ci_test.db
+          DATABASE_URL_FACTS: ""

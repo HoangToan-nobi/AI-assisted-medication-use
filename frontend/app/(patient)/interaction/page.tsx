@@ -5,10 +5,28 @@ import { useSearchParams } from "next/navigation";
 import MaterialIcon from "@/components/MaterialIcon";
 import PrescriptionPanel from "@/components/PrescriptionPanel";
 import InteractionResultView from "@/components/graph/InteractionResultView";
-import { ApiError, checkGuestProducts, checkProducts, listPatientPrescriptions, searchGuestProducts, searchProducts, type MedicationCheckResponse, type PatientPrescription } from "@/lib/api";
+import {
+  ApiError,
+  checkGuestProducts,
+  checkProducts,
+  listPatientPrescriptions,
+  searchGuestProducts,
+  searchProducts,
+  type MedicationCheckResponse,
+  type PatientPrescription,
+} from "@/lib/api";
 import { getSession } from "@/lib/auth";
-import { createPrescription, mergeSavedIntoPrescriptions, mergedDrugNames, nonEmptyPrescriptions, toPrescriptionCheckInput, type Prescription } from "@/lib/prescription";
+import { scrollBelowStickyHeader } from "@/lib/scroll";
+import {
+  createPrescription,
+  mergeSavedIntoPrescriptions,
+  mergedDrugNames,
+  nonEmptyPrescriptions,
+  toPrescriptionCheckInput,
+  type Prescription,
+} from "@/lib/prescription";
 import MediFox from "@/components/MediFox";
+import { useMediAlert } from "@/components/MediAlertProvider";
 
 // Lưu tạm các đơn/thuốc đang nhập dở và kết quả phân tích gần nhất trong phiên
 // trình duyệt, để reload trang hoặc chuyển sang tab khác rồi quay lại Tra cứu
@@ -17,9 +35,18 @@ const DRAFT_KEY = "medguard_interaction_draft";
 const RESULT_KEY = "medguard_interaction_result";
 // Ảnh chụp danh sách đơn thuốc (đã lọc rỗng) TẠI THỜI ĐIỂM chạy check tạo ra
 // RESULT_KEY - phải dùng đúng danh sách này (không phải state `prescriptions` đang
-// sống, có thể đã bị sửa tiếp) để dựng đồ thị, vì chỉ số đơn trong đó khớp với
-// don_a_index/don_b_index mà backend trả về trong result.prescription_explanations.
+// sống, có thể đã bị sửa tiếp) để dựng lại đúng đồ thị/origins phía client (xem
+// drugOrigins trong lib/prescription.ts), khớp với dữ liệu lúc chạy check.
 const RESULT_PRESCRIPTIONS_KEY = "medguard_interaction_result_prescriptions";
+
+function renumberDefaultPrescriptions(prescriptions: Prescription[]): Prescription[] {
+  return prescriptions.map((prescription, index) => ({
+    ...prescription,
+    label: /^Đơn thuốc \d+$/.test(prescription.label)
+      ? `Đơn thuốc ${index + 1}`
+      : prescription.label,
+  }));
+}
 
 function loadDraftPrescriptions(): Prescription[] | null {
   if (typeof window === "undefined") return null;
@@ -73,6 +100,7 @@ function parseLandingDrugs(value: string | null): string[] {
 
 function InteractionPageContent() {
   const session = getSession();
+  const { confirm } = useMediAlert();
   const searchParams = useSearchParams();
   // Chỉ tự nhập thuốc từ hồ sơ khi được điều hướng tới từ nút "Kiểm tra tương tác"
   // (ví dụ ở trang Hồ sơ, gắn ?import=profile) - không tự ý ghi đè khi người dùng
@@ -82,13 +110,26 @@ function InteractionPageContent() {
   const [prescriptions, setPrescriptions] = useState<Prescription[]>(() => {
     if (landingDrugs.length) {
       const prescription = createPrescription(1);
-      return [{ ...prescription, drugs: landingDrugs.map((name) => ({ name, known: true })) }];
+      return [
+        {
+          ...prescription,
+          drugs: landingDrugs.map((name) => ({ name, known: true })),
+        },
+      ];
     }
-    return loadDraftPrescriptions() ?? [createPrescription(1)];
+    return renumberDefaultPrescriptions(
+      loadDraftPrescriptions() ?? [createPrescription(1)],
+    );
   });
-  const [savedPrescriptions, setSavedPrescriptions] = useState<PatientPrescription[]>([]);
-  const [result, setResult] = useState<MedicationCheckResponse | null>(() => loadDraftResult());
-  const [resultPrescriptions, setResultPrescriptions] = useState<Prescription[] | null>(() => loadDraftResultPrescriptions());
+  const [savedPrescriptions, setSavedPrescriptions] = useState<
+    PatientPrescription[]
+  >([]);
+  const [result, setResult] = useState<MedicationCheckResponse | null>(() =>
+    loadDraftResult(),
+  );
+  const [resultPrescriptions, setResultPrescriptions] = useState<
+    Prescription[] | null
+  >(() => loadDraftResultPrescriptions());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -105,7 +146,8 @@ function InteractionPageContent() {
         // bấm thẳng vào tab Tương tác không tự ý ghi đè bàn cân. Gộp theo nhãn đơn
         // (mergeSavedIntoPrescriptions) thay vì thay thế toàn bộ, để import nhiều
         // lần liên tiếp nối tiếp nhau vào bàn cân thay vì xóa mất lần import trước.
-        if (shouldImportFromProfile && saved.length > 0) setPrescriptions((prev) => mergeSavedIntoPrescriptions(prev, saved));
+        if (shouldImportFromProfile && saved.length > 0)
+          setPrescriptions((prev) => mergeSavedIntoPrescriptions(prev, saved));
       })
       .catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -114,53 +156,86 @@ function InteractionPageContent() {
     window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(prescriptions));
   }, [prescriptions]);
   useEffect(() => {
-    if (result) window.sessionStorage.setItem(RESULT_KEY, JSON.stringify(result));
+    if (result)
+      window.sessionStorage.setItem(RESULT_KEY, JSON.stringify(result));
     else window.sessionStorage.removeItem(RESULT_KEY);
   }, [result]);
   useEffect(() => {
-    if (resultPrescriptions) window.sessionStorage.setItem(RESULT_PRESCRIPTIONS_KEY, JSON.stringify(resultPrescriptions));
+    if (resultPrescriptions)
+      window.sessionStorage.setItem(
+        RESULT_PRESCRIPTIONS_KEY,
+        JSON.stringify(resultPrescriptions),
+      );
     else window.sessionStorage.removeItem(RESULT_PRESCRIPTIONS_KEY);
   }, [resultPrescriptions]);
 
-  const searchFn = (q: string) => (session ? searchProducts(q, session.accessToken) : searchGuestProducts(q));
+  const searchFn = (q: string) =>
+    session ? searchProducts(q, session.accessToken) : searchGuestProducts(q);
 
   function addDrugTo(prescriptionId: string, name: string, known = true) {
-    setPrescriptions((prev) => prev.map((p) => {
-      if (p.id !== prescriptionId) return p;
-      if (p.drugs.some((d) => d.name.toLowerCase() === name.toLowerCase())) return p;
-      return { ...p, drugs: [...p.drugs, { name, known }] };
-    }));
+    setPrescriptions((prev) =>
+      prev.map((p) => {
+        if (p.id !== prescriptionId) return p;
+        if (p.drugs.some((d) => d.name.toLowerCase() === name.toLowerCase()))
+          return p;
+        return { ...p, drugs: [...p.drugs, { name, known }] };
+      }),
+    );
     setResult(null);
   }
 
   function removeDrugFrom(prescriptionId: string, name: string) {
-    setPrescriptions((prev) => prev.map((p) => (p.id === prescriptionId ? { ...p, drugs: p.drugs.filter((d) => d.name !== name) } : p)));
+    setPrescriptions((prev) =>
+      prev.map((p) =>
+        p.id === prescriptionId
+          ? { ...p, drugs: p.drugs.filter((d) => d.name !== name) }
+          : p,
+      ),
+    );
     setResult(null);
   }
 
   function addPrescription() {
-    setPrescriptions((prev) => [...prev, createPrescription(prev.length + 1)]);
+    setPrescriptions((prev) => {
+      const renumbered = renumberDefaultPrescriptions(prev);
+      return [...renumbered, createPrescription(renumbered.length + 1)];
+    });
   }
 
   function removePrescription(id: string) {
-    setPrescriptions((prev) => (prev.length <= 1 ? prev : prev.filter((p) => p.id !== id)));
+    setPrescriptions((prev) =>
+      prev.length <= 1
+        ? prev
+        : renumberDefaultPrescriptions(
+            prev.filter((prescription) => prescription.id !== id),
+          ),
+    );
     setResult(null);
   }
 
-  function importFromProfile(prescriptionId: string, sourcePrescriptionId: string) {
-    const source = savedPrescriptions.find((p) => p.id === sourcePrescriptionId);
+  function importFromProfile(
+    prescriptionId: string,
+    sourcePrescriptionId: string,
+  ) {
+    const source = savedPrescriptions.find(
+      (p) => p.id === sourcePrescriptionId,
+    );
     if (!source) return;
-    setPrescriptions((prev) => prev.map((p) => {
-      if (p.id !== prescriptionId) return p;
-      const existing = new Set(p.drugs.map((d) => d.name.toLowerCase()));
-      const toAdd = source.medications.filter((item) => !existing.has(item.ten_thuoc.toLowerCase())).map((item) => ({ name: item.ten_thuoc, known: true }));
-      return toAdd.length ? { ...p, drugs: [...p.drugs, ...toAdd] } : p;
-    }));
+    setPrescriptions((prev) =>
+      prev.map((p) => {
+        if (p.id !== prescriptionId) return p;
+        const existing = new Set(p.drugs.map((d) => d.name.toLowerCase()));
+        const toAdd = source.medications
+          .filter((item) => !existing.has(item.ten_thuoc.toLowerCase()))
+          .map((item) => ({ name: item.ten_thuoc, known: true }));
+        return toAdd.length ? { ...p, drugs: [...p.drugs, ...toAdd] } : p;
+      }),
+    );
     setResult(null);
   }
 
-  function resetAll() {
-    if (!window.confirm("Xóa toàn bộ đơn thuốc, thuốc đã nhập và kết quả tra cứu hiện tại?")) return;
+  async function resetAll() {
+    if (!(await confirm({ title: "Làm mới tra cứu?", message: "Xóa toàn bộ đơn thuốc, thuốc đã nhập và kết quả tra cứu hiện tại?", confirmLabel: "Làm mới", tone: "danger" }))) return;
     setPrescriptions([createPrescription(1)]);
     setResult(null);
     setResultPrescriptions(null);
@@ -170,57 +245,166 @@ function InteractionPageContent() {
   async function runCheck(e?: FormEvent) {
     e?.preventDefault();
     const activePrescriptions = nonEmptyPrescriptions(prescriptions);
-    if (mergedDrugNames(activePrescriptions).length < 2) { setError("Hãy chọn ít nhất 2 thuốc để phân tích tương tác."); return; }
-    setError(null); setLoading(true);
+    if (mergedDrugNames(activePrescriptions).length < 2) {
+      setError("Hãy chọn ít nhất 2 thuốc để phân tích tương tác.");
+      return;
+    }
+    setError(null);
+    setLoading(true);
     const payload = toPrescriptionCheckInput(activePrescriptions);
     try {
-      const data = session ? await checkProducts(payload, session.accessToken) : await checkGuestProducts(payload);
+      const data = session
+        ? await checkProducts(payload, session.accessToken)
+        : await checkGuestProducts(payload);
       setResult(data);
       setResultPrescriptions(activePrescriptions);
-      window.sessionStorage.setItem("medguard_last_check", JSON.stringify(data));
+      window.sessionStorage.setItem(
+        "medguard_last_check",
+        JSON.stringify(data),
+      );
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollBelowStickyHeader("interaction-result");
+        });
+      });
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Không thể phân tích tương tác lúc này.",
+      );
+    } finally {
+      setLoading(false);
     }
-    catch (err) { setError(err instanceof ApiError ? err.message : "Không thể phân tích tương tác lúc này."); }
-    finally { setLoading(false); }
   }
 
-  return <main className="interaction-page">{!session && <div className="guest-mode-banner"><MaterialIcon name="visibility" size={18} /><span>Chế độ khách: kết quả chỉ hiển thị tạm thời và không được lưu vào lịch sử.</span></div>}
-    <section className="page-intro page-intro--with-action">
-      <div><p className="eyebrow">PHÂN TÍCH AN TOÀN</p><h1>Kiểm Tra Tương Tác Thuốc</h1><p>Thêm thuốc mới vào đơn hiện tại để xem phân tích tương tác tức thì, hoặc thêm nhiều đơn thuốc để so sánh cùng lúc.</p></div>
-      {(result || boardMode || primary.drugs.length > 0) && (
-        <button type="button" className="interaction-reset" onClick={resetAll}>
-          <MaterialIcon name="restart_alt" size={17} /> Làm mới
-        </button>
+  return (
+    <main className="interaction-page">
+      {!session && (
+        <div className="guest-mode-banner">
+          <MaterialIcon name="visibility" size={18} />
+          <span>
+            Chế độ khách: kết quả chỉ hiển thị tạm thời và không được lưu vào
+            lịch sử.
+          </span>
+        </div>
       )}
-    </section>
+      <section className="page-intro page-intro--with-action">
+        <div>
+          <p className="eyebrow">PHÂN TÍCH AN TOÀN</p>
+          <h1 className="page-title-icon"><MaterialIcon name="hub" size={26} />Kiểm Tra Tương Tác Thuốc</h1>
+        </div>
+        {(result || boardMode || primary.drugs.length > 0) && (
+          <button
+            type="button"
+            className="interaction-reset"
+            onClick={resetAll}
+          >
+            <MaterialIcon name="restart_alt" size={17} /> Làm mới
+          </button>
+        )}
+      </section>
 
-    {error && <p className="error-text" role="alert">{error}</p>}
-    {result && (result.unknown_products?.length ?? 0) > 0 && <div className="guest-mode-banner"><MaterialIcon name="info" size={18} /><span>Không tìm thấy trong CSDL: {result.unknown_products!.join(", ")}.</span></div>}
+      <section className="interaction-guide" aria-label="Cáo Medi gợi ý">
+        <MediFox variant="search" className="interaction-guide__fox" />
+        <div>
+          <span className="interaction-guide__eyebrow">CÁO MEDI GỢI Ý</span>
+          <h2 className="section-heading-icon"><MaterialIcon name="search" size={21} />Chọn thuốc để bắt đầu tra cứu</h2>
+          <p>
+            Thêm ít nhất 2 thuốc vào đơn, hoặc nhập đơn đã lưu từ hồ sơ để so
+            sánh tương tác với các thuốc khác.
+          </p>
+        </div>
+      </section>
 
-    <section className="prescription-board-wrap">
-      <div className="prescription-board prescription-board--slider">
-        {prescriptions.map((p) => (
-          <PrescriptionPanel key={p.id} label={p.label} drugs={p.drugs} search={searchFn}
-            onAdd={(name, known) => addDrugTo(p.id, name, known)}
-            onRemoveDrug={(name) => removeDrugFrom(p.id, name)}
-            onRemovePanel={boardMode ? () => removePrescription(p.id) : undefined}
-            savedPrescriptions={session ? savedPrescriptions : undefined}
-            onImportFrom={session ? (sourceId) => importFromProfile(p.id, sourceId) : undefined}
-            inputId={`prescription-search-${p.id}`} />
-        ))}
-        <button type="button" className="prescription-board__add" onClick={addPrescription}>
-          <MaterialIcon name="add_circle" size={26} /><span>Thêm đơn thuốc</span>
+      {error && (
+        <p className="error-text" role="alert">
+          {error}
+        </p>
+      )}
+      {result && (result.unknown_products?.length ?? 0) > 0 && (
+        <div className="guest-mode-banner">
+          <MaterialIcon name="info" size={18} />
+          <span>
+            Không tìm thấy trong CSDL: {result.unknown_products!.join(", ")}.
+          </span>
+        </div>
+      )}
+
+      <section className="prescription-board-wrap">
+        <div className="prescription-board prescription-board--slider">
+          {prescriptions.map((p) => (
+            <PrescriptionPanel
+              key={p.id}
+              label={p.label}
+              drugs={p.drugs}
+              search={searchFn}
+              onAdd={(name, known) => addDrugTo(p.id, name, known)}
+              onRemoveDrug={(name) => removeDrugFrom(p.id, name)}
+              onRemovePanel={
+                boardMode ? () => removePrescription(p.id) : undefined
+              }
+              savedPrescriptions={session ? savedPrescriptions : undefined}
+              onImportFrom={
+                session
+                  ? (sourceId) => importFromProfile(p.id, sourceId)
+                  : undefined
+              }
+              inputId={`prescription-search-${p.id}`}
+              token={session?.accessToken}
+            />
+          ))}
+          <button
+            type="button"
+            className="prescription-board__add"
+            onClick={addPrescription}
+          >
+            <MaterialIcon name="add_circle" size={26} />
+            <span>Thêm đơn thuốc</span>
+          </button>
+        </div>
+        <button
+          className="interaction-run"
+          type="button"
+          onClick={() => void runCheck()}
+          disabled={loading || mergedDrugNames(prescriptions).length < 2}
+        >
+          <MaterialIcon name="analytics" size={19} />
+          {loading ? "Đang phân tích..." : "Phân tích tương tác"}
         </button>
-      </div>
-      <button className="interaction-run" type="button" onClick={() => void runCheck()} disabled={loading || mergedDrugNames(prescriptions).length < 2}>
-        <MaterialIcon name="analytics" size={19} />{loading ? "Đang phân tích..." : "Phân tích tương tác"}
-      </button>
-      {loading && <div className="mascot-loading" role="status"><MediFox variant="loading" className="mascot-loading__image" /><span>Cáo Medi đang rà soát các tương tác thuốc...</span></div>}
-    </section>
+        {loading && (
+          <div className="mascot-loading" role="status">
+            <MediFox variant="loading" className="mascot-loading__image" />
+            <span>Cáo Medi đang rà soát các tương tác thuốc...</span>
+          </div>
+        )}
+      </section>
 
-    {result && <InteractionResultView result={result} prescriptions={resultPrescriptions ?? []} session={session} />}
-  </main>;
+      {result && (
+        <section id="interaction-result">
+          <InteractionResultView
+            result={result}
+            prescriptions={resultPrescriptions ?? []}
+            session={session}
+          />
+        </section>
+      )}
+    </main>
+  );
 }
 
 export default function InteractionPage() {
-  return <Suspense fallback={<main className="interaction-page"><div className="loading-row"><span className="spinner" /> Đang tải...</div></main>}><InteractionPageContent /></Suspense>;
+  return (
+    <Suspense
+      fallback={
+        <main className="interaction-page">
+          <div className="loading-row">
+            <span className="spinner" /> Đang tải...
+          </div>
+        </main>
+      }
+    >
+      <InteractionPageContent />
+    </Suspense>
+  );
 }

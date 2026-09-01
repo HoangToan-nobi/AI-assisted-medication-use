@@ -1,0 +1,71 @@
+# Pinned to the versions this service was built and tested against
+# (Python 3.12, Ubuntu 24.04, CPU).
+
+# Resolve the explicitly pinned +cpu PyTorch wheels from PyTorch's official
+# CPU index. Without this, PyPI currently selects a CUDA build and downloads
+# several gigabytes of NVIDIA libraries even though OCR_DEVICE=cpu.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# --- API layer ---
+fastapi==0.115.6
+uvicorn[standard]==0.52.1
+python-multipart==0.0.32
+pydantic==2.13.4
+
+# --- OCR (pretrained only: no training, no fine-tuning) ---
+# paddlepaddle is the CPU build. For GPU, swap this line for the matching
+# paddlepaddle-gpu wheel and set OCR_DEVICE=gpu:0 -- no code changes needed.
+#
+# Pinned to 3.2.2 deliberately. 3.3.x raises
+#   NotImplementedError: ConvertPirAttribute2RuntimeAttribute not support
+#   [pir::ArrayAttribute<pir::DoubleAttribute>]
+# the moment oneDNN is enabled, for every model tier. Disabling oneDNN works
+# around the crash but costs ~4x: a dense drug box goes from ~3 s to ~12 s.
+# Re-test before raising this pin.
+paddlepaddle==3.2.2
+paddleocr==3.7.0
+
+# VietOCR does all Vietnamese recognition and is NOT optional. PaddleOCR ships
+# no Vietnamese recognizer: `lang="vi"` falls into its latin group, whose
+# 836-character dictionary has no codepoint for `ạ ả ấ ậ ắ ẹ ế ệ ị ọ ố ộ ớ ợ ụ
+# ứ ự ...` and carries no combining marks, so those characters cannot be
+# produced at any confidence. VietOCR's vocabulary covers Vietnamese in full.
+#
+# Pin the tested CPU pair. See the ONNX note in README.md for the route to
+# dropping the PyTorch runtime entirely if image size becomes a problem.
+vietocr==0.3.13
+torch==2.6.0+cpu
+# vietocr's CNN backbone (vietocr/model/backbone/vgg.py) imports
+# torchvision.models directly, but vietocr's own package metadata does not
+# declare torchvision as a dependency - without this line, VietOCR fails to
+# load with "ModuleNotFoundError: No module named 'torchvision'" and every
+# Vietnamese diacritic in the OCR output comes out wrong (falls back to
+# PaddleOCR, which has no Vietnamese recognizer at all - see README.md).
+torchvision==0.21.0+cpu
+# vietocr -> vietocr.tool.utils -> gdown imports "pkg_resources" unconditionally.
+# setuptools >= 81 dropped pkg_resources entirely, which breaks that import chain
+# the same way as the missing torchvision above (VietOCR fails to load, silently
+# falls back to a recognizer that cannot read Vietnamese). Pin below that line.
+setuptools<81
+
+# --- Image handling ---
+opencv-python-headless==4.10.0.84
+# Keep compatible with the preinstalled CPU image and avoid forcing a large
+# wheel download during deployment.
+pillow>=10.0,<13
+numpy==2.3.5
+
+# --- Drug resolver ---
+rapidfuzz==3.14.5
+# pandas is pulled in by paddlex anyway; pinned here so the version is not a
+# surprise. The CSV loader itself uses the stdlib `csv` module -- it streams a
+# 44k-row file in ~0.5 s and does not coerce registration numbers into floats.
+# Streamlit 1.45 requires pandas<3. The service only needs the CSV/dataframe
+# APIs, so pandas 2.x is sufficient and keeps the demo installable.
+pandas>=2.0,<3
+
+# --- Tests ---
+pytest==9.1.1
+httpx==0.27.2
+requests==2.32.3
+streamlit==1.45.1

@@ -1,15 +1,52 @@
-"""Gộp (rollup) các cặp giải thích cấp hoạt chất lên cấp thuốc/sản phẩm và cấp đơn
-thuốc, rồi gọi LLM sinh 1 đoạn giải thích RIÊNG cho từng cấp — chỉ nhắc tên ở đúng
-cấp đó (thuốc/đơn thuốc), không lộ tên hoạt chất cụ thể — thay vì lấy nguyên văn
-giải thích cấp hoạt chất như trước đây. Sống ngoài LangGraph (gọi từ src/api/routes.py
-sau khi agent chạy xong) vì việc nhóm đơn thuốc là khái niệm của request, agent chỉ
-biết tên hoạt chất."""
+"""Gộp (rollup) các cặp hoạt chất lên cấp thuốc/sản phẩm, rồi gọi LLM sinh 1 đoạn
+giải thích RIÊNG cho cấp thuốc — chỉ nhắc tên thuốc, không lộ tên hoạt chất cụ thể
+— đọc thẳng mo_ta/xu_tri gốc (tiếng Anh) của các cặp hoạt chất góp phần thay vì qua
+1 lớp giai_thich trung gian cấp hoạt chất (đã bỏ, xem explain_node.py). Sống ngoài
+LangGraph (gọi từ src/api/routes.py sau khi agent chạy xong) vì việc nhóm đơn thuốc
+là khái niệm của request, agent chỉ biết tên hoạt chất.
+
+Không còn rollup cấp đơn thuốc (đơn-với-đơn) - tính năng đó không có UI nào hiển
+thị, đã xoá hẳn cùng lệnh gọi LLM tương ứng."""
 
 import asyncio
+import re
 
 from src.agents.nodes.guardrail_node import filter_banned_language
+from src.db.models import ProductExplanationCache
+from src.services.explanation_cache import lookup_cached, save_cached
 from src.services.llm import ainvoke_llm
-from src.services.tone_prompt import FORMAT_INSTRUCTIONS, SAFETY_RULES, parse_tones
+from src.services.tone_prompt import SAFETY_RULES, TRANSLATION_MARKER, split_translation_block
+
+# Cú pháp nhấn mạnh riêng cho đoạn tóm tắt tổng quan: LLM tự bọc cụm từ muốn nhấn
+# mạnh trong đoạn văn bằng {{muc_do:cụm từ}} (muc_do phải khớp đúng 1 trong 4 mức đã
+# cho sẵn trong prompt - không tự bịa mức mới). Server tách marker ra khỏi text
+# thường (client không cần biết cú pháp này) và trả về danh sách (text, muc_do) theo
+# ĐÚNG thứ tự xuất hiện để frontend tô màu lại đúng chỗ trong bản text đã làm sạch.
+_HIGHLIGHT_PATTERN = re.compile(r"\{\{(nang|trung_binh|nhe|chua_phan_loai):([^{}]+?)\}\}")
+
+
+def _parse_highlights(raw: str) -> tuple[str, list[dict]]:
+    highlights: list[dict] = []
+
+    def _replace(match: re.Match) -> str:
+        muc_do, text = match.group(1), match.group(2).strip()
+        if text:
+            highlights.append({"text": text, "muc_do": muc_do})
+        return text
+
+    clean_text = _HIGHLIGHT_PATTERN.sub(_replace, raw)
+    return clean_text, highlights
+
+
+def _tone_fields(text: str, audience: str) -> dict:
+    """Giống hệt src/agents/nodes/explain_node.py::_tone_fields - giai_thich luôn là
+    bản đúng giọng điệu của audience hiện tại; giai_thich_duoc_si chỉ trùng giá trị
+    khi audience="pharmacist" (khớp type contract cũ ở frontend, không sinh thêm
+    lệnh gọi LLM thứ 2)."""
+    return {
+        "giai_thich": text,
+        "giai_thich_duoc_si": text if audience == "pharmacist" else None,
+    }
 
 _SEVERITY_RANK = {"nang": 3, "trung_binh": 2, "nhe": 1, "chua_phan_loai": 0}
 
@@ -94,11 +131,18 @@ async def literal_merge_translate(
     system_prompt = (
         _LITERAL_MERGE_SYSTEM_PROMPT_WITH_XU_TRI if include_xu_tri else _LITERAL_MERGE_SYSTEM_PROMPT_MO_TA_ONLY
     )
+    # temperature=0: đây là bản dịch bám sát nghĩa gốc (không sáng tạo/diễn giải lại
+    # như giai_thich) - dùng chung temperature=0.7 mặc định sẽ khiến bản dịch trôi
+    # nghĩa giữa các lần sinh dù cùng 1 nguồn (rà soát kiến trúc 01/09 trước eval
+    # quy mô lớn - gia thuyết đã ghi từ PLAN.md, chưa từng được xử lý). Đây là bản
+    # dịch dược sĩ dùng làm trích dẫn tin cậy nên cần ổn định/nhất quán hơn văn tổng
+    # hợp giai_thich (vẫn giữ 0.7 để đa dạng cách nói).
     response = await ainvoke_llm(
         [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": "\n\n".join(lines)},
-        ]
+        ],
+        temperature=0,
     )
     return _literal_merge_parse(response.content or "")
 
@@ -172,56 +216,6 @@ def severity_counts(edges: list[dict]) -> dict[str, int]:
     return counts
 
 
-def build_prescription_edges(
-    product_edges: list[dict], product_origins: dict[str, set[int]]
-) -> list[dict]:
-    """Port của buildPrescriptionGraph: gộp cạnh cấp thuốc lên cấp đơn thuốc, dùng
-    product_origins (tên thuốc viết thường -> tập chỉ số đơn chứa thuốc đó, theo
-    đúng thứ tự prescriptions trong request) do routes.py truyền vào."""
-    edges: dict[tuple[int, int], dict] = {}
-    counted_products: dict[tuple[int, int], set[str]] = {}
-
-    for pe in product_edges:
-        set_a = product_origins.get(pe["product_a"].lower())
-        set_b = product_origins.get(pe["product_b"].lower())
-        if not set_a or not set_b:
-            continue
-        pe_key = _edge_key(pe["product_a"], pe["product_b"])
-
-        for rx_a in set_a:
-            for rx_b in set_b:
-                if rx_a == rx_b:
-                    continue
-                i, j = (rx_a, rx_b) if rx_a < rx_b else (rx_b, rx_a)
-                key = (i, j)
-                seen_products = counted_products.setdefault(key, set())
-                edge = edges.get(key)
-
-                if pe_key in seen_products:
-                    # Đã tính cạnh thuốc này cho đúng cặp đơn (i, j) rồi (2 thuốc
-                    # cùng thuộc cả 2 đơn) - không cộng dồn pair_count 2 lần.
-                    if edge is not None and _severity_rank(pe["muc_do"]) > _severity_rank(edge["muc_do"]):
-                        edge["muc_do"] = pe["muc_do"]
-                    continue
-
-                seen_products.add(pe_key)
-                if edge is None:
-                    edges[key] = {
-                        "rx_a_index": i,
-                        "rx_b_index": j,
-                        "muc_do": pe["muc_do"],
-                        "has_incomplete_pair": pe["has_incomplete_pair"],
-                        "pair_count": 1,
-                    }
-                else:
-                    edge["pair_count"] += 1
-                    edge["has_incomplete_pair"] = edge["has_incomplete_pair"] or pe["has_incomplete_pair"]
-                    if _severity_rank(pe["muc_do"]) > _severity_rank(edge["muc_do"]):
-                        edge["muc_do"] = pe["muc_do"]
-
-    return list(edges.values())
-
-
 # ---- Cấp thuốc (sản phẩm) ----
 
 # Chỉ đưa tối đa từng này cặp hoạt chất (đã sắp nặng nhất trước) vào prompt cấp
@@ -229,21 +223,77 @@ def build_prescription_edges(
 # đại diện vì các cặp còn lại thường nhẹ hơn cặp đã đưa vào.
 _MAX_CONTRIBUTING_PAIRS = 5
 
-_PRODUCT_SYSTEM_PROMPT = (
-    "Bạn là dược sĩ đang tổng hợp cảnh báo tương tác GIỮA HAI THUỐC (cấp thuốc), "
-    "dựa trên các giải thích tương tác hoạt chất CÓ THẬT giữa 2 thuốc này được liệt "
-    "kê ở tin nhắn tiếp theo — đó là nguồn duy nhất bạn được dùng, không thêm dữ "
-    "kiện y khoa nào khác. Hãy TỔNG HỢP LẠI thành 1 đoạn nói về việc dùng chung "
-    "THUỐC A và THUỐC B (xưng tên thuốc là chính, không cần liệt kê lại từng hoạt "
-    "chất), không chỉ đơn thuần dịch nguyên văn 1 cặp.\n\n"
-    "Phần bệnh nhân: giọng gần gũi, thân thiện, ngắn gọn dễ hiểu (2-4 câu), nêu "
-    "ngay việc dùng chung 2 thuốc này cần lưu ý và mức độ ra sao, tóm lược đúng "
-    "bản chất rủi ro từ các giải thích được cung cấp.\n\n"
-    "Phần dược sĩ: giọng khoa học, chuyên nghiệp, súc tích (2-3 câu), có thể nhắc "
-    "ngắn gọn cơ chế/hoạt chất liên quan nếu dữ liệu cung cấp có đề cập, phù hợp để "
-    "tra cứu nhanh.\n\n"
-    f"{FORMAT_INSTRUCTIONS}\n\n{SAFETY_RULES}"
+_PRODUCT_STYLE_PATIENT = (
+    "Phần bệnh nhân: giọng gần gũi, thân thiện, dùng từ ngữ đời thường - viết "
+    "sao cho người không có chuyên môn y dược đọc cũng hiểu ngay. Độ dài co "
+    "giãn theo độ phức tạp của dữ liệu gốc: cơ chế đơn giản thì viết 2 câu "
+    "ngắn (~50-70 từ); dữ liệu có nhiều cặp hoạt chất hoặc nhiều cơ chế/yếu tố "
+    "nguy cơ thì viết 3-4 câu (~90-130 từ) để giải thích đủ ý, không cắt bớt "
+    "thông tin quan trọng chỉ để cho ngắn - nếu nguồn liệt kê từ 3 điều kiện/"
+    "yếu tố nguy cơ/hậu quả trở lên, PHẢI nêu tên đủ TẤT CẢ (có thể liệt kê "
+    "ngắn gọn trong 1 câu), không chỉ chọn 1-2 cái nổi bật nhất rồi bỏ qua "
+    "phần còn lại. Mỗi câu là 1 ý, viết câu đơn, không "
+    "cần từ nối cầu kỳ - nhưng ý câu sau phải liên quan trực tiếp và làm rõ "
+    "thêm cho ý câu trước (VD: câu nêu rủi ro xong thì câu tiếp theo giải "
+    "thích vì sao xảy ra), không viết những ý rời rạc, không ăn nhập với "
+    "nhau. Nếu cần nhắc thuật ngữ y khoa (tên enzyme, cơ chế chuyển hóa, chỉ "
+    "số xét nghiệm...), giải thích ngắn gọn bằng lời dễ hiểu ngay trong câu "
+    "thay vì dùng thuật ngữ trần trụi. Nếu Mô tả CSDL có số liệu cụ thể quan "
+    "trọng thể hiện mức độ tác động (tỷ lệ %, mức tăng nguy cơ...), hãy giữ "
+    "đúng số liệu đó trong câu giải thích để cụ thể, đáng tin hơn - nhưng "
+    "KHÔNG lấy số liệu về liều lượng/ngưỡng dùng thuốc từ phần Xử trí, vì đó "
+    "thuộc phạm vi khuyên xử trí không được phép đưa vào đoạn này. KHÔNG "
+    "nhắc lại mức độ nghiêm trọng (nặng/trung bình/nhẹ...) hay các cụm như "
+    "\"mức độ được đánh giá là...\" - thẻ hiển thị đã có sẵn nhãn mức độ ở "
+    "tiêu đề, nhắc lại là thừa. Diễn đạt tự nhiên, đa dạng cách nói giữa các "
+    "lần trả lời - tránh dùng đi dùng lại một câu công thức y hệt."
 )
+
+_PRODUCT_STYLE_PHARMACIST = (
+    "Phần dược sĩ: giọng khoa học, chuyên nghiệp, súc tích. Độ dài co giãn "
+    "theo độ phức tạp của dữ liệu gốc: cơ chế đơn giản thì viết 2 câu (~40-50 "
+    "từ); nhiều cặp hoạt chất hoặc nhiều cơ chế cần gộp thì viết 3 câu (~70-90 "
+    "từ), không cắt bớt thông tin quan trọng chỉ để cho ngắn - nếu nguồn liệt "
+    "kê từ 3 điều kiện/yếu tố nguy cơ/hậu quả trở lên, PHẢI nêu tên đủ TẤT CẢ "
+    "(có thể liệt kê ngắn gọn trong 1 câu), không chỉ chọn 1-2 cái nổi bật "
+    "nhất rồi bỏ qua phần còn lại. Mỗi câu 1 ý, "
+    "viết câu đơn - nhưng ý câu sau phải liên quan trực tiếp và làm rõ thêm "
+    "cho ý câu trước, không viết những ý rời rạc, không ăn nhập với nhau. "
+    "Nếu Mô tả CSDL có số liệu cụ thể quan trọng thể hiện mức độ tác động "
+    "(tỷ lệ %, mức tăng nguy cơ...), hãy giữ đúng số liệu đó trong câu giải "
+    "thích để cụ thể, đáng tin hơn - nhưng KHÔNG lấy số liệu về liều lượng/"
+    "ngưỡng dùng thuốc từ phần Xử trí, vì đó thuộc phạm vi khuyên xử trí "
+    "không được phép đưa vào đoạn này. KHÔNG nhắc lại mức độ nghiêm trọng "
+    "(nặng/trung bình/nhẹ...) - thẻ hiển thị đã có sẵn nhãn mức độ ở tiêu "
+    "đề, nhắc lại là thừa. Diễn đạt tự nhiên, đa dạng cách nói giữa các lần "
+    "trả lời - tránh dùng đi dùng lại một câu công thức y hệt."
+)
+
+
+def _product_system_prompt(audience: str) -> str:
+    style = _PRODUCT_STYLE_PHARMACIST if audience == "pharmacist" else _PRODUCT_STYLE_PATIENT
+    return (
+        "Bạn là dược sĩ đang tổng hợp cảnh báo tương tác GIỮA HAI THUỐC (cấp thuốc), "
+        "dựa trên Mô tả/Xử trí CSDL DDInter 2.0 (tiếng Anh) của các cặp hoạt chất CÓ "
+        "THẬT góp phần vào 2 thuốc này, liệt kê ở tin nhắn tiếp theo — đó là nguồn "
+        "duy nhất bạn được dùng, không thêm dữ kiện y khoa nào khác.\n\n"
+        "Trả lời gồm ĐÚNG 2 phần theo thứ tự sau, không thêm chữ nào khác ngoài đó. "
+        "\"PHẦN 1\"/\"PHẦN 2\" dưới đây chỉ là tên gọi để MÔ TẢ cấu trúc cho bạn hiểu "
+        "- TUYỆT ĐỐI KHÔNG được viết các chữ \"PHẦN 1\", \"PHẦN 2\" vào câu trả lời:\n\n"
+        "Phần đầu - đoạn giải thích TỔNG HỢP LẠI bằng tiếng Việt, nói về việc dùng "
+        "chung THUỐC A và THUỐC B (xưng tên thuốc là chính, không cần liệt kê lại "
+        "từng hoạt chất), không chỉ đơn thuần dịch nguyên văn 1 cặp. Bắt đầu thẳng "
+        "vào nội dung, không thêm tiêu đề nào.\n"
+        f"{style}\n\n"
+        f"Phần sau - bắt đầu bằng đúng dòng {TRANSLATION_MARKER}, theo sau là bản DỊCH "
+        "BÁM SÁT NGHĨA GỐC (không diễn giải, không đổi giọng điệu như phần đầu) của Mô "
+        "tả/Xử trí CSDL đã gộp các cặp hoạt chất lại, đúng định dạng:\n"
+        "mô tả: <tổng hợp + dịch sát nghĩa Mô tả CSDL>\n"
+        "xử trí: <tổng hợp + dịch sát nghĩa Xử trí CSDL, để trống sau dấu hai chấm "
+        "nếu không có>\n\n"
+        f"{SAFETY_RULES}"
+    )
+
 
 _UNCLASSIFIED_PRODUCT_MESSAGE = (
     "Giữa {a} và {b} có tương tác hoạt chất mà DDInter chưa phân loại mức độ "
@@ -251,28 +301,63 @@ _UNCLASSIFIED_PRODUCT_MESSAGE = (
 )
 
 
+# Phòng hờ LLM lỡ chép nguyên văn nhãn cấu trúc "PHẦN 1"/"PHẦN 2" (xem
+# _product_system_prompt) vào nội dung câu trả lời thay vì chỉ dùng chúng để hiểu
+# thứ tự - dọn sạch trước khi hiển thị cho người dùng.
+_LEADING_PART1_LABEL = re.compile(r"^\s*ph[aầ]n\s*1\s*[-:–]?\s*", re.IGNORECASE)
+_TRAILING_PART2_LABEL = re.compile(r"\s*ph[aầ]n\s*2\s*[-:–]?\s*$", re.IGNORECASE)
+
+
+def _strip_stray_part_labels(text: str) -> str:
+    text = _LEADING_PART1_LABEL.sub("", text, count=1)
+    text = _TRAILING_PART2_LABEL.sub("", text, count=1)
+    return text
+
+
 def _product_citation(pair_count: int) -> str:
     return f"Tổng hợp từ {pair_count} cặp hoạt chất tương tác trong CSDL DDInter 2.0."
 
 
-def _product_user_prompt(product_a: str, product_b: str, muc_do: str, contributing_pairs: list[dict]) -> str:
-    lines = [f"Cặp thuốc: {product_a} + {product_b}", f"Mức độ nghiêm trọng cao nhất: {muc_do}", ""]
-    lines.append("Các giải thích tương tác hoạt chất có thật giữa 2 thuốc này:")
+def _product_user_prompt(product_a: str, product_b: str, contributing_pairs: list[dict], audience: str) -> str:
+    # Không đưa "mức độ nghiêm trọng cao nhất" riêng - contributing_pairs đã sort
+    # nặng nhất trước (xem build_product_edges) nên cặp đầu tiên dưới đây LUÔN
+    # trùng đúng mức đó, đưa thêm 1 dòng riêng chỉ lặp lại vô ích.
+    #
+    # Xử trí CSDL CHỈ đưa vào cho audience=pharmacist - trước đây đưa cho cả patient
+    # rồi trông chờ prompt (SAFETY_RULES) tự loại bỏ khi viết, nhưng eval phát hiện
+    # LLM không tuân thủ 100% (case dd-nang-016, dd-nang-001, dd-trung_binh-027 - xem
+    # eval/results/report.md Finding 15/14) - chặn từ gốc, không đưa dữ liệu vào thay
+    # vì chỉ dặn đừng dùng.
+    include_xu_tri = audience == "pharmacist"
+    lines = [f"Cặp thuốc: {product_a} + {product_b}", ""]
+    lines.append("Các cặp hoạt chất góp phần (CSDL DDInter 2.0, tiếng Anh):")
     for pair in contributing_pairs[:_MAX_CONTRIBUTING_PAIRS]:
-        lines.append(
+        block = (
             f"- Hoạt chất {pair.get('thuoc_a')} + {pair.get('thuoc_b')} (mức {pair.get('muc_do')}):\n"
-            f"  Bản bệnh nhân: {pair.get('giai_thich', '')}\n"
-            f"  Bản dược sĩ: {pair.get('giai_thich_duoc_si', '')}"
+            f"  Mô tả CSDL: {_truncate(pair.get('mo_ta'), 800)}"
         )
+        if include_xu_tri:
+            block += f"\n  Xử trí CSDL: {_truncate(pair.get('xu_tri'), 800) or '(không có)'}"
+        lines.append(block)
     lines.append("")
-    lines.append(
-        "Hãy viết cả 2 phần theo đúng định dạng đã nêu, bằng tiếng Việt, tổng hợp lại "
-        "đúng nội dung ở trên - không thêm dữ kiện nào ngoài đó."
-    )
+    lines.append("Hãy trả lời đúng 2 phần theo định dạng đã nêu, bằng tiếng Việt, không thêm dữ kiện nào ngoài đó.")
     return "\n".join(lines)
 
 
-async def _explain_product_edge(edge: dict) -> dict:
+async def _explain_product_edge(edge: dict, audience: str) -> dict:
+    """1 lượt gọi LLM DUY NHẤT cho mỗi cạnh thuốc - đọc thẳng mo_ta/xu_tri (tiếng
+    Anh) của từng cặp hoạt chất góp phần, sinh cùng lúc PHẦN 1 (giai_thich, văn tự
+    nhiên) và PHẦN 2 (mo_ta_dich/xu_tri_dich, dịch bám sát nghĩa) - thay vì 2 lượt
+    gọi song song như trước (1 viết giai_thich dựa trên đoạn văn cấp hoạt chất đã
+    bị bỏ, 1 literal_merge_translate riêng). split_translation_block tách PHẦN 2 ra
+    khỏi PHẦN 1 dựa theo TRANSLATION_MARKER (xem tone_prompt.py).
+
+    Cache theo (product_a, product_b, muc_do, audience) đã chuẩn hóa - thành phần
+    hoạt chất của 1 thuốc cố định trong DB nên tập cặp hoạt chất góp phần vào 1 cạnh
+    thuốc-thuốc luôn giống nhau giữa các request, dù CÁC THUỐC KHÁC trong request có
+    khác nhau (không dùng contributing_pairs làm key vì thuoc_a/thuoc_b trong đó đã
+    bị _brand_label ở routes.py gắn thêm brand từ những thuốc không liên quan khác
+    trong cùng request - xem src/services/explanation_cache.py)."""
     product_a, product_b = edge["product_a"], edge["product_b"]
     muc_do, pair_count = edge["muc_do"], edge["pair_count"]
 
@@ -282,179 +367,128 @@ async def _explain_product_edge(edge: dict) -> dict:
             "thuoc_a": product_a,
             "thuoc_b": product_b,
             "muc_do": muc_do,
-            "giai_thich": message,
-            "giai_thich_duoc_si": message,
+            **_tone_fields(message, audience),
             "nguon_trich_dan": _product_citation(pair_count),
             "mo_ta_dich": None,
             "xu_tri_dich": None,
         }
 
-    # 2 lượt gọi LLM ĐỘC LẬP chạy song song: 1 viết giải thích (giọng điệu tự nhiên,
-    # đa dạng cách nói), 1 gộp + dịch bám sát nghĩa gốc (không đổi giọng điệu) - xem
-    # literal_merge_translate.
-    narrative_response, (mo_ta_dich, xu_tri_dich) = await asyncio.gather(
-        ainvoke_llm(
-            [
-                {"role": "system", "content": _PRODUCT_SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": _product_user_prompt(product_a, product_b, muc_do, edge["contributing_pairs"]),
-                },
-            ]
-        ),
-        literal_merge_translate(edge["contributing_pairs"], include_xu_tri=True),
+    key_a, key_b = sorted([product_a.lower(), product_b.lower()])
+    cached = lookup_cached(
+        ProductExplanationCache, product_a=key_a, product_b=key_b, muc_do=muc_do, audience=audience
     )
-    patient_text, pharmacist_text = parse_tones(narrative_response.content)
-    return {
-        "thuoc_a": product_a,
-        "thuoc_b": product_b,
-        "muc_do": muc_do,
-        "giai_thich": filter_banned_language(patient_text),
-        "giai_thich_duoc_si": filter_banned_language(pharmacist_text),
-        "nguon_trich_dan": _product_citation(pair_count),
-        "mo_ta_dich": mo_ta_dich,
-        "xu_tri_dich": xu_tri_dich,
-    }
-
-
-async def build_product_explanations(product_edges: list[dict]) -> list[dict]:
-    if not product_edges:
-        return []
-    return list(await asyncio.gather(*(_explain_product_edge(edge) for edge in product_edges)))
-
-
-# ---- Cấp đơn thuốc ----
-
-_PRESCRIPTION_SYSTEM_PROMPT = (
-    "Bạn là dược sĩ đang tổng hợp cảnh báo tương tác GIỮA HAI ĐƠN THUỐC (cấp đơn, "
-    "KHÔNG phải cấp thuốc hay hoạt chất). Bạn CHỈ được cung cấp nhãn của 2 đơn "
-    "thuốc, mức độ nghiêm trọng cao nhất ghi nhận được, và số cặp thuốc tương tác "
-    "góp phần — hoàn toàn KHÔNG biết tên thuốc hay hoạt chất cụ thể nào bên trong "
-    "từng đơn. Vì vậy TUYỆT ĐỐI KHÔNG được nêu, bịa, hay suy đoán tên thuốc/hoạt "
-    "chất cụ thể — chỉ nói ở mức tổng quan cấp đơn thuốc, và gợi ý xem chi tiết cấp "
-    "thuốc hoặc hỏi dược sĩ nếu cần biết cụ thể hơn.\n\n"
-    "Phần bệnh nhân: giọng gần gũi, thân thiện, ngắn gọn dễ hiểu (2-3 câu).\n\n"
-    "Phần dược sĩ: giọng khoa học, chuyên nghiệp, súc tích (1-2 câu).\n\n"
-    f"{FORMAT_INSTRUCTIONS}\n\n{SAFETY_RULES}"
-)
-
-_UNCLASSIFIED_PRESCRIPTION_MESSAGE = (
-    "Giữa {a} và {b} có tương tác thuốc mà DDInter chưa phân loại mức độ nghiêm "
-    "trọng — cần thận trọng, hãy hỏi dược sĩ/bác sĩ trước khi dùng chung."
-)
-
-
-def _prescription_citation(pair_count: int) -> str:
-    return (
-        f"Tổng hợp từ {pair_count} cặp thuốc tương tác trong CSDL DDInter 2.0 — "
-        "xem chi tiết ở cấp thuốc."
-    )
-
-
-def _prescription_user_prompt(label_a: str, label_b: str, muc_do: str, pair_count: int) -> str:
-    return (
-        f"Cặp đơn thuốc: {label_a} + {label_b}\n"
-        f"Mức độ nghiêm trọng cao nhất: {muc_do}\n"
-        f"Số cặp thuốc tương tác ghi nhận giữa 2 đơn này: {pair_count}\n\n"
-        "Hãy viết cả 2 phần theo đúng định dạng đã nêu, bằng tiếng Việt."
-    )
-
-
-async def _explain_prescription_edge(edge: dict, labels: list[str]) -> dict:
-    i, j = edge["rx_a_index"], edge["rx_b_index"]
-    label_a = labels[i] if i < len(labels) else f"Đơn thuốc {i + 1}"
-    label_b = labels[j] if j < len(labels) else f"Đơn thuốc {j + 1}"
-    muc_do, pair_count = edge["muc_do"], edge["pair_count"]
-
-    if muc_do == "chua_phan_loai":
-        message = _UNCLASSIFIED_PRESCRIPTION_MESSAGE.format(a=label_a, b=label_b)
-        return {
-            "don_a": label_a,
-            "don_b": label_b,
-            "don_a_index": i,
-            "don_b_index": j,
-            "muc_do": muc_do,
-            "giai_thich": message,
-            "giai_thich_duoc_si": message,
-            "nguon_trich_dan": _prescription_citation(pair_count),
-        }
+    if cached is not None:
+        return {"thuoc_a": product_a, "thuoc_b": product_b, "muc_do": muc_do, **cached}
 
     response = await ainvoke_llm(
         [
-            {"role": "system", "content": _PRESCRIPTION_SYSTEM_PROMPT},
-            {"role": "user", "content": _prescription_user_prompt(label_a, label_b, muc_do, pair_count)},
+            {"role": "system", "content": _product_system_prompt(audience)},
+            {
+                "role": "user",
+                "content": _product_user_prompt(product_a, product_b, edge["contributing_pairs"], audience),
+            },
         ]
     )
-    patient_text, pharmacist_text = parse_tones(response.content)
-    return {
-        "don_a": label_a,
-        "don_b": label_b,
-        "don_a_index": i,
-        "don_b_index": j,
-        "muc_do": muc_do,
-        "giai_thich": filter_banned_language(patient_text),
-        "giai_thich_duoc_si": filter_banned_language(pharmacist_text),
-        "nguon_trich_dan": _prescription_citation(pair_count),
-    }
-
-
-async def build_prescription_explanations(prescription_edges: list[dict], labels: list[str]) -> list[dict]:
-    if not prescription_edges:
-        return []
-    return list(
-        await asyncio.gather(*(_explain_prescription_edge(edge, labels) for edge in prescription_edges))
+    narrative, translated = split_translation_block(
+        (response.content or "").strip(), [("mô tả:", "mo_ta_dich"), ("xử trí:", "xu_tri_dich")]
     )
+    text = filter_banned_language(_strip_stray_part_labels(narrative.strip()).strip())
+    result = {
+        **_tone_fields(text, audience),
+        "nguon_trich_dan": _product_citation(pair_count),
+        "mo_ta_dich": translated["mo_ta_dich"],
+        "xu_tri_dich": translated["xu_tri_dich"],
+    }
+    save_cached(
+        ProductExplanationCache, product_a=key_a, product_b=key_b, muc_do=muc_do, audience=audience, **result
+    )
+    return {"thuoc_a": product_a, "thuoc_b": product_b, "muc_do": muc_do, **result}
+
+
+async def build_product_explanations(product_edges: list[dict], audience: str = "patient") -> list[dict]:
+    if not product_edges:
+        return []
+    return list(await asyncio.gather(*(_explain_product_edge(edge, audience) for edge in product_edges)))
 
 
 # ---- Tóm tắt tổng quan (luồng bệnh nhân + luồng dược sĩ, 2 giọng điệu riêng) ----
+#
+# Chỉ đưa tối đa từng này cặp thuốc-thuốc (nặng nhất trước) vào prompt làm ví dụ
+# "đáng chú ý" - không đưa cả danh sách để giữ prompt gọn/rẻ.
+_MAX_OVERVIEW_NOTABLE_PAIRS = 3
 
-# Chỉ đưa tối đa từng này cặp thuốc-thuốc (nặng nhất trước) vào prompt tóm tắt, để
-# tránh phình prompt khi lần phân tích có rất nhiều thuốc/cặp tương tác.
-_MAX_OVERVIEW_PAIRS = 8
+_OVERVIEW_SEVERITY_LABELS: list[tuple[str, str]] = [
+    ("nang", "nghiêm trọng"),
+    ("trung_binh", "trung bình"),
+    ("nhe", "nhẹ"),
+    ("chua_phan_loai", "chưa phân loại"),
+]
+
+# Yêu cầu LLM tự đánh dấu cụm từ muốn nhấn mạnh bằng markup {{muc_do:...}} - server
+# tách ra (xem _parse_highlights) để frontend tô màu đúng theo mức độ, KHÔNG phải
+# markdown chung chung nên không xung đột với rule cấm markdown ở dưới.
+_HIGHLIGHT_INSTRUCTIONS = (
+    "ĐÁNH DẤU NHẤN MẠNH: bọc MỖI cụm nêu tên 1 cặp thuốc đáng chú ý (đúng cụm bạn "
+    "vừa viết ở câu 2, ví dụ \"Aspirin và Warfarin\") bằng markup "
+    "{{muc_do:cụm từ}}, dùng ĐÚNG mức độ đã cho của cặp đó (nang/trung_binh/nhe/"
+    "chua_phan_loai - viết liền không dấu, đúng 4 giá trị này). Ví dụ: "
+    "\"{{nang:Aspirin và Warfarin}}\". Không bọc số liệu hay câu khác, không tự "
+    "tạo mức độ ngoài 4 giá trị trên."
+)
 
 _OVERVIEW_SYSTEM_PROMPT_PATIENT = (
-    "Bạn là một dược sĩ đang tóm tắt TOÀN BỘ kết quả phân tích tương tác thuốc cho "
-    "bệnh nhân, dựa trên thống kê và danh sách giải thích từng cặp thuốc-thuốc CÓ "
-    "THẬT được liệt kê ở tin nhắn tiếp theo — đó là nguồn duy nhất bạn được dùng, "
-    "không thêm dữ kiện y khoa nào khác.\n\n"
-    "Viết 1 đoạn tổng quan bằng tiếng Việt (4-6 câu), giọng gần gũi, thân thiện, dễ "
-    "hiểu, xưng \"mình\", gọi người đọc là \"bạn\":\n"
-    "- Câu đầu nêu ngay bức tranh chung: có bao nhiêu cặp tương tác thuốc-thuốc "
-    "được tìm thấy, chia theo mức độ (nghiêm trọng/trung bình/nhẹ/chưa phân loại) "
-    "dựa đúng số liệu được cung cấp.\n"
-    "- Các câu sau khái quát lại nội dung chính của những cặp đáng chú ý nhất (ưu "
-    "tiên các cặp mức nghiêm trọng nếu có), không cần liệt kê hết từng cặp một.\n\n"
+    "Bạn là một dược sĩ đang tóm tắt kết quả phân tích tương tác thuốc cho bệnh "
+    "nhân, dựa CHỈ trên số liệu và danh sách cặp đáng chú ý CÓ THẬT được cung cấp "
+    "ở tin nhắn tiếp theo - không thêm dữ kiện y khoa nào khác, không bịa số.\n\n"
+    "Viết 1 đoạn ngắn (3-5 câu) bằng tiếng Việt, giọng gần gũi, thân thiện, xưng "
+    "\"mình\", gọi người đọc là \"bạn\":\n"
+    "- Câu đầu mở bằng đúng ngữ cảnh được cung cấp (kiểm tra TRONG 1 đơn thuốc hay "
+    "so sánh GIỮA nhiều đơn thuốc khác nhau - diễn đạt tự nhiên theo đúng ngữ cảnh, "
+    "không dùng khẩu hiệu cố định), rồi nêu tổng số cặp tương tác và phân bố theo "
+    "từng mức độ (nghiêm trọng/trung bình/nhẹ/chưa phân loại) - CHỈ nhắc mức nào có "
+    "số liệu > 0.\n"
+    "- 1-2 câu tiếp gọi tên các cặp đáng chú ý nhất trong danh sách được cung cấp "
+    "(không cần giải thích cơ chế, chỉ nêu tên 2 thuốc + mức độ), KHÔNG liệt kê hết "
+    "mọi cặp.\n"
+    "- Câu cuối mời xem chi tiết từng cặp ở phần bên dưới, diễn đạt tự nhiên.\n\n"
+    f"{_HIGHLIGHT_INSTRUCTIONS}\n\n"
     "QUY TẮC BẮT BUỘC:\n"
     "- TUYỆT ĐỐI KHÔNG khuyên ngừng, đổi, kê đơn, hoặc tự ý điều chỉnh liều/thời "
     "điểm dùng bất kỳ thuốc nào — kể cả gợi ý mơ hồ.\n"
     "- TUYỆT ĐỐI KHÔNG chẩn đoán bệnh hay tình trạng sức khỏe của người dùng.\n"
-    "- CHỈ dựa trên đúng thống kê và giải thích được cung cấp — không thêm dữ kiện "
-    "y khoa nào khác.\n"
-    "- Khép lại bằng việc nhắc trao đổi với dược sĩ/bác sĩ nếu cần biết cụ thể hơn, "
-    "diễn đạt tự nhiên, không phải khẩu hiệu dán cứng."
+    "- CHỈ dùng đúng số liệu và tên cặp được cung cấp — không thêm dữ kiện y khoa "
+    "nào khác.\n"
+    "- Ngoài markup nhấn mạnh {{muc_do:...}} đã nêu, viết văn bản thuần (plain "
+    "text) — KHÔNG dùng markdown/ký hiệu in đậm (**), gạch đầu dòng, hay bất kỳ "
+    "định dạng nào khác."
 )
 
 _OVERVIEW_SYSTEM_PROMPT_PHARMACIST = (
-    "Bạn là dược sĩ lâm sàng đang tóm tắt TOÀN BỘ kết quả phân tích tương tác thuốc "
-    "để trình bày cho một dược sĩ khác đang tra cứu, dựa trên thống kê và danh sách "
-    "giải thích từng cặp thuốc-thuốc CÓ THẬT được liệt kê ở tin nhắn tiếp theo — đó "
-    "là nguồn duy nhất bạn được dùng, không thêm dữ kiện y khoa nào khác.\n\n"
-    "Viết 1 đoạn tổng quan bằng tiếng Việt (4-6 câu), văn phong khoa học, chuyên "
-    "nghiệp, học thuật và lịch sự, phù hợp trao đổi giữa các dược sĩ - hạn chế xưng "
-    "hô trực tiếp, có thể dùng thuật ngữ dược lý/dược động học khi dữ liệu có đề cập "
-    "(cơ chế, enzym, thụ thể, nồng độ huyết tương...):\n"
-    "- Câu đầu nêu ngay số liệu tổng quan: tổng số cặp tương tác thuốc-thuốc ghi "
-    "nhận được, chia theo mức độ (nghiêm trọng/trung bình/nhẹ/chưa phân loại) dựa "
-    "đúng số liệu được cung cấp.\n"
-    "- Các câu sau khái quát bản chất và cơ chế của những cặp đáng chú ý nhất (ưu "
-    "tiên các cặp mức nghiêm trọng nếu có), không cần liệt kê hết từng cặp một.\n\n"
+    "Bạn là dược sĩ lâm sàng đang tóm tắt kết quả phân tích tương tác thuốc để "
+    "trình bày cho một dược sĩ khác đang tra cứu, dựa CHỈ trên số liệu và danh "
+    "sách cặp đáng chú ý CÓ THẬT được cung cấp ở tin nhắn tiếp theo - không thêm "
+    "dữ kiện y khoa nào khác, không bịa số.\n\n"
+    "Viết 1 đoạn ngắn (3-5 câu) bằng tiếng Việt, văn phong khoa học, chuyên "
+    "nghiệp, hạn chế xưng hô trực tiếp:\n"
+    "- Câu đầu mở bằng đúng ngữ cảnh được cung cấp (phân tích TRONG 1 đơn thuốc "
+    "hay so sánh GIỮA nhiều đơn thuốc khác nhau - diễn đạt tự nhiên theo đúng ngữ "
+    "cảnh, không dùng khẩu hiệu cố định), rồi nêu tổng số cặp tương tác và phân bố "
+    "theo từng mức độ (nghiêm trọng/trung bình/nhẹ/chưa phân loại) - CHỈ nhắc mức "
+    "nào có số liệu > 0.\n"
+    "- 1-2 câu tiếp gọi tên các cặp đáng chú ý nhất trong danh sách được cung cấp "
+    "(không cần giải thích cơ chế, chỉ nêu tên 2 thuốc + mức độ), KHÔNG liệt kê hết "
+    "mọi cặp.\n"
+    "- Câu cuối mời xem chi tiết từng cặp ở phần bên dưới để có đầy đủ căn cứ "
+    "trước khi ra quyết định lâm sàng.\n\n"
+    f"{_HIGHLIGHT_INSTRUCTIONS}\n\n"
     "QUY TẮC BẮT BUỘC:\n"
     "- TUYỆT ĐỐI KHÔNG khuyên ngừng, đổi, kê đơn, hoặc tự ý điều chỉnh liều/thời "
     "điểm dùng bất kỳ thuốc nào — kể cả gợi ý mơ hồ.\n"
-    "- CHỈ dựa trên đúng thống kê và giải thích được cung cấp — không thêm dữ kiện "
-    "y khoa nào khác.\n"
-    "- Khép lại bằng việc nhắc xem chi tiết từng cặp thuốc để có đầy đủ căn cứ trước "
-    "khi ra quyết định lâm sàng, diễn đạt tự nhiên, không phải khẩu hiệu dán cứng."
+    "- CHỈ dùng đúng số liệu và tên cặp được cung cấp — không thêm dữ kiện y khoa "
+    "nào khác.\n"
+    "- Ngoài markup nhấn mạnh {{muc_do:...}} đã nêu, viết văn bản thuần (plain "
+    "text) — KHÔNG dùng markdown/ký hiệu in đậm (**), gạch đầu dòng, hay bất kỳ "
+    "định dạng nào khác."
 )
 
 _NO_INTERACTION_OVERVIEW_MESSAGE_PATIENT = (
@@ -470,54 +504,50 @@ _NO_INTERACTION_OVERVIEW_MESSAGE_PHARMACIST = (
 )
 
 
-_MAX_OVERVIEW_EDGE_SUMMARY_CHARS = 500
+def _overview_context_line(prescription_count: int) -> str:
+    if prescription_count <= 1:
+        return "Ngữ cảnh: phân tích các thuốc TRONG 1 đơn thuốc (không so sánh với đơn nào khác)."
+    if prescription_count == 2:
+        return (
+            "Ngữ cảnh: so sánh tương tác GIỮA 2 đơn thuốc khác nhau - chỉ tính cặp "
+            "thuốc thuộc 2 đơn khác nhau, KHÔNG tính cặp trong cùng 1 đơn."
+        )
+    return (
+        f"Ngữ cảnh: so sánh tương tác GIỮA {prescription_count} đơn thuốc khác nhau - "
+        "chỉ tính cặp thuốc thuộc các đơn khác nhau, KHÔNG tính cặp trong cùng 1 đơn."
+    )
 
 
-def _overview_edge_summary(edge: dict) -> str:
-    """Tóm tắt ngắn 1 dòng cho 1 cạnh cấp thuốc, đọc THẲNG dữ liệu gốc (mô tả CSDL
-    của cặp hoạt chất góp phần nặng nhất - contributing_pairs đã sort severity-desc)
-    - KHÔNG đọc lại đoạn văn product_explanations đã viết, để overview không phải đợi
-    build_product_explanations chạy xong (xem build_overview_explanation).
-
-    Đang dùng thẳng mo_ta gốc tiếng Anh (KHÔNG ưu tiên mo_ta_dich đã cache) theo yêu
-    cầu test - bỏ qua phụ thuộc vào batch dịch cache còn đang dở dang."""
-    if edge.get("muc_do") == "chua_phan_loai":
-        return "DDInter chưa phân loại mức độ nghiêm trọng cho tương tác này."
-    representative = edge["contributing_pairs"][0] if edge["contributing_pairs"] else {}
-    text = representative.get("mo_ta") or ""
-    return _truncate(text, _MAX_OVERVIEW_EDGE_SUMMARY_CHARS)
-
-
-def _overview_user_prompt(counts: dict[str, int], product_edges: list[dict]) -> str:
+def _overview_user_prompt(counts: dict[str, int], product_edges: list[dict], prescription_count: int) -> str:
     total = sum(counts.values())
     lines = [
-        f"Tổng số cặp thuốc-thuốc có tương tác: {total}",
-        f"- Mức nghiêm trọng: {counts['nang']}",
-        f"- Mức trung bình: {counts['trung_binh']}",
-        f"- Mức nhẹ: {counts['nhe']}",
-        f"- Chưa phân loại: {counts['chua_phan_loai']}",
+        _overview_context_line(prescription_count),
         "",
-        "Danh sách dữ liệu gốc (CSDL DDInter 2.0) từng cặp thuốc-thuốc, đã sắp nặng nhất trước:",
+        f"Tổng số cặp thuốc-thuốc có tương tác: {total}",
     ]
+    lines += [f"- Mức {label}: {counts[key]}" for key, label in _OVERVIEW_SEVERITY_LABELS if counts[key] > 0]
+
     sorted_edges = sorted(product_edges, key=lambda e: _severity_rank(e.get("muc_do")), reverse=True)
-    for edge in sorted_edges[:_MAX_OVERVIEW_PAIRS]:
-        lines.append(
-            f"- {edge.get('product_a')} + {edge.get('product_b')} (mức {edge.get('muc_do')}): "
-            f"{_overview_edge_summary(edge)}"
-        )
+    notable = sorted_edges[:_MAX_OVERVIEW_NOTABLE_PAIRS]
+    if notable:
+        lines.append("")
+        lines.append("Các cặp đáng chú ý nhất (nặng nhất trước) - chỉ nêu tên, KHÔNG liệt kê cặp nào ngoài danh sách này:")
+        lines += [f"- {edge.get('product_a')} + {edge.get('product_b')} (mức {edge.get('muc_do')})" for edge in notable]
+
     lines.append("")
     lines.append("Hãy viết đoạn tổng quan theo đúng hướng dẫn ở trên, bằng tiếng Việt.")
     return "\n".join(lines)
 
 
-async def build_overview_explanation(product_edges: list[dict], audience: str = "patient") -> dict:
-    """Sinh 1 đoạn tóm tắt tổng quan toàn bộ lần phân tích - thống kê số cặp
-    thuốc-thuốc theo mức độ + tổng hợp TRỰC TIẾP từ dữ liệu gốc trong product_edges
-    (contributing_pairs, đã có bản dịch cache sẵn) - KHÔNG còn đọc product_explanations
-    (đoạn văn rollup cấp thuốc do LLM khác viết) làm nguyên liệu như trước, để overview
-    không phải đợi build_product_explanations chạy xong mà chạy SONG SONG được với nó
-    (xem routes.py::_run_product_check). audience="patient"|"pharmacist" chỉ còn ảnh
-    hưởng tới giọng điệu system prompt, không ảnh hưởng dữ liệu nguồn đưa vào."""
+async def build_overview_explanation(
+    product_edges: list[dict], audience: str = "patient", prescription_count: int = 1
+) -> dict:
+    """Tóm tắt tổng quan toàn bộ lần phân tích - nêu tổng số cặp + phân bố theo mức
+    độ + 2-3 cặp đáng chú ý nhất, ngôn ngữ linh hoạt theo ngữ cảnh 1 đơn hay nhiều
+    đơn (prescription_count - truyền len(prescriptions) từ routes.py). Đọc THẲNG dữ
+    liệu gốc trong product_edges (không đọc lại product_explanations của LLM khác
+    viết) để chạy song song được với build_product_explanations, xem
+    routes.py::_run_product_check."""
     counts = severity_counts(product_edges)
     total = sum(counts.values())
     is_pharmacist = audience == "pharmacist"
@@ -526,18 +556,26 @@ async def build_overview_explanation(product_edges: list[dict], audience: str = 
         giai_thich = (
             _NO_INTERACTION_OVERVIEW_MESSAGE_PHARMACIST if is_pharmacist else _NO_INTERACTION_OVERVIEW_MESSAGE_PATIENT
         )
+        nhan_manh: list[dict] = []
     else:
         system_prompt = _OVERVIEW_SYSTEM_PROMPT_PHARMACIST if is_pharmacist else _OVERVIEW_SYSTEM_PROMPT_PATIENT
         response = await ainvoke_llm(
             [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": _overview_user_prompt(counts, product_edges)},
+                {"role": "user", "content": _overview_user_prompt(counts, product_edges, prescription_count)},
             ]
         )
-        giai_thich = filter_banned_language((response.content or "").strip())
+        clean_text, nhan_manh = _parse_highlights((response.content or "").strip())
+        giai_thich = filter_banned_language(clean_text)
+        # filter_banned_language hoạ hoằn mới thay nguyên đoạn bằng câu fallback
+        # trung lập (chỉ khi lỡ dính ngôn ngữ cấm) - lúc đó các cụm đã đánh dấu
+        # không còn nằm trong giai_thich nữa, phải bỏ để frontend không tìm nhầm.
+        if giai_thich != clean_text:
+            nhan_manh = []
 
     return {
         "giai_thich": giai_thich,
+        "nhan_manh": nhan_manh,
         "so_cap_nang": counts["nang"],
         "so_cap_trung_binh": counts["trung_binh"],
         "so_cap_nhe": counts["nhe"],

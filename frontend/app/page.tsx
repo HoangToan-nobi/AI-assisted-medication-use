@@ -2,7 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import {
   checkGuestProducts,
   checkProducts,
@@ -12,8 +17,9 @@ import {
 } from "@/lib/api";
 import { getSession, type Session } from "@/lib/auth";
 import type { Prescription } from "@/lib/prescription";
+import { scrollBelowStickyHeader } from "@/lib/scroll";
 import InteractionResultView from "@/components/graph/InteractionResultView";
-import MediFox from "@/components/MediFox";
+import ThemeModeToggle from "@/components/ThemeModeToggle";
 
 const asset = (name: string) => encodeURI(`/Bộ nhận diện y tế/${name}`);
 
@@ -24,9 +30,9 @@ const features = [
     text: "Phân tích tương tác giữa các loại thuốc bạn đang dùng để giảm rủi ro.",
   },
   {
-    icon: "search",
-    title: "Tra cứu thuốc",
-    text: "Thông tin rõ ràng về hàng ngàn loại thuốc, liều lượng và tác dụng phụ.",
+    icon: "hub",
+    title: "Đồ thị tương tác trực quan",
+    text: "Mỗi thuốc là một nút, mỗi cặp tương tác là một đường nối tô màu theo mức độ nghiêm trọng.",
   },
   {
     icon: "support_agent",
@@ -39,10 +45,15 @@ function Header() {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const updateHeader = () => setScrolled(window.scrollY > 12);
+    const scrollRoot = document.querySelector(".mc-page");
+    const updateHeader = () => {
+      const scrollTop = scrollRoot instanceof HTMLElement ? scrollRoot.scrollTop : window.scrollY;
+      setScrolled(scrollTop > 12);
+    };
     updateHeader();
-    window.addEventListener("scroll", updateHeader, { passive: true });
-    return () => window.removeEventListener("scroll", updateHeader);
+    const eventTarget = scrollRoot instanceof HTMLElement ? scrollRoot : window;
+    eventTarget.addEventListener("scroll", updateHeader, { passive: true });
+    return () => eventTarget.removeEventListener("scroll", updateHeader);
   }, []);
 
   return (
@@ -59,12 +70,16 @@ function Header() {
         />
       </Link>
       <nav className="mc-nav" aria-label="Điều hướng chính">
+        <ThemeModeToggle />
         <a href="#features">Tính năng</a>
         <a href="#about">Về MediCheck</a>
         <Link href="/auth" className="mc-login">
           Đăng nhập
         </Link>
       </nav>
+      <Link href="/auth" className="mc-mobile-login">
+        Đăng nhập
+      </Link>
     </header>
   );
 }
@@ -75,6 +90,15 @@ type LandingCheck = {
   session: Session | null;
 };
 
+const LANDING_SEARCH_PLACEHOLDER = "Nhập tên thuốc rồi chọn trong danh sách gợi ý";
+const DRUG_CHIP_LABEL_MAX_LENGTH = 30;
+
+function compactDrugChipLabel(name: string): string {
+  return name.length > DRUG_CHIP_LABEL_MAX_LENGTH
+    ? `${name.slice(0, DRUG_CHIP_LABEL_MAX_LENGTH).trimEnd()}…`
+    : name;
+}
+
 function HeroDrugSearch({
   onComplete,
 }: {
@@ -84,8 +108,39 @@ function HeroDrugSearch({
   const [selected, setSelected] = useState<string[]>([]);
   const selectedRef = useRef<string[]>([]);
   const [suggestions, setSuggestions] = useState<ProductSearchResult[]>([]);
-  const [loginToastVersion, setLoginToastVersion] = useState(0);
+  const [showLoginToast, setShowLoginToast] = useState(false);
+  const [toastLeaving, setToastLeaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [messageIsError, setMessageIsError] = useState(false);
+  const [animatedPlaceholder, setAnimatedPlaceholder] = useState("");
+
+  useEffect(() => {
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (reducedMotion.matches) {
+      setAnimatedPlaceholder(LANDING_SEARCH_PLACEHOLDER);
+      return;
+    }
+
+    let visibleCharacters = 0;
+    let deleting = false;
+    let timer: number;
+    const animate = () => {
+      setAnimatedPlaceholder(LANDING_SEARCH_PLACEHOLDER.slice(0, visibleCharacters));
+      let delay = deleting ? 30 : 58;
+      if (!deleting && visibleCharacters === LANDING_SEARCH_PLACEHOLDER.length) {
+        deleting = true;
+        delay = 1500;
+      } else if (deleting && visibleCharacters === 0) {
+        deleting = false;
+        delay = 400;
+      } else {
+        visibleCharacters += deleting ? -1 : 1;
+      }
+      timer = window.setTimeout(animate, delay);
+    };
+    animate();
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const keyword = query.trim();
@@ -93,24 +148,44 @@ function HeroDrugSearch({
       setSuggestions([]);
       return;
     }
+    let cancelled = false;
     const timer = window.setTimeout(() => {
       searchGuestProducts(keyword)
-        .then(setSuggestions)
-        .catch(() => setSuggestions([]));
+        .then((results) => {
+          if (cancelled) return;
+          setSuggestions(results);
+          if (results.length === 0) {
+            setMessage("Không tìm thấy tên thuốc này. Vui lòng nhập lại và chọn từ danh sách gợi ý.");
+            setMessageIsError(true);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setSuggestions([]);
+        });
     }, 250);
-    return () => window.clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [query]);
 
-  function parseNames(value: string) {
-    return value
-      .split(/[,;|\n]/)
-      .map((name) => name.trim())
-      .filter(Boolean);
+  function triggerLoginToast() {
+    setToastLeaving(false);
+    setShowLoginToast(true);
   }
 
-  function showLoginToast() {
-    setLoginToastVersion((version) => version + 1);
-  }
+  useEffect(() => {
+    if (!showLoginToast) return;
+    const leaveTimer = window.setTimeout(() => setToastLeaving(true), 1600);
+    const removeTimer = window.setTimeout(() => {
+      setShowLoginToast(false);
+      setToastLeaving(false);
+    }, 2000);
+    return () => {
+      window.clearTimeout(leaveTimer);
+      window.clearTimeout(removeTimer);
+    };
+  }, [showLoginToast]);
 
   function addDrugs(names: string[]) {
     const next = [...selectedRef.current];
@@ -118,8 +193,9 @@ function HeroDrugSearch({
       if (next.some((item) => item.toLowerCase() === name.toLowerCase()))
         continue;
       if (next.length >= 3) {
-        showLoginToast();
+        triggerLoginToast();
         setMessage("");
+        setMessageIsError(false);
         return;
       }
       next.push(name);
@@ -129,23 +205,21 @@ function HeroDrugSearch({
     setQuery("");
     setSuggestions([]);
     setMessage("");
+    setMessageIsError(false);
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const typed = parseNames(query);
     const next = [...selectedRef.current];
-    for (const name of typed) {
-      if (!next.some((item) => item.toLowerCase() === name.toLowerCase()))
-        next.push(name);
-    }
-    if (next.length >= 4) {
-      showLoginToast();
-      setMessage("");
+
+    if (query.trim()) {
+      setMessage("Tên thuốc bạn vừa gõ chưa được chọn. Hãy bấm vào đúng thuốc trong danh sách gợi ý.");
+      setMessageIsError(true);
       return;
     }
     if (next.length < 2) {
-      setMessage("Hãy nhập ít nhất 2 thuốc để kiểm tra tương tác.");
+      setMessage("Hãy tìm và chọn ít nhất 2 thuốc từ danh sách gợi ý để kiểm tra tương tác.");
+      setMessageIsError(true);
       return;
     }
     const prescription: Prescription = {
@@ -155,6 +229,7 @@ function HeroDrugSearch({
     };
     const session = getSession();
     setMessage("Đang phân tích tương tác...");
+    setMessageIsError(false);
     try {
       const payload = [{ label: prescription.label, products: next }];
       const result = session
@@ -164,6 +239,7 @@ function HeroDrugSearch({
       setMessage("");
     } catch {
       setMessage("Không thể phân tích tương tác lúc này. Vui lòng thử lại.");
+      setMessageIsError(true);
     }
   }
 
@@ -175,7 +251,7 @@ function HeroDrugSearch({
             {selected.map((name) => (
               <span key={name} className="mc-drug-chip">
                 <span className="mc-drug-chip__name" title={name}>
-                  {name}
+                  {compactDrugChipLabel(name)}
                 </span>
                 <button
                   type="button"
@@ -203,30 +279,43 @@ function HeroDrugSearch({
           </span>
           <input
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            aria-label="Nhập tên thuốc"
-            placeholder="Nhập tên thuốc, có thể thêm tối đa 3 thuốc"
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setMessage("");
+              setMessageIsError(false);
+            }}
+            aria-label="Tìm và chọn tên thuốc"
+            aria-autocomplete="list"
+            aria-controls="landing-drug-suggestions"
+            aria-expanded={suggestions.length > 0}
+            aria-describedby={message ? "landing-drug-search-message" : undefined}
+            placeholder={animatedPlaceholder}
           />
           <button type="submit">
             Tra cứu ngay <span aria-hidden="true">→</span>
           </button>
         </div>
         {suggestions.length > 0 && (
-          <ul className="mc-search-suggestions">
+          <ul id="landing-drug-suggestions" className="mc-search-suggestions" aria-label="Danh sách thuốc gợi ý">
             {suggestions.slice(0, 5).map((product) => (
-              <li key={product.id}>
+              <li key={product.id} className={selected.some((name) => name.toLowerCase() === product.ten_thuoc.toLowerCase()) ? "mc-search-suggestion--selected" : undefined}>
                 <button
                   type="button"
+                  disabled={selected.some((name) => name.toLowerCase() === product.ten_thuoc.toLowerCase())}
                   onClick={() => addDrugs([product.ten_thuoc])}
                 >
-                  {product.ten_thuoc}
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    {selected.some((name) => name.toLowerCase() === product.ten_thuoc.toLowerCase()) ? "check_circle" : "add_circle"}
+                  </span>
+                  <b>{product.ten_thuoc}</b>
+                  <small>{selected.some((name) => name.toLowerCase() === product.ten_thuoc.toLowerCase()) ? "Đã chọn" : "Chọn"}</small>
                 </button>
               </li>
             ))}
           </ul>
         )}
         {message && (
-          <p className="mc-search-message" role="alert">
+          <p id="landing-drug-search-message" className={`mc-search-message ${messageIsError ? "mc-search-message--error" : ""}`} role={messageIsError ? "alert" : "status"}>
             {message}
           </p>
         )}
@@ -251,10 +340,9 @@ function HeroDrugSearch({
           </span>
         </div>
       </form>
-      {loginToastVersion > 0 && (
+      {showLoginToast && (
         <aside
-          key={loginToastVersion}
-          className="mc-login-toast"
+          className={`mc-login-toast${toastLeaving ? " mc-login-toast--leaving" : ""}`}
           role="status"
           aria-live="polite"
         >
@@ -262,7 +350,10 @@ function HeroDrugSearch({
             className="mc-login-toast__close"
             type="button"
             aria-label="Đóng thông báo"
-            onClick={() => setLoginToastVersion(0)}
+            onClick={() => {
+              setShowLoginToast(false);
+              setToastLeaving(false);
+            }}
           >
             ×
           </button>
@@ -289,7 +380,7 @@ function HeroSection({
   return (
     <section
       className="mc-shell mc-hero"
-      aria-label="MediCheck - tra cứu thông minh, dùng thuốc an toàn"
+      aria-label="MediCheck - tra cứu tương tác, dùng thuốc an toàn"
     >
       <div className="mc-hero__glow" />
       <Image
@@ -298,7 +389,8 @@ function HeroSection({
         alt="Viên nang minh họa MediCheck"
         fill
         priority
-        sizes="(max-width: 800px) 50vw,800px"
+        quality={95}
+        sizes="(max-width: 760px) 145vw, 125vw"
       />
       <div className="mc-hero__overlay" />
       <div className="mc-hero__caption">
@@ -315,17 +407,16 @@ function HeroSection({
       </div>
       <div className="mc-hero__new-copy">
         <h1>
-          Tra cứu thông minh
+          Tra cứu tương tác
           <br />
           <em>dùng thuốc an toàn</em>
         </h1>
         <p>
-          Sử dụng thuốc an toàn là ưu tiên hàng đầu — tra cứu thông tin thuốc,
-          liều dùng và tương tác chỉ trong vài giây.
+          Biến tương tác phức tạp thành phân tích trực quan, đồng hành cùng
+          bạn dùng thuốc an toàn.
         </p>
       </div>
       <HeroDrugSearch onComplete={onComplete} />
-      <MediFox variant="search" className="mc-hero__fox" />
     </section>
   );
 }
@@ -395,7 +486,7 @@ function MissionSection() {
 
 function AudienceSection() {
   return (
-    <section className="mc-shell mc-audience">
+    <section id="audience" className="mc-shell mc-audience">
       <div className="mc-audience__intro">
         <span className="mc-kicker">03 / FOR </span>
         <h2>
@@ -444,8 +535,60 @@ function CTASection() {
   );
 }
 
+function LandingFooter() {
+  return (
+    <footer className="mc-footer">
+      <div className="mc-shell mc-footer__inner">
+        <div className="mc-footer__top">
+          <div className="mc-footer__brand">
+            <Link href="/" className="mc-footer__logo" aria-label="MediCheck - Trang chủ">
+              <Image src={asset("2-cropped.png")} alt="MediCheck" fill sizes="190px" />
+            </Link>
+            <p>
+              Tra cứu tương tác thuốc rõ ràng, có nguồn dữ liệu và luôn đặt an
+              toàn của người dùng lên trước.
+            </p>
+          </div>
+
+          <nav className="mc-footer__nav" aria-label="Điều hướng cuối trang">
+            <div>
+              <strong>Khám phá</strong>
+              <a href="#features">Tính năng</a>
+              <a href="#about">Về MediCheck</a>
+              <a href="#audience">Dành cho ai</a>
+            </div>
+            <div>
+              <strong>Sử dụng</strong>
+              <Link href="/interaction">Kiểm tra tương tác</Link>
+              <Link href="/auth">Đăng nhập</Link>
+              <Link href="/auth">Tạo tài khoản</Link>
+            </div>
+          </nav>
+        </div>
+
+        <div className="mc-footer__bottom">
+          <span>© 2026 MediCheck. Dữ liệu tham chiếu DDInter 2.0.</span>
+          <span>
+            Thông tin chỉ mang tính tham khảo, không thay thế tư vấn của bác sĩ
+            hoặc dược sĩ.
+          </span>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
 export default function LandingPage() {
   const [landingCheck, setLandingCheck] = useState<LandingCheck | null>(null);
+
+  useEffect(() => {
+    if (!landingCheck) return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        scrollBelowStickyHeader("landing-interaction-result");
+      });
+    });
+  }, [landingCheck]);
 
   return (
     <main className="mc-page">
@@ -453,8 +596,12 @@ export default function LandingPage() {
         .mc-page {
           --ink: #f5f8ff;
           --muted: #a8b5cc;
-          min-height: 100vh;
-          overflow: clip;
+          height: 100dvh;
+          min-height: 0;
+          overflow-x: clip;
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          scrollbar-gutter: stable;
           background: #070d18;
           color: var(--ink);
           font-family: Inter, Arial, sans-serif;
@@ -540,6 +687,10 @@ export default function LandingPage() {
           position: absolute;
           inset: 0;
           z-index: 1;
+          /* .mc-hero switches to overflow: visible below so .mc-hero__capsule
+             can bleed past the card edge - this fills the same box and needs
+             its own radius or its flat corners show through unclipped. */
+          border-radius: 28px;
           background: linear-gradient(
             90deg,
             #07111acc 0%,
@@ -791,6 +942,104 @@ export default function LandingPage() {
           background: #fff;
           color: #162d57;
         }
+        .mc-footer {
+          margin-top: 38px;
+          border-top: 1px solid #c7d8ef;
+          background:
+            radial-gradient(circle at 12% 0%, #aacbff4d, transparent 300px),
+            linear-gradient(180deg, #f3f8ff, #eaf2fd);
+        }
+        .mc-footer__inner {
+          padding: 52px 0 28px;
+        }
+        .mc-footer__top {
+          display: grid;
+          grid-template-columns: minmax(260px, 1.35fr) minmax(360px, 1fr);
+          gap: 72px;
+          align-items: start;
+        }
+        .mc-footer__logo {
+          position: relative;
+          display: block;
+          width: 190px;
+          height: 58px;
+        }
+        .mc-footer__logo img {
+          object-fit: contain;
+          object-position: left center;
+        }
+        .mc-footer__brand p {
+          max-width: 460px;
+          margin: 18px 0 0;
+          color: #5d6f88;
+          font-size: 14px;
+          line-height: 1.7;
+        }
+        .mc-footer__nav {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(140px, 1fr));
+          gap: 36px;
+        }
+        .mc-footer__nav > div {
+          display: grid;
+          align-content: start;
+          gap: 12px;
+        }
+        .mc-footer__nav strong {
+          margin-bottom: 4px;
+          color: #132a4d;
+          font-size: 12px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+        }
+        .mc-footer__nav a {
+          width: fit-content;
+          color: #5d6f88;
+          font-size: 14px;
+          text-decoration: none;
+          transition: color 0.18s ease, transform 0.18s ease;
+        }
+        .mc-footer__nav a:hover,
+        .mc-footer__nav a:focus-visible {
+          color: #315da1;
+          transform: translateX(3px);
+        }
+        .mc-footer__bottom {
+          display: flex;
+          justify-content: space-between;
+          gap: 30px;
+          margin-top: 42px;
+          padding-top: 22px;
+          border-top: 1px solid #c7d8ef;
+          color: #667892;
+          font-size: 12px;
+          line-height: 1.55;
+        }
+        .mc-footer__bottom span:last-child {
+          max-width: 520px;
+          text-align: right;
+        }
+        html[data-theme="dark"] .mc-footer {
+          border-top-color: #334b6a;
+          background:
+            radial-gradient(circle at 12% 0%, #4167b21f, transparent 300px),
+            linear-gradient(180deg, #0b1629, #070d18);
+        }
+        html[data-theme="dark"] .mc-footer__brand p,
+        html[data-theme="dark"] .mc-footer__nav a {
+          color: #a8b5cc;
+        }
+        html[data-theme="dark"] .mc-footer__nav strong {
+          color: #f5f8ff;
+        }
+        html[data-theme="dark"] .mc-footer__nav a:hover,
+        html[data-theme="dark"] .mc-footer__nav a:focus-visible {
+          color: #82adff;
+        }
+        html[data-theme="dark"] .mc-footer__bottom {
+          border-top-color: #263a57;
+          color: #899ab4;
+        }
         @media (max-width: 760px) {
           .mc-shell {
             width: min(100% - 24px, 1240px);
@@ -865,6 +1114,32 @@ export default function LandingPage() {
           }
           .mc-cta .mc-button {
             margin-top: 26px;
+          }
+          .mc-footer {
+            margin-top: 24px;
+          }
+          .mc-footer__inner {
+            padding: 38px 0 24px;
+          }
+          .mc-footer__top {
+            grid-template-columns: 1fr;
+            gap: 34px;
+          }
+          .mc-footer__logo {
+            width: 164px;
+            height: 50px;
+          }
+          .mc-footer__nav {
+            gap: 24px;
+          }
+          .mc-footer__bottom {
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 34px;
+          }
+          .mc-footer__bottom span:last-child {
+            text-align: left;
           }
         }
         .mc-logo {
@@ -1284,7 +1559,7 @@ export default function LandingPage() {
         .mc-hero__capsule {
           width: 65%;
           height: 182%;
-          right: 46%;
+          right: 27.4%;
           top: -39%;
           transform: rotate(-2deg) scale(1.8);
           transform-origin: 62% 50%;
@@ -1333,7 +1608,7 @@ export default function LandingPage() {
           }
         }
         .mc-hero__capsule {
-          transform: translateX(18vw) rotate(-2deg) scale(1.78) !important;
+          transform: translateX(220px) rotate(-2deg) scale(1.78);
           transform-origin: 62% 50%;
         }
         .mc-search-panel {
@@ -1379,9 +1654,136 @@ export default function LandingPage() {
           right: -18px;
           top: -25px;
         }
+        /* Transparent glass panels for the landing surfaces. */
+        .mc-header,
+        .mc-search-panel,
+        .mc-glass,
+        .mc-feature-card,
+        .mc-audience-card,
+        .mc-mission__card,
+        .mc-cta {
+          border: 1px solid rgba(255, 255, 255, 0.52);
+          background: rgba(255, 255, 255, 0.28);
+          box-shadow: inset 0 1px rgba(255, 255, 255, 0.62), 0 18px 44px rgba(44, 71, 112, 0.12);
+          backdrop-filter: blur(22px) saturate(135%);
+          -webkit-backdrop-filter: blur(22px) saturate(135%);
+        }
+        .mc-search-row {
+          border-color: rgba(183, 204, 237, 0.72);
+          background: rgba(255, 255, 255, 0.48);
+          backdrop-filter: blur(16px) saturate(130%);
+          -webkit-backdrop-filter: blur(16px) saturate(130%);
+        }
+        .mc-search-panel {
+          border-color: transparent;
+          background: transparent;
+          box-shadow: none;
+          backdrop-filter: none;
+          -webkit-backdrop-filter: none;
+        }
+        .mc-header { background: rgba(255, 255, 255, 0.2); }
+        .mc-nav {
+          gap: 2px;
+          padding: 5px 5px 5px 17px;
+          border: 1px solid rgba(255, 255, 255, 0.38);
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.18);
+          box-shadow: inset 0 1px rgba(255, 255, 255, 0.5);
+          backdrop-filter: blur(14px) saturate(130%);
+          -webkit-backdrop-filter: blur(14px) saturate(130%);
+        }
+        .mc-nav a:not(.mc-login) {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          min-height: 38px;
+          padding: 8px 12px;
+          border-radius: 999px;
+          color: #536887;
+          font-size: 14px;
+          font-weight: 600;
+          letter-spacing: -0.01em;
+          transition: color 180ms ease, background 180ms ease, transform 180ms ease;
+        }
+        .mc-nav a:not(.mc-login)::after {
+          content: "";
+          position: absolute;
+          right: 16px;
+          bottom: 5px;
+          left: 16px;
+          height: 2px;
+          border-radius: 999px;
+          background: #5575c4;
+          opacity: 0;
+          transform: scaleX(0.45);
+          transition: opacity 180ms ease, transform 180ms ease;
+        }
+        .mc-nav a:not(.mc-login):hover,
+        .mc-nav a:not(.mc-login):focus-visible {
+          color: #294b8c;
+          background: rgba(255, 255, 255, 0.62);
+          outline: none;
+          transform: translateY(-1px);
+        }
+        .mc-nav a:not(.mc-login):hover::after,
+        .mc-nav a:not(.mc-login):focus-visible::after {
+          opacity: 1;
+          transform: scaleX(1);
+        }
+        html[data-theme="dark"] .mc-nav {
+          border-color: rgba(155, 184, 228, 0.28);
+          background: rgba(13, 28, 49, 0.34);
+        }
+        html[data-theme="dark"] .mc-nav a:not(.mc-login) {
+          color: #b9c9e2;
+        }
+        html[data-theme="dark"] .mc-nav a:not(.mc-login):hover,
+        html[data-theme="dark"] .mc-nav a:not(.mc-login):focus-visible {
+          color: #fff;
+          background: rgba(79, 111, 186, 0.3);
+        }
+        html[data-theme="dark"] .mc-header,
+        html[data-theme="dark"] .mc-search-panel,
+        html[data-theme="dark"] .mc-glass,
+        html[data-theme="dark"] .mc-feature-card,
+        html[data-theme="dark"] .mc-audience-card,
+        html[data-theme="dark"] .mc-mission__card,
+        html[data-theme="dark"] .mc-cta {
+          border-color: rgba(155, 184, 228, 0.28);
+          background: rgba(13, 28, 49, 0.38);
+          box-shadow: inset 0 1px rgba(255, 255, 255, 0.1), 0 18px 44px rgba(0, 0, 0, 0.2);
+        }
+        html[data-theme="dark"] .mc-search-row {
+          border-color: rgba(155, 184, 228, 0.32);
+          background: rgba(10, 24, 43, 0.46);
+        }
+        .mc-search-row input,
+        .mc-search-row input:focus {
+          border: 0 !important;
+          outline: 0 !important;
+          background: transparent !important;
+          box-shadow: none !important;
+        }
+        html[data-theme="dark"] .mc-search-row input,
+        html[data-theme="dark"] .mc-search-row input:focus {
+          border: 0 !important;
+          background: transparent !important;
+          color: #edf4ff;
+          box-shadow: none !important;
+        }
+        html[data-theme="dark"] .mc-search-row input::placeholder {
+          color: #9db0cf;
+          opacity: 1;
+        }
+        html[data-theme="dark"] .mc-search-panel {
+          border-color: transparent;
+          background: transparent;
+          box-shadow: none;
+        }
+
         @media (max-width: 760px) {
           .mc-hero__capsule {
-            transform: translateX(0) rotate(-4deg) scale(1.5) !important;
+            transform: translateX(0) rotate(-4deg) scale(1.5);
           }
           .mc-search-panel {
             bottom: 9% !important;
@@ -1410,25 +1812,6 @@ export default function LandingPage() {
           }
           .mc-audience-card p {
             font-size: 14px;
-          }
-        }
-        .mc-hero__fox {
-          position: absolute;
-          z-index: 5;
-          right: 3.5%;
-          bottom: 5%;
-          width: 150px;
-          height: 122px;
-          pointer-events: none;
-          filter: drop-shadow(0 12px 14px #31528420);
-        }
-        @media (max-width: 760px) {
-          .mc-hero__fox {
-            right: 4%;
-            bottom: 3%;
-            width: 96px;
-            height: 78px;
-            opacity: 0.9;
           }
         }
         .mc-search-panel {
@@ -1516,7 +1899,10 @@ export default function LandingPage() {
           border-top: 1px solid #edf2fa;
         }
         .mc-search-suggestions button {
-          display: block;
+          display: grid;
+          grid-template-columns: 22px minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 9px;
           width: 100%;
           padding: 11px 13px;
           border: 0;
@@ -1527,17 +1913,94 @@ export default function LandingPage() {
           font: inherit;
           font-size: 13px;
         }
+        .mc-search-suggestions button > .material-symbols-outlined {
+          color: #5276bd;
+          font-size: 20px;
+        }
+        .mc-search-suggestions button > b {
+          min-width: 0;
+          overflow: hidden;
+          font-weight: 700;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .mc-search-suggestions button > small {
+          color: #5574ad;
+          font-size: 11px;
+          font-weight: 750;
+        }
         .mc-search-suggestions button:hover {
           background: #eef5ff;
         }
-        .mc-search-help,
+        .mc-search-suggestions {
+          bottom: calc(100% + 12px);
+          max-height: 176px;
+          padding: 6px;
+          border: 1px solid rgba(173, 198, 235, 0.88);
+          border-radius: 18px;
+          background: rgba(255, 255, 255, 0.82);
+          box-shadow: 0 18px 38px rgba(36, 62, 107, 0.16), inset 0 1px rgba(255, 255, 255, 0.9);
+          backdrop-filter: blur(20px) saturate(135%);
+          -webkit-backdrop-filter: blur(20px) saturate(135%);
+          scrollbar-width: thin;
+          scrollbar-color: #9aabd0 transparent;
+        }
+        .mc-search-suggestions::-webkit-scrollbar { width: 7px; }
+        .mc-search-suggestions::-webkit-scrollbar-track { background: transparent; }
+        .mc-search-suggestions::-webkit-scrollbar-thumb {
+          border: 2px solid transparent;
+          border-radius: 999px;
+          background: #9aabd0;
+          background-clip: padding-box;
+        }
+        .mc-search-suggestions li + li { border-top-color: rgba(207, 220, 241, 0.65); }
+        .mc-search-suggestions button {
+          min-height: 42px;
+          border-radius: 12px;
+          color: #263e6d;
+        }
+        .mc-search-suggestions button:hover,
+        .mc-search-suggestions button:focus-visible {
+          background: rgba(220, 233, 255, 0.78);
+          color: #263e6d !important;
+          outline: none;
+        }
+        .mc-search-suggestion--selected button {
+          color: #8798b8 !important;
+          background: rgba(230, 237, 248, 0.62);
+          cursor: not-allowed;
+        }
+        .mc-search-suggestion--selected small {
+          margin-left: 12px;
+          color: #7085aa;
+          font-size: 11px;
+          font-weight: 700;
+        }
+        html[data-theme="dark"] .mc-search-suggestions {
+          border-color: rgba(104, 139, 195, 0.58);
+          background: rgba(17, 34, 57, 0.9);
+          box-shadow: 0 18px 38px rgba(0, 0, 0, 0.28);
+          scrollbar-color: #5f7fae transparent;
+        }
+        html[data-theme="dark"] .mc-search-suggestions li + li { border-top-color: rgba(91, 119, 160, 0.36); }
+        html[data-theme="dark"] .mc-search-suggestions button { color: #e6efff; }
+        html[data-theme="dark"] .mc-search-suggestions button:hover,
+        html[data-theme="dark"] .mc-search-suggestions button:focus-visible {
+          background: rgba(68, 101, 157, 0.45);
+          color: #e6efff !important;
+        }
+        html[data-theme="dark"] .mc-search-suggestion--selected button {
+          color: #8298ba !important;
+          background: rgba(49, 72, 108, 0.6);
+        }
+        html[data-theme="dark"] .mc-search-suggestion--selected small { color: #9bb0d0; }
         .mc-search-message {
           margin: 8px 4px 0;
           color: #54709d;
           font-size: 11px;
           line-height: 1.4;
         }
-        .mc-search-message {
+        .mc-search-message--error {
           color: #b14455;
           font-weight: 700;
         }
@@ -1667,23 +2130,41 @@ export default function LandingPage() {
           box-shadow: 0 12px 28px #274d872b;
         }
         .mc-drug-chips {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          display: flex;
+          flex-wrap: nowrap;
+          align-items: center;
           gap: 9px;
           width: 100%;
+          overflow-x: auto;
+          overflow-y: hidden;
+          scrollbar-width: none;
+          -webkit-overflow-scrolling: touch;
+        }
+        .mc-drug-chips::-webkit-scrollbar {
+          display: none;
         }
         .mc-drug-chip {
           min-width: 0;
-          display: flex;
+          width: fit-content;
+          max-width: 100%;
+          flex: 0 0 auto;
+          min-height: 0 !important;
+          height: 52px !important;
+          display: inline-flex;
+          align-self: center;
           align-items: center;
           gap: 7px;
+          padding: 8px 12px;
+          line-height: 1.25;
+          overflow: hidden;
         }
         .mc-drug-chip__name {
           min-width: 0;
+          max-width: 100%;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
-          flex: 1;
+          flex: 1 1 auto;
         }
         .mc-drug-chip button {
           width: auto;
@@ -1691,20 +2172,26 @@ export default function LandingPage() {
           padding: 0;
           border: 0 !important;
           border-radius: 0 !important;
-          background: transparent;
+          background: transparent !important;
           color: #4167b2;
           font-size: 21px;
           font-weight: 500;
           line-height: 1;
           flex: 0 0 auto;
+          appearance: none;
+          outline: 0;
+          box-shadow: none;
         }
         .mc-drug-chip button:hover {
           color: #173f82;
+          background: transparent !important;
+          border: 0 !important;
+          box-shadow: none;
         }
         .mc-login-toast {
           position: fixed;
           z-index: 2000;
-          top: 24px;
+          top: 100px;
           right: 24px;
           width: min(390px, calc(100vw - 32px));
           padding: 25px 28px;
@@ -1766,8 +2253,74 @@ export default function LandingPage() {
             font-size: 18px;
           }
           .mc-login-toast {
-            top: 14px;
+            top: 84px;
             right: 16px;
+          }
+        }
+        @keyframes mc-toast-out {
+          from {
+            transform: translateY(0);
+            opacity: 1;
+          }
+          to {
+            transform: translateY(36px);
+            opacity: 0;
+          }
+        }
+        .mc-login-toast--leaving {
+          animation: mc-toast-out 0.4s cubic-bezier(0.4, 0, 1, 1) both;
+          pointer-events: none;
+        }
+
+        /* Living capsule: subtle floating motion keeps the hero active without
+           competing with the search interaction. */
+        .mc-hero__capsule {
+          animation:
+            mc-capsule-float 7s ease-in-out infinite,
+            mc-capsule-glow 4.5s ease-in-out infinite;
+          backface-visibility: hidden;
+          image-rendering: auto;
+          will-change: transform, filter;
+        }
+
+        @keyframes mc-capsule-float {
+          0%, 100% {
+            transform: translate3d(220px, 0, 0) rotate(-2deg) scale(1.78);
+          }
+          50% {
+            transform: translate3d(228px, -18px, 0) rotate(1deg) scale(1.82);
+          }
+        }
+
+        @keyframes mc-capsule-glow {
+          0%, 100% {
+            filter: drop-shadow(0 18px 24px rgba(39, 96, 183, 0.16));
+          }
+          50% {
+            filter: drop-shadow(0 26px 34px rgba(39, 96, 183, 0.28));
+          }
+        }
+
+        @media (max-width: 760px) {
+          .mc-hero__capsule {
+            animation:
+              mc-capsule-float-mobile 6.5s ease-in-out infinite,
+              mc-capsule-glow 4.5s ease-in-out infinite;
+          }
+
+          @keyframes mc-capsule-float-mobile {
+            0%, 100% {
+              transform: translate3d(0, 0, 0) rotate(-4deg) scale(1.5);
+            }
+            50% {
+              transform: translate3d(5px, -10px, 0) rotate(-1deg) scale(1.53);
+            }
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .mc-hero__capsule {
+            animation: none;
           }
         }
       `}</style>
@@ -1788,6 +2341,9 @@ export default function LandingPage() {
           border-color: #b7cceb;
           color: #204779;
           background: #ffffffaa;
+        }
+        .mc-mobile-login {
+          display: none;
         }
         .mc-hero {
           background: #fff;
@@ -1880,27 +2436,311 @@ export default function LandingPage() {
           background: #4167b2;
           color: #fff;
         }
+
         @media (max-width: 760px) {
+          .mc-page {
+            height: 100svh;
+            width: 100%;
+            max-width: 100%;
+            overflow-x: hidden;
+            scrollbar-gutter: auto;
+          }
+          .mc-shell {
+            width: calc(100% - 24px);
+          }
+          .mc-header,
+          .mc-header.mc-shell {
+            width: calc(100% - 12px);
+            height: 64px;
+            min-height: 64px;
+            margin: 6px auto 0;
+            padding: 6px 8px;
+            top: 6px;
+            gap: 4px;
+            border: 1px solid rgba(183, 204, 237, 0.72);
+            border-radius: 22px;
+            background: rgba(255, 255, 255, 0.48) !important;
+            box-shadow: 0 8px 24px rgba(45, 77, 124, 0.1) !important;
+            backdrop-filter: blur(18px) saturate(140%);
+            -webkit-backdrop-filter: blur(18px) saturate(140%);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+          }
+          html[data-theme="dark"] .mc-header,
+          html[data-theme="dark"] .mc-header.mc-shell {
+            border-color: rgba(91, 119, 160, 0.58);
+            background: rgba(13, 28, 49, 0.48) !important;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18) !important;
+          }
+          .mc-logo {
+            flex: 0 1 clamp(62px, 20vw, 88px);
+            width: clamp(62px, 20vw, 88px);
+            height: 42px;
+            min-width: 0;
+          }
+          .mc-nav {
+            position: static;
+            flex: 1 1 auto;
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: clamp(1px, 0.8vw, 5px);
+            height: auto;
+            padding: 0;
+            border: 0;
+            border-radius: 999px;
+            background: transparent !important;
+            box-shadow: none;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+          }
+          html[data-theme="dark"] .mc-header .mc-nav {
+            border-color: transparent;
+            background: transparent !important;
+            box-shadow: none;
+          }
+          .mc-nav a:not(.mc-login) {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 34px;
+            padding: 4px clamp(2px, 1vw, 6px);
+            font-size: clamp(9px, 2.7vw, 12px);
+            white-space: nowrap;
+          }
+          .mc-nav .mc-login {
+            display: inline-flex !important;
+            flex: 0 0 auto;
+            width: auto !important;
+            height: 34px !important;
+            min-height: 34px;
+            padding: 5px clamp(6px, 2vw, 10px);
+            font-size: clamp(9px, 2.7vw, 12px);
+          }
+          .mc-header .theme-toggle {
+            display: inline-flex !important;
+            flex: 0 0 clamp(38px, 11vw, 48px);
+            width: clamp(38px, 11vw, 48px);
+            height: 24px;
+          }
+          .mc-header .theme-toggle__thumb {
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+          }
+          .mc-header .theme-toggle--dark .theme-toggle__thumb {
+            transform: translateX(calc(clamp(38px, 11vw, 48px) - 24px));
+          }
+          .mc-mobile-login {
+            display: none;
+          }
+          html[data-theme="dark"] .mc-mobile-login {
+            border-color: #4d71a5;
+            background: #1b3152;
+            color: #e7f0ff;
+          }
+          .mc-hero,
+          .mc-hero.mc-shell {
+            display: flex;
+            flex-direction: column;
+            width: auto !important;
+            min-height: 0;
+            height: auto;
+            aspect-ratio: auto !important;
+            margin: 12px !important;
+            padding: 30px 18px 20px;
+            overflow: hidden;
+            border-radius: 26px;
+            max-width: none;
+            box-sizing: border-box;
+          }
+          .mc-hero__new-copy {
+            position: relative;
+            z-index: 4;
+            top: auto;
+            left: auto;
+            width: 100%;
+            max-width: none;
+          }
+          .mc-hero__new-copy h1 {
+            margin: 0 0 12px;
+            font-size: clamp(32px, 9.2vw, 38px);
+            line-height: 1.06;
+            letter-spacing: -0.045em;
+            overflow-wrap: normal;
+            word-break: normal;
+          }
+          .mc-hero__new-copy p {
+            max-width: 34rem;
+            font-size: 13px;
+            line-height: 1.5;
+          }
           .mc-hero__capsule {
-            object-position: 70% 12%;
+            width: 76%;
+            height: 240px;
+            top: 174px;
+            right: auto;
+            left: 12%;
+            object-position: center;
+            opacity: 0.48;
+            animation: none !important;
+            transform: none !important;
+            will-change: auto;
           }
           .mc-hero__overlay {
             background: linear-gradient(
               0deg,
               #ffffff 0%,
-              #ffffffef 48%,
-              #ffffff22 100%
+              #fffffff2 34%,
+              #ffffff38 72%,
+              #ffffffb8 100%
             );
           }
-          .mc-hero__caption h1 {
-            font-size: 44px;
+          html[data-theme="dark"] .mc-hero__overlay {
+            background: linear-gradient(
+              0deg,
+              #0d1c31 0%,
+              #0d1c31ee 34%,
+              #0d1c3144 72%,
+              #0d1c31c7 100%
+            );
+          }
+          .mc-search-panel {
+            position: static !important;
+            z-index: 8;
+            top: auto;
+            right: auto;
+            bottom: auto !important;
+            left: auto;
+            width: 100%;
+            max-width: 100%;
+            margin-top: 154px;
+          }
+          .mc-search-row {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
+            gap: 5px 9px;
+            min-height: 0;
+            width: 100%;
+            max-width: 100%;
+            padding: 8px;
+            overflow: hidden;
+            border-radius: 20px;
+            box-sizing: border-box;
+            box-shadow: 0 12px 30px rgba(39, 73, 126, 0.1);
+          }
+          .mc-search-icon {
+            align-self: center;
+            margin-left: 4px;
+            font-size: 24px;
+          }
+          .mc-search-row input {
+            width: 100%;
+            min-height: 42px;
+            padding: 0;
+            font-size: 14px;
+            text-overflow: ellipsis;
+          }
+          .mc-search-row button {
+            grid-column: 1 / -1;
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            min-height: 44px;
+            padding: 10px 18px;
+            font-size: 13px;
+            box-sizing: border-box;
+            justify-self: stretch;
+          }
+          .mc-search-stats {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            margin: 12px 0 0;
+            padding: 0;
+          }
+          .mc-search-stats span {
+            min-width: 0;
+            min-height: 58px;
+            width: 100%;
+            padding: 6px 3px;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            flex-direction: column;
+            justify-content: flex-start;
+            gap: 5px;
+            font-size: 9.5px;
+            line-height: 1.25;
+            text-align: center;
+            white-space: normal;
+            box-sizing: border-box;
+          }
+          .mc-search-stats i {
+            flex: 0 0 auto;
+            font-size: 19px;
+          }
+          html[data-theme="dark"] .mc-search-stats,
+          html[data-theme="dark"] .mc-search-stats span,
+          html[data-theme="dark"] .mc-search-stats i {
+            color: #91b4ff;
+          }
+          html[data-theme="dark"] .mc-search-stats span {
+            border-color: transparent;
+            background: transparent;
+          }
+          .mc-search-suggestions {
+            position: static;
+            width: 100%;
+            margin-top: 8px;
+            max-height: 220px;
+          }
+          .mc-drug-chips {
+            display: flex;
+            flex-wrap: nowrap;
+          }
+          .mc-drug-chip {
+            height: 44px !important;
+          }
+          .mc-section {
+            padding-top: 64px;
+            padding-bottom: 64px;
+          }
+          .mc-section-heading,
+          .mc-section-heading p,
+          .mc-mission,
+          .mc-feature-grid,
+          .mc-audience-grid {
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+          }
+          .mc-feature-grid,
+          .mc-audience-grid {
+            grid-template-columns: minmax(0, 1fr);
+          }
+          .mc-feature-card,
+          .mc-audience-card,
+          .mc-mission__card {
+            min-width: 0;
+          }
+          .mc-section-heading h2,
+          .mc-mission h2,
+          .mc-cta h2 {
+            font-size: clamp(30px, 9vw, 40px);
+            line-height: 1.08;
+            overflow-wrap: normal;
+            word-break: normal;
           }
         }
       `}</style>
       <Header />
       <HeroSection onComplete={setLandingCheck} />
       {landingCheck ? (
-        <section className="mc-result-shell mc-shell">
+        <section id="landing-interaction-result" className="mc-result-shell mc-shell">
           <div className="mc-result-shell__header">
             <div>
               <span className="mc-kicker">KẾT QUẢ TRA CỨU</span>
@@ -1911,7 +2751,9 @@ export default function LandingPage() {
               className="mc-result-shell__close"
               onClick={() => {
                 setLandingCheck(null);
-                window.scrollTo({ top: 0, behavior: "smooth" });
+                const landingPage = document.querySelector(".mc-page");
+                if (landingPage instanceof HTMLElement) landingPage.scrollTo({ top: 0, behavior: "smooth" });
+                else window.scrollTo({ top: 0, behavior: "smooth" });
               }}
             >
               Quay lại trang giới thiệu
@@ -1921,6 +2763,8 @@ export default function LandingPage() {
             result={landingCheck.result}
             prescriptions={landingCheck.prescriptions}
             session={landingCheck.session}
+            requireLoginToReview={!landingCheck.session}
+            showReviewAction={false}
           />
         </section>
       ) : (
@@ -1931,6 +2775,7 @@ export default function LandingPage() {
           <CTASection />
         </>
       )}
+      <LandingFooter />
     </main>
   );
 }

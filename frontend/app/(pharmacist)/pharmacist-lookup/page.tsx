@@ -7,7 +7,17 @@ import InteractionOverview from "@/components/graph/InteractionOverview";
 import { ApiError, checkProductsAsPharmacist, searchProducts, type MedicationCheckResponse } from "@/lib/api";
 import { getSession } from "@/lib/auth";
 import { createPrescription, mergedDrugNames, nonEmptyPrescriptions, toPrescriptionCheckInput, type Prescription } from "@/lib/prescription";
+import { scrollBelowStickyHeader } from "@/lib/scroll";
 import MediFox from "@/components/MediFox";
+
+function renumberDefaultPrescriptions(items: Prescription[]) {
+  return items.map((prescription, index) => ({
+    ...prescription,
+    label: /^Đơn thuốc \d+$/.test(prescription.label)
+      ? `Đơn thuốc ${index + 1}`
+      : prescription.label,
+  }));
+}
 
 // Cùng bàn cân (PrescriptionPanel + prescription-board) và cùng khung kết quả
 // (InteractionOverview, audience="pharmacist") với luồng "Tương tác" của bệnh
@@ -47,11 +57,17 @@ export default function PharmacistLookupPage() {
   }
 
   function addPrescription() {
-    setPrescriptions((prev) => [...prev, createPrescription(prev.length + 1)]);
+    setPrescriptions((prev) => {
+      const normalized = renumberDefaultPrescriptions(prev);
+      return [...normalized, createPrescription(normalized.length + 1)];
+    });
   }
 
   function removePrescription(id: string) {
-    setPrescriptions((prev) => (prev.length <= 1 ? prev : prev.filter((p) => p.id !== id)));
+    setPrescriptions((prev) => {
+      if (prev.length <= 1) return prev;
+      return renumberDefaultPrescriptions(prev.filter((p) => p.id !== id));
+    });
     setResult(null);
   }
 
@@ -65,6 +81,11 @@ export default function PharmacistLookupPage() {
       const data = await checkProductsAsPharmacist(toPrescriptionCheckInput(activePrescriptions), session.accessToken);
       setResult(data);
       setResultPrescriptions(activePrescriptions);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollBelowStickyHeader("pharmacist-interaction-result");
+        });
+      });
     } catch (err) { setError(err instanceof ApiError ? err.message : "Không thể phân tích tương tác lúc này."); }
     finally { setLoading(false); }
   }
@@ -75,7 +96,7 @@ export default function PharmacistLookupPage() {
     <main>
       <section className="greeting">
         <p className="eyebrow">SỔ TAY DƯỢC SĨ</p>
-        <h1 className="greeting__title">Tra cứu tương tác thuốc</h1>
+        <h1 className="greeting__title page-title-icon"><MaterialIcon name="analytics" size={25} />Tra cứu tương tác thuốc</h1>
         <p className="greeting__subtitle">Công cụ tra cứu nội bộ — không lưu lịch sử, không gắn với bệnh nhân nào.</p>
       </section>
 
@@ -95,7 +116,8 @@ export default function PharmacistLookupPage() {
               onRemoveDrug={(name) => removeDrugFrom(p.id, name)}
               onRemovePanel={boardMode ? () => removePrescription(p.id) : undefined}
               onRename={(newLabel) => renamePrescription(p.id, newLabel)}
-              inputId={`pharmacist-prescription-search-${p.id}`} />
+              inputId={`pharmacist-prescription-search-${p.id}`}
+              token={session.accessToken} audience="pharmacist" />
           ))}
           <button type="button" className="prescription-board__add" onClick={addPrescription}>
             <MaterialIcon name="add_circle" size={26} /><span>Thêm đơn thuốc</span>
@@ -107,7 +129,11 @@ export default function PharmacistLookupPage() {
         {loading && <div className="pharmacist-mascot-loading" role="status"><MediFox variant="loading" className="pharmacist-mascot-loading__image" /><strong>Cáo Medi đang rà soát các tương tác thuốc...</strong></div>}
       </section>
 
-      {result && <InteractionOverview result={result} prescriptions={resultPrescriptions ?? []} session={session} audience="pharmacist" />}
+      {result && (
+        <section id="pharmacist-interaction-result">
+          <InteractionOverview result={result} prescriptions={resultPrescriptions ?? []} session={session} audience="pharmacist" />
+        </section>
+      )}
     </main>
   );
 }

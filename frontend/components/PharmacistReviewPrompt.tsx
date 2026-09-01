@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useState } from "react";
 import Link from "next/link";
 import MaterialIcon from "@/components/MaterialIcon";
 import { getPharmacists, listPatientChecks, requestReview, type PharmacistSummary } from "@/lib/api";
@@ -8,10 +8,22 @@ import { getPharmacists, listPatientChecks, requestReview, type PharmacistSummar
 type PharmacistReviewPromptProps = {
   checkId: string;
   token?: string;
+  // true: lần tra từ "Đơn thuốc của tôi"; false: tra cứu chung, có thể tra cứu hộ.
+  personalized?: boolean;
   // Cần để tự tra lại trạng thái xác nhận thật của lần kiểm tra này (không chỉ
   // dựa vào state cục bộ "assigned" - state đó mất ngay khi rời trang/reload).
   patientId?: string;
   onAssigned?: () => void;
+  // Báo cho khung kết quả sau khi danh sách đã thật sự xuất hiện trong DOM. Bên
+  // ngoài dùng mốc này để cuộn chính xác, thay vì đoán thời điểm React render.
+  onListVisible?: () => void;
+  // Ẩn CTA mặc định khi bên gọi đã có một nút kích hoạt riêng. Component vẫn
+  // được mount để ref có thể mở trực tiếp danh sách dược sĩ.
+  hideCollapsed?: boolean;
+};
+
+export type PharmacistReviewPromptHandle = {
+  toggleList: () => boolean;
 };
 
 type KnownStatus = "chua_xac_nhan" | "cho_xac_nhan" | "da_xac_nhan";
@@ -20,12 +32,17 @@ type Step = "cta" | "list" | "form";
 // Gợi ý gửi lần kiểm tra hiện tại cho dược sĩ xem lại - tách từ check-result/page.tsx
 // để dùng lại được ở mọi nơi hiện kết quả (InteractionOverview render widget này
 // cho MỌI lần tra cứu, không riêng gì tương tác nghiêm trọng).
-export default function PharmacistReviewPrompt({ checkId, token, patientId, onAssigned }: PharmacistReviewPromptProps) {
+const PharmacistReviewPrompt = forwardRef<PharmacistReviewPromptHandle, PharmacistReviewPromptProps>(function PharmacistReviewPrompt(
+  { checkId, token, personalized = false, patientId, onAssigned, onListVisible, hideCollapsed = false },
+  ref,
+) {
   const [step, setStep] = useState<Step>("cta");
   const [pharmacists, setPharmacists] = useState<PharmacistSummary[]>([]);
   const [pharmacistsLoading, setPharmacistsLoading] = useState(false);
   const [selected, setSelected] = useState<PharmacistSummary | null>(null);
-  const [attachProfile, setAttachProfile] = useState(true);
+  // Hồ sơ cá nhân là dữ liệu tùy chọn và cần được người dùng chủ động đồng ý chia sẻ.
+  // Lựa chọn này chỉ chi phối dữ liệu dược sĩ được xem, không chi phối lần tra tương tác.
+  const [attachProfile, setAttachProfile] = useState(!personalized);
   const [manualName, setManualName] = useState("");
   const [manualDob, setManualDob] = useState("");
   const [manualNote, setManualNote] = useState("");
@@ -61,10 +78,30 @@ export default function PharmacistReviewPrompt({ checkId, token, patientId, onAs
     finally { setPharmacistsLoading(false); }
   }
 
+  useImperativeHandle(ref, () => ({
+    toggleList: () => {
+      if (step === "cta") {
+        void handleShowPharmacists();
+        return true;
+      }
+      setSelected(null);
+      setStep("cta");
+      return false;
+    },
+  }));
+
+  useLayoutEffect(() => {
+    if (step !== "list" || statusLoading) return;
+    onListVisible?.();
+  }, [step, statusLoading, onListVisible]);
+
   function handleSelectPharmacist(p: PharmacistSummary) {
     setSelected(p);
-    setAttachProfile(true);
-    setManualName(""); setManualDob(""); setManualNote(""); setQuestion("");
+    setAttachProfile(!personalized);
+    setManualName("");
+    setManualDob("");
+    setManualNote("");
+    setQuestion("");
     setSubmitError(null);
     setStep("form");
   }
@@ -75,9 +112,9 @@ export default function PharmacistReviewPrompt({ checkId, token, patientId, onAs
     try {
       await requestReview(checkId, selected.id, token as string, {
         guiKemHoSo: attachProfile,
-        tenNguoiDuocKiemTra: attachProfile ? undefined : manualName.trim() || undefined,
-        ngaySinhNhapTay: attachProfile ? undefined : manualDob || undefined,
-        ghiChuNhapTay: attachProfile ? undefined : manualNote.trim() || undefined,
+        tenNguoiDuocKiemTra: !personalized && !attachProfile ? manualName.trim() || undefined : undefined,
+        ngaySinhNhapTay: !personalized && !attachProfile ? manualDob || undefined : undefined,
+        ghiChuNhapTay: !personalized && !attachProfile ? manualNote.trim() || undefined : undefined,
         cauHoi: question.trim() || undefined,
       });
       setAssigned(true);
@@ -91,7 +128,7 @@ export default function PharmacistReviewPrompt({ checkId, token, patientId, onAs
 
   if (!token) {
     return (
-      <div className="pharmacist-prompt">
+      <div className="pharmacist-prompt pharmacist-prompt--cta-row">
         <p className="pharmacist-prompt__title">Bạn có muốn nhờ dược sĩ xác nhận lại tương tác thuốc này không?</p>
         <Link href="/" className="guest-login-link">Đăng nhập để gửi yêu cầu cho dược sĩ</Link>
       </div>
@@ -99,6 +136,7 @@ export default function PharmacistReviewPrompt({ checkId, token, patientId, onAs
   }
 
   if (statusLoading) {
+    if (hideCollapsed) return null;
     return (
       <div className="pharmacist-prompt pharmacist-prompt--loading">
         <span className="spinner spinner--sm" /> Đang kiểm tra trạng thái gửi dược sĩ...
@@ -129,22 +167,44 @@ export default function PharmacistReviewPrompt({ checkId, token, patientId, onAs
           <MaterialIcon name="arrow_back" size={16} /> Chọn dược sĩ khác
         </button>
         <p className="pharmacist-prompt__title">Gửi yêu cầu tới <strong>{selected.ho_ten}</strong></p>
-        <div className="pharmacist-prompt__attach-toggle">
-          <label className={attachProfile ? "pharmacist-prompt__attach-option pharmacist-prompt__attach-option--active" : "pharmacist-prompt__attach-option"}>
-            <input type="radio" name="attach-mode" checked={attachProfile} onChange={() => setAttachProfile(true)} />
-            Gửi kèm hồ sơ cá nhân của tôi
-          </label>
-          <label className={!attachProfile ? "pharmacist-prompt__attach-option pharmacist-prompt__attach-option--active" : "pharmacist-prompt__attach-option"}>
-            <input type="radio" name="attach-mode" checked={!attachProfile} onChange={() => setAttachProfile(false)} />
-            Nhập thông tin khác (tra cứu hộ người khác)
-          </label>
-        </div>
-        {!attachProfile && (
-          <div className="pharmacist-prompt__manual-form">
-            <div className="field"><label>Họ tên người được kiểm tra</label><input value={manualName} onChange={(e) => setManualName(e.target.value)} placeholder="Ví dụ: Nguyễn Văn A" /></div>
-            <div className="field"><label>Ngày sinh</label><input type="date" value={manualDob} onChange={(e) => setManualDob(e.target.value)} /></div>
-            <div className="field"><label>Ghi chú (bệnh nền, dị ứng...)</label><textarea rows={2} value={manualNote} onChange={(e) => setManualNote(e.target.value)} placeholder="Không bắt buộc" /></div>
+        {personalized ? (
+          <div className="pharmacist-prompt__attach-toggle">
+            <label className={attachProfile ? "pharmacist-prompt__attach-option pharmacist-prompt__attach-option--active" : "pharmacist-prompt__attach-option"}>
+              <input
+                type="checkbox"
+                checked={attachProfile}
+                onChange={(event) => setAttachProfile(event.target.checked)}
+              />
+              <span>
+                <strong>Chia sẻ hồ sơ cá nhân của tôi với dược sĩ</strong>
+                <small>Dược sĩ sẽ được xem thông tin cá nhân, bệnh nền và dị ứng thuốc trong hồ sơ của bạn.</small>
+              </span>
+            </label>
+            <p className="pharmacist-prompt__privacy-note">
+              <MaterialIcon name="shield" size={17} />
+              Không bắt buộc. Dù không chia sẻ hồ sơ, dược sĩ vẫn nhận được danh sách thuốc và kết quả tra tương tác này.
+            </p>
           </div>
+        ) : (
+          <>
+            <div className="pharmacist-prompt__attach-toggle">
+              <label className={attachProfile ? "pharmacist-prompt__attach-option pharmacist-prompt__attach-option--active" : "pharmacist-prompt__attach-option"}>
+                <input type="radio" name={`attach-mode-${checkId}`} checked={attachProfile} onChange={() => setAttachProfile(true)} />
+                Gửi kèm hồ sơ cá nhân của tôi
+              </label>
+              <label className={!attachProfile ? "pharmacist-prompt__attach-option pharmacist-prompt__attach-option--active" : "pharmacist-prompt__attach-option"}>
+                <input type="radio" name={`attach-mode-${checkId}`} checked={!attachProfile} onChange={() => setAttachProfile(false)} />
+                Nhập thông tin khác (tra cứu hộ người khác)
+              </label>
+            </div>
+            {!attachProfile && (
+              <div className="pharmacist-prompt__manual-form">
+                <div className="field"><label>Họ tên người được kiểm tra</label><input value={manualName} onChange={(e) => setManualName(e.target.value)} placeholder="Ví dụ: Nguyễn Văn A" /></div>
+                <div className="field"><label>Ngày sinh</label><input type="date" value={manualDob} onChange={(e) => setManualDob(e.target.value)} /></div>
+                <div className="field"><label>Ghi chú (bệnh nền, dị ứng...)</label><textarea rows={2} value={manualNote} onChange={(e) => setManualNote(e.target.value)} placeholder="Không bắt buộc" /></div>
+              </div>
+            )}
+          </>
         )}
         <div className="field">
           <label>Câu hỏi cho dược sĩ (không bắt buộc)</label>
@@ -158,13 +218,15 @@ export default function PharmacistReviewPrompt({ checkId, token, patientId, onAs
     );
   }
 
+  if (step === "cta" && hideCollapsed) return null;
+
   return (
-    <div className="pharmacist-prompt">
+    <div className={`pharmacist-prompt ${step === "cta" ? "pharmacist-prompt--cta-row" : ""}`}>
       <p className="pharmacist-prompt__title">Bạn có muốn nhờ dược sĩ xác nhận lại tương tác thuốc này không?</p>
       {step === "cta" ? (
         <button type="button" className="pharmacist-prompt__cta" onClick={() => void handleShowPharmacists()}>Nhờ dược sĩ xác nhận</button>
       ) : (
-        <div className="pharmacist-prompt__list">
+        <div className={`pharmacist-prompt__list${pharmacistsLoading ? " pharmacist-prompt__list--loading" : ""}`}>
           {pharmacistsLoading ? <p className="pharmacist-prompt__loading">Đang tải danh sách dược sĩ...</p> : pharmacists.map((p) => {
             // Chỉ 2 dòng: tên, rồi nơi làm việc + mô tả ngắn gộp chung 1 dòng (cắt
             // bớt bằng ellipsis nếu quá dài) - tránh tràn ra ngoài khung danh sách.
@@ -183,4 +245,6 @@ export default function PharmacistReviewPrompt({ checkId, token, patientId, onAs
       )}
     </div>
   );
-}
+});
+
+export default PharmacistReviewPrompt;
