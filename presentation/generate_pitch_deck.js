@@ -395,7 +395,7 @@ function addNotes(slide, notes) {
     if (i < 4) arrow(slide, x + 2.08, 3.05, x + 2.38, 3.05, C.line, 1.6);
   });
   const rails = [
-    ['Nguồn sự thật', '1.503 thuốc\n15.140 cặp tương tác\nDDInter 2.0', C.blue, C.pale],
+    ['Nguồn sự thật', '1.939 hoạt chất\n160.227 cặp tương tác\nDDInter 2.0', C.blue, C.pale],
     ['Vai trò của LLM', 'Chỉ diễn giải dữ liệu đã tra cứu; không tự tạo tương tác.', C.purple, 'F0E8FB'],
     ['Rào chắn an toàn', 'Bắt buộc citation; lọc khuyến nghị tự đổi/ngừng thuốc.', C.red, C.redPale],
     ['Con người kiểm soát', 'Dược sĩ xem chi tiết chuyên môn và xác nhận ca cần chú ý.', C.green, C.greenPale],
@@ -417,7 +417,7 @@ function addNotes(slide, notes) {
     ['FRONTEND', 'Next.js 14\nReact 18\nTypeScript', C.blue],
     ['BACKEND', 'FastAPI\nPydantic\nUvicorn', C.purple],
     ['AGENT', 'LangGraph\nLangChain\nDeepSeek Chat', C.amber],
-    ['DATA', 'PostgreSQL / Neon\nSQLite offline\nSQLAlchemy', C.green],
+    ['DATA', 'Supabase Postgres\nCockroachDB (facts)\nSQLAlchemy', C.green],
     ['QUALITY', 'pytest\nSmoke test auth\nSwagger / OpenAPI', C.red],
   ];
   stack.forEach((s, i) => {
