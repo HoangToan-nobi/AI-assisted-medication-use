@@ -6,6 +6,8 @@ Bệnh nhân dùng nhiều thuốc/thực phẩm chức năng cùng lúc dễ g�
 
 **AI không tự chẩn đoán, không tự khuyên đổi/ngừng thuốc — mọi cảnh báo chỉ mang tính tham khảo.**
 
+🔗 **Dùng thử:** https://ai20k-c3-team005-medicheck.vercel.app · 🎬 **Video demo:** https://www.youtube.com/watch?v=mrw6JcRn0yU
+
 ## Screenshot
 
 | Landing page | Dashboard bệnh nhân |
@@ -226,7 +228,25 @@ Xem video giới thiệu và quy trình hoạt động các luồng tra cứu (3
 
 ## Live URL
 
-_TODO: điền URL sau khi deploy._ Hiện tại chạy local qua Docker theo hướng dẫn ở trên.
+**https://ai20k-c3-team005-medicheck.vercel.app**
+
+Frontend Next.js trên Vercel, proxy `/api/*` sang backend FastAPI (xem `frontend/next.config.js`).
+Dùng thử ngay không cần đăng ký: trang chủ → ô tra cứu khách (guest), nhập 2 biệt dược bất kỳ.
+
+Thử nhanh bằng curl qua chính domain production:
+
+```bash
+curl "https://ai20k-c3-team005-medicheck.vercel.app/api/v1/guest/products/search?q=aspirin"
+
+curl -X POST https://ai20k-c3-team005-medicheck.vercel.app/api/v1/guest/medications/check \
+  -H "Content-Type: application/json" \
+  -d '{"medications": ["Aspirin", "Warfarin"]}'
+```
+
+> ⏱️ Backend chạy free tier nên **request đầu tiên sau một thời gian không dùng có thể mất 30-60 giây**
+> (cold start); các request sau trả về dưới 1 giây. Nếu trang báo lỗi tải ở lần vào đầu tiên, tải lại sau ít phút.
+
+Muốn chạy local thay vì dùng bản deploy: xem mục [Cài đặt & Chạy](#cài-đặt--chạy) ở trên.
 
 ## License
 

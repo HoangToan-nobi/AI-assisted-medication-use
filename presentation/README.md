@@ -2,8 +2,8 @@
 
 ## Bản thuyết trình hoàn chỉnh
 
-- `pitch_deck_medicheck_vi.pptx` — deck PowerPoint 12 slide, có thể chỉnh sửa.
-- `pitch_deck_medicheck_vi.pdf` — bản PDF để xem hoặc gửi nhanh.
+- `pitch_deck.pptx` — deck PowerPoint 12 slide, có thể chỉnh sửa.
+- `pitch_deck.pdf` — bản PDF để xem hoặc gửi nhanh.
 - `speaker_notes_vi.md` — lời dẫn ngắn theo từng slide.
 - `generate_pitch_deck.js` — mã nguồn tạo lại deck.
 

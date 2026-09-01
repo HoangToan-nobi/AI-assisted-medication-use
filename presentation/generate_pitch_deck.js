@@ -445,6 +445,47 @@ function addNotes(slide, notes) {
   addNotes(slide, 'MVP dùng Next.js, FastAPI, LangGraph và PostgreSQL. Toàn bộ hệ thống có thể chạy qua Docker Compose. Nhóm cũng đã chuẩn bị hướng dẫn xác thực production và smoke test. Các KPI chất lượng chưa có số đo chính thức nên trong deck này chúng em không đưa ra con số chưa được kiểm chứng.');
 }
 
+// Slide 10b — Evaluation (LLM quality)
+{
+  const slide = pptx.addSlide('MEDICHECK');
+  title(slide, '08 / Đánh giá', 'Đánh giá chất lượng giải thích AI — 3/3 chỉ số chính đạt ngưỡng', '135 case thực tế, chấm bằng 24 phiên AI độc lập không cùng nhà cung cấp với model sinh nội dung — thay vì để AI tự chấm chính mình.');
+
+  addText(slide, 'SCORECARD', 0.58, 1.86, 3, 0.26, { fontSize: 10, bold: true, color: C.blue, charSpacing: 1.3 });
+  const kpis = [
+    ['0.97', 'Faithfulness', '≥ 0.95', C.green, C.greenPale],
+    ['4.67', 'Relevance /5', '≥ 4.3', C.green, C.greenPale],
+    ['1.00', 'Completeness', '≥ 0.90', C.green, C.greenPale],
+    ['100%', 'Guardrail', 'sau khi vá', C.green, C.greenPale],
+    ['89%', 'Consistency', 'mục tiêu 100%', C.amber, C.amberPale],
+    ['$0.0004', 'Chi phí / lượt', 'cache ấm', C.blue, C.pale],
+  ];
+  const kw = (12.17 - 5 * 0.14) / 6;
+  kpis.forEach((k, i) => {
+    const x = 0.58 + i * (kw + 0.14);
+    rect(slide, x, 2.18, kw, 1.28, k[4], 0.16);
+    addText(slide, k[0], x + 0.15, 2.32, kw - 0.3, 0.5, { fontSize: 19, bold: true, color: k[3] });
+    addText(slide, k[1], x + 0.15, 2.84, kw - 0.3, 0.32, { fontSize: 10, bold: true, color: C.navy });
+    addText(slide, k[2], x + 0.15, 3.15, kw - 0.3, 0.24, { fontSize: 8.4, color: C.muted });
+  });
+
+  addText(slide, 'ĐIỂM NỔI BẬT', 0.58, 3.72, 3, 0.26, { fontSize: 10, bold: true, color: C.blue, charSpacing: 1.3 });
+  const highlights = [
+    ['01', 'Đổi giám khảo, không tự chấm mình', 'AI khác nhà cung cấp với model sinh nội dung được dùng để chấm — giảm thiên vị "tự chấm chính mình" so với đợt trước.', C.blue],
+    ['02', 'Rà soát trước khi chấm diện rộng', 'Tìm và vá 5 kiểu rò rỉ lời khuyên xử trí ẩn trong văn bản, trước khi tốn chi phí đánh giá cả 135 case.', C.amber],
+    ['03', 'Soát tay bắt lỗi ngoài khung có sẵn', '1 thành viên đọc trực tiếp, không cần chuyên môn y dược, phát hiện thêm 1 lỗi mà bộ tiêu chí tự động không bắt được.', C.green],
+  ];
+  const nw = (12.17 - 2 * 0.2) / 3;
+  highlights.forEach((h, i) => {
+    const x = 0.58 + i * (nw + 0.2);
+    card(slide, x, 4.06, nw, 2.0, h[1], h[2], h[3], h[0]);
+  });
+
+  rect(slide, 0.58, 6.20, 12.17, 0.48, C.navy, 0.14);
+  addText(slide, 'Không có cảnh báo xử trí/liều lượng nào lọt qua tầng guardrail trong toàn bộ 135 case kiểm tra — kể cả câu diễn đạt gián tiếp.', 0.85, 6.26, 11.63, 0.36, { fontSize: 11, bold: true, color: C.white, align: 'center' });
+
+  addNotes(slide, 'Đợt đánh giá này đổi giám khảo từ DeepSeek-reasoner sang Claude để tránh việc AI tự chấm phiên bản anh em của chính nó, đồng thời rà soát kiến trúc và vá nhiều lỗi rò rỉ trước khi chấm diện rộng. Cả 3 chỉ số chất lượng chính đều đạt ngưỡng lần đầu tiên; điểm cần theo dõi tiếp là độ ổn định giữa các lần sinh.');
+}
+
 // Slide 11 — Analysis & roadmap
 {
   const slide = pptx.addSlide('MEDICHECK');
@@ -533,7 +574,7 @@ async function main() {
   } else if (maxSlides > 0) {
     pptx._slides = pptx._slides.slice(0, maxSlides);
   }
-  const outName = onlySlide > 0 ? `_test_slide_${onlySlide}.pptx` : (maxSlides > 0 ? `_test_prefix_${maxSlides}.pptx` : 'pitch_deck_medicheck_vi.pptx');
+  const outName = onlySlide > 0 ? `_test_slide_${onlySlide}.pptx` : (maxSlides > 0 ? `_test_prefix_${maxSlides}.pptx` : 'pitch_deck.pptx');
   const out = path.join(__dirname, outName);
   const notesOut = path.join(__dirname, 'speaker_notes_vi.md');
   await pptx.writeFile({ fileName: out, compression: true });
