@@ -1,0 +1,17 @@
+{
+  "completeness": {
+    "n": 10,
+    "cohen_kappa": 1.0,
+    "trust": "OK (dùng judge)"
+  },
+  "faithfulness": {
+    "n": 10,
+    "cohen_kappa": 0.2857,
+    "trust": "THẤP — chuyển chấm tay"
+  },
+  "relevance": {
+    "n": 10,
+    "cohen_kappa": 0.0,
+    "trust": "THẤP — chuyển chấm tay"
+  }
+}

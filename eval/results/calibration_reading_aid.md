@@ -1,0 +1,207 @@
+# Tài liệu hỗ trợ đọc — calibration.csv (10 case)
+
+Mục đích: đọc nhanh hơn, KHÔNG quyết định hộ pass/fail. Bạn tự đối chiếu từng câu
+tiếng Việt (đã tách sẵn) với nguồn tiếng Anh bên cạnh, rồi tự điền pass/fail vào
+`calibration_Quan.csv` / `calibration_Toan.csv` (KHÔNG điền vào file này).
+
+Nhắc tiêu chí:
+- **faithfulness**: mỗi câu tiếng Việt có truy được về mo_ta/xu_tri gốc không? Có bịa/thêm không?
+- **relevance**: có nói cụ thể đúng cặp này không, hay chung chung?
+- **completeness**: có đủ CƠ CHẾ + HẬU QUẢ mà phần Mô tả nguồn có không?
+
+---
+
+## 1. `dd-nang-001` — thuoc: A.T Ketoconazole 2% + A.T Loperamid 2 mg
+
+**Nguồn (mo_ta_goc_EN):**
+> Coadministration with drugs that enhance the gastrointestinal absorption or inhibit the metabolism of loperamide (e.g., potent CYP450 3A4 or 2C8 inhibitors) may increase the plasma concentrations and adverse effects of loperamide.
+
+**Nguồn xử trí (xu_tri_goc_EN — chỉ để hiểu bối cảnh):**
+> Caution is recommended if loperamide is used with drugs that enhance its gastrointestinal absorption or inhibit its metabolism. Particular caution is advised when drugs that inhibit CYP450 3A4 (e.g., azole antifungal agents, clarithromycin, cobicistat, conivaptan, delavirdine, erythromycin, idelalisib, nefazodone, protease inhibitors, telithromycin) and CYP450 2C8 (e.g., gemfibrozil, clopidogrel) are used together with loperamide, or when one or more of these drugs are combined with inhibitors of P-glycoprotein transport (e.g., amiodarone, cyclosporine, diltiazem, dronedarone, quinidine, verapamil), since they may act synergistically to increase loperamide concentrations. Patients should be counseled to not exceed the recommended dosage and frequency or duration of use of loperamide, and to seek prompt medical attention if they experience symptoms that could indicate the occurrence of torsade de pointes such as dizziness, lightheadedness, fainting, palpitation, irregular heart rhythm, shortness of breath, or syncope. If loperamide-induced cardiotoxicity is suspected, promptly discontinue loperamide and initiate therapy to manage and prevent cardiac arrhythmias and adverse outcomes. Electrical pacing or cardioversion may be necessary if torsade de pointes persists despite pharmacotherapy.
+
+**Đoạn giải thích tiếng Việt (đã tách câu):**
+
+1. [ ] Ketoconazole bôi da và Loperamid dùng chung có thể làm tăng lượng Loperamid trong máu, vì Ketoconazole ức chế enzyme gan giúp phân hủy Loperamid, đồng thời có thể làm tăng hấp thu thuốc này qua đường tiêu hóa.
+2. [ ] Khi nồng độ Loperamid trong máu cao hơn bình thường, nguy cơ gặp tác dụng phụ của thuốc (như buồn ngủ, táo bón, chóng mặt) cũng tăng theo.
+3. [ ] Điều này đặc biệt đáng lưu ý khi dùng Loperamid với các thuốc khác cũng ức chế enzyme gan hoặc vận chuyển thuốc, vì chúng có thể cộng hưởng làm tăng thêm nồng độ Loperamid.
+
+**Verdict (tự điền vào file calibration_<tên>.csv, KHÔNG điền ở đây):**
+- faithfulness: pass / fail — lý do nếu fail: ___________
+- relevance: pass / fail — lý do nếu fail: ___________
+- completeness: pass / fail — lý do nếu fail: ___________
+
+---
+
+## 2. `dd-nang-009` — thuoc: Diatramine Capsule 11.30mg + Aronol
+
+**Nguồn (mo_ta_goc_EN):**
+> Concomitant use of sibutramine with other serotonin reuptake inhibitors or other agents that possess or enhance serotonergic activity such as monoamine oxidase inhibitors (MAOIs), tricyclic antidepressants, 5-HT1 receptor agonists, ergot alkaloids, phenylpiperidine opioids, bupropion, dextromethorphan, linezolid, lithium, St. John&#x27;s wort, tramadol, and tryptophan may potentiate the risk of serotonin syndrome, which is a rare but serious and potentially fatal condition thought to result from hyperstimulation of brainstem 5-HT1A and 2A receptors.
+
+**Nguồn xử trí (xu_tri_goc_EN — chỉ để hiểu bối cảnh):**
+> In general, the concomitant use of sibutramine with other agents that affect the serotonergic neurotransmitter system should be avoided if possible, or otherwise approached with caution if potential benefit is deemed to outweigh the risk. Patients should be closely monitored for symptoms of the serotonin syndrome during treatment. Particular caution is advised when initiating or increasing the dosages of these agents. The potential risk for serotonin syndrome should be considered even when administering serotonergic agents sequentially, as some agents may demonstrate a prolonged elimination half-life. For example, a 5-week washout period is recommended following use of fluoxetine and 3 weeks following use of vortioxetine before administering another serotonergic agent such as sibutramine. At least 14 days should elapse between discontinuation of other serotonergic agents and initiation of treatment with sibutramine. If serotonin syndrome develops or is suspected during the course of therapy, all serotonergic agents should be discontinued immediately and supportive care rendered as necessary. Moderately ill patients may also benefit from the administration of a serotonin antagonist (e.g., cyproheptadine, chlorpromazine). Severe cases should be managed under consultation with a toxicologist and may require sedation, neuromuscular paralysis, intubation, and mechanical ventilation in addition to the other measures.
+
+**Đoạn giải thích tiếng Việt (đã tách câu):**
+
+1. [ ] Dùng chung Diatramine và Aronol có thể làm tăng nguy cơ mắc hội chứng serotonin, một tình trạng hiếm gặp nhưng rất nguy hiểm, thậm chí có thể đe dọa tính mạng.
+2. [ ] Nguyên nhân là do cả hai loại thuốc này đều làm tăng lượng serotonin trong não, và khi kết hợp với nhau sẽ khiến chất này bị dư thừa quá mức, dẫn đến các triệu chứng như kích động, sốt cao, co giật.
+3. [ ] Vì vậy, việc dùng chung hai thuốc này cần được cân nhắc rất kỹ lưỡng và phải có sự theo dõi chặt chẽ của bác sĩ.
+
+**Verdict (tự điền vào file calibration_<tên>.csv, KHÔNG điền ở đây):**
+- faithfulness: pass / fail — lý do nếu fail: ___________
+- relevance: pass / fail — lý do nếu fail: ___________
+- completeness: pass / fail — lý do nếu fail: ___________
+
+---
+
+## 3. `dd-nhe-033` — thuoc: Canaflin 100 + Menzag
+
+**Nguồn (mo_ta_goc_EN):**
+> The efficacy of insulin and other antidiabetic agents may be diminished by topical corticosteroids, particularly during prolonged or indiscriminate use. Corticosteroids can raise blood glucose level by antagonizing the action and suppressing the secretion of insulin, which results in inhibition of peripheral glucose uptake and increased gluconeogenesis. The duration of administration Close clinical monitoring of glycemic control is recommended if topical corticosteroids are administered chronically and/or to large areas in diabetic patients.
+
+**Đoạn giải thích tiếng Việt (đã tách câu):**
+
+1. [ ] Dùng chung Canaflin 100 và Menzag có thể làm giảm hiệu quả kiểm soát đường huyết của thuốc tiểu đường.
+2. [ ] Nguyên nhân là do Menzag (thuốc bôi ngoài da chứa corticosteroid) có thể làm tăng đường huyết bằng cách chống lại tác dụng của insulin và làm giảm tiết insulin, từ đó khiến đường khó đi vào tế bào và gan sản xuất thêm đường mới.
+3. [ ] Nếu phải dùng Menzag kéo dài hoặc bôi trên diện tích da rộng, người bệnh tiểu đường cần được theo dõi chặt chẽ chỉ số đường huyết để đảm bảo thuốc vẫn hoạt động tốt.
+
+**Verdict (tự điền vào file calibration_<tên>.csv, KHÔNG điền ở đây):**
+- faithfulness: pass / fail — lý do nếu fail: ___________
+- relevance: pass / fail — lý do nếu fail: ___________
+- completeness: pass / fail — lý do nếu fail: ___________
+
+---
+
+## 4. `dd-nhe-041` — thuoc: A.T Ofloxacin 200 mg/40 ml + Campto
+
+**Nguồn (mo_ta_goc_EN):**
+> Limited data suggest that chemotherapy with antineoplastic agents may reduce the plasma concentrations of oral quinolone antibiotics. The proposed mechanism is decreased quinolone absorption secondary to alteration of intestinal mucosa by cancer chemotherapy.
+
+**Đoạn giải thích tiếng Việt (đã tách câu):**
+
+1. [ ] Dùng chung Ofloxacin (thuốc A.T Ofloxacin) với Irinotecan (Campto) có thể làm giảm nồng độ Ofloxacin trong huyết tương.
+2. [ ] Nguyên nhân được cho là do hóa trị liệu ung thư làm tổn thương niêm mạc ruột, từ đó cản trở hấp thu của kháng sinh nhóm quinolon dùng đường uống.
+3. [ ] Dữ liệu hiện tại còn hạn chế, chỉ ghi nhận sự thay đổi này mà chưa định lượng rõ mức độ ảnh hưởng lâm sàng.
+
+**Verdict (tự điền vào file calibration_<tên>.csv, KHÔNG điền ở đây):**
+- faithfulness: pass / fail — lý do nếu fail: ___________
+- relevance: pass / fail — lý do nếu fail: ___________
+- completeness: pass / fail — lý do nếu fail: ___________
+
+---
+
+## 5. `dd-trung_binh-019` — thuoc: Antilex + Typhim Vi (Phòng bệnh: nhiễm khuẩn do Salmonella (thương hàn))
+
+**Nguồn (mo_ta_goc_EN):**
+> The administration of inactivated, killed, or otherwise noninfectious vaccines to immunosuppressed patients is generally safe but may be associated with a diminished or suboptimal immunologic response due to antibody inhibition. Such patients may include those who have recently received or are receiving immunosuppressive agents, antilymphocyte globulins, alkylating agents, antimetabolites, radiation, some antirheumatic agents, high dosages of corticosteroids or adrenocorticotropic agents, or long-term topical or inhaled corticosteroids.
+
+**Nguồn xử trí (xu_tri_goc_EN — chỉ để hiểu bối cảnh):**
+> In general, the US Department of Public Health Advisory Committee on Immunization Practices (ACIP) recommends that inactivated or killed vaccines be administered to non-HIV immunosuppressed patients according to the same guidelines as for healthy patients. For Haemophilus influenzae b vaccine, some experts recommend that it be administered at least 2 weeks before starting or 3 months after discontinuing chemotherapy when used in patients with Hodgkin&#x27;s disease. For rabies vaccine, some authorities suggest that immunosuppressive agents should generally be avoided during postexposure therapy except when absolutely necessary for the treatment of other conditions.
+
+**Đoạn giải thích tiếng Việt (đã tách câu):**
+
+1. [ ] Antilex là thuốc điều trị ung thư, có tác dụng làm suy giảm hệ miễn dịch của cơ thể.
+2. [ ] Typhim Vi là vắc-xin phòng bệnh thương hàn, hoạt động bằng cách kích thích cơ thể tạo ra kháng thể chống lại vi khuẩn gây bệnh.
+3. [ ] Khi dùng chung hai loại này, hệ miễn dịch đang yếu do hóa trị có thể không đáp ứng tốt với vắc-xin, khiến hiệu quả bảo vệ của vắc-xin bị giảm đi.
+4. [ ] Điều này xảy ra vì thuốc trị ung thư ức chế khả năng sản xuất kháng thể của cơ thể, nên dù tiêm vắc-xin, cơ thể vẫn khó tạo đủ miễn dịch để chống lại vi khuẩn thương hàn.
+
+**Verdict (tự điền vào file calibration_<tên>.csv, KHÔNG điền ở đây):**
+- faithfulness: pass / fail — lý do nếu fail: ___________
+- relevance: pass / fail — lý do nếu fail: ___________
+- completeness: pass / fail — lý do nếu fail: ___________
+
+---
+
+## 6. `dd-trung_binh-027` — thuoc: A.T LINAGLIPTIN 5 mg + Apidra
+
+**Nguồn (mo_ta_goc_EN):**
+> Coadministration of a dipeptidyl peptidase-4 inhibitor with an insulin secretagogue (e.g., sulfonylurea, meglitinide) or insulin may potentiate the risk of hypoglycemia.
+
+**Nguồn xử trí (xu_tri_goc_EN — chỉ để hiểu bối cảnh):**
+> A lower dosage of the insulin secretagogue or insulin may be required when used in combination with a dipeptidyl peptidase-4 inhibitor.
+
+**Đoạn giải thích tiếng Việt (đã tách câu):**
+
+1. [ ] Dùng chung Linagliptin với Apidra có thể làm tăng nguy cơ hạ đường huyết, do cả hai thuốc đều tác động lên quá trình kiểm soát glucose máu theo cơ chế bổ trợ.
+2. [ ] Sự phối hợp này đòi hỏi theo dõi chặt chẽ đường huyết, đặc biệt ở người có nguy cơ cao.
+3. [ ] Việc điều chỉnh liều nếu cần thiết phải do bác sĩ hoặc dược sĩ cân nhắc dựa trên tình trạng cụ thể của từng bệnh nhân.
+
+**Verdict (tự điền vào file calibration_<tên>.csv, KHÔNG điền ở đây):**
+- faithfulness: pass / fail — lý do nếu fail: ___________
+- relevance: pass / fail — lý do nếu fail: ___________
+- completeness: pass / fail — lý do nếu fail: ___________
+
+---
+
+## 7. `dis-nang-003` — benh_nen: Nhiễm toan lactic
+
+**Nguồn (mo_ta_goc_EN):**
+> Lactate metabolism results in production of bicarbonate.  Bicarbonate generation is impaired in patients with compromised liver function and/or disorders that decrease tissue perfusion and increase anoxia.  Therapy with sodium lactate should not be used in conditions in which lactate levels are increased (e.g., shock, congestive heart failure, respiratory alkalosis) or in which utilization of lactate is diminished (e.g., anoxia, beriberi).  Sodium lactate is not for use in the treatment of lactic acidosis.
+
+**Đoạn giải thích tiếng Việt (đã tách câu):**
+
+1. [ ] Duofilm có chứa hoạt chất lactic acid, và khi cơ thể chuyển hóa lactate sẽ tạo ra bicarbonate – một chất giúp trung hòa axit trong máu.
+2. [ ] Nhưng ở người đang bị nhiễm toan lactic (tình trạng axit lactic tích tụ quá nhiều trong máu), quá trình này lại không diễn ra tốt, thậm chí dùng thêm lactic acid còn khiến lượng lactate trong cơ thể tăng cao hơn nữa.
+3. [ ] Vì vậy, loại thuốc này không được dùng cho những trường hợp đang có nồng độ lactate tăng, bao gồm cả bệnh nhiễm toan lactic, bởi nó sẽ làm tình trạng rối loạn chuyển hóa vốn đã nguy hiểm trở nên trầm trọng hơn.
+
+**Verdict (tự điền vào file calibration_<tên>.csv, KHÔNG điền ở đây):**
+- faithfulness: pass / fail — lý do nếu fail: ___________
+- relevance: pass / fail — lý do nếu fail: ___________
+- completeness: pass / fail — lý do nếu fail: ___________
+
+---
+
+## 8. `dis-nhe-020` — benh_nen: Bệnh thận
+
+**Nguồn (mo_ta_goc_EN):**
+> In clinical studies, renal failure occurred in 1% of patients with colorectal cancer treated with cetuximab.  Close monitoring is recommended in these patients.
+
+**Đoạn giải thích tiếng Việt (đã tách câu):**
+
+1. [ ] Nếu bạn có tiền sử hoặc đang mắc bệnh thận, việc dùng Erbitux cần được theo dõi sát sao hơn.
+2. [ ] Trong các nghiên cứu lâm sàng, tình trạng suy thận đã xảy ra ở 1% bệnh nhân ung thư đại trực tràng điều trị bằng thuốc này.
+3. [ ] Vì vậy, những người có sẵn vấn đề về thận cần được kiểm tra chức năng thận thường xuyên khi dùng thuốc để phát hiện sớm bất kỳ dấu hiệu bất thường nào.
+
+**Verdict (tự điền vào file calibration_<tên>.csv, KHÔNG điền ở đây):**
+- faithfulness: pass / fail — lý do nếu fail: ___________
+- relevance: pass / fail — lý do nếu fail: ___________
+- completeness: pass / fail — lý do nếu fail: ___________
+
+---
+
+## 9. `dis-trung_binh-017` — benh_nen: Bệnh gan
+
+**Nguồn (mo_ta_goc_EN):**
+> Cases of hepatitis have been reported with the use of certain cephalosporins.  Transient rise in AST, ALT, and alkaline phosphatase levels have also been observed.  Caution and monitoring is recommended when these agents are prescribed to patients with hepatic disorders.
+
+**Đoạn giải thích tiếng Việt (đã tách câu):**
+
+1. [ ] Khi sử dụng Bifotin 1g ở người có tiền sử hoặc đang mắc bệnh gan, cần lưu ý đến nguy cơ ảnh hưởng chức năng gan vì hoạt chất cefoxitin trong thuốc có thể gây viêm gan và làm tăng thoáng qua các men gan (AST, ALT) cũng như phosphatase kiềm.
+2. [ ] Do đó, việc theo dõi chặt chẽ các chỉ số này được khuyến cáo khi chỉ định thuốc cho những bệnh nhân có rối loạn gan từ trước.
+
+**Verdict (tự điền vào file calibration_<tên>.csv, KHÔNG điền ở đây):**
+- faithfulness: pass / fail — lý do nếu fail: ___________
+- relevance: pass / fail — lý do nếu fail: ___________
+- completeness: pass / fail — lý do nếu fail: ___________
+
+---
+
+## 10. `food-nang-007` — thuc_pham: trà xanh
+
+**Nguồn (mo_ta_goc_EN):**
+> Coadministration with grapefruit juice may significantly increase the plasma concentrations of lovastatin and simvastatin and their active acid metabolites.  The proposed mechanism is inhibition of CYP450 3A4-mediated first-pass metabolism in the gut wall by certain compounds present in grapefruit.
+
+**Nguồn xử trí (xu_tri_goc_EN — chỉ để hiểu bối cảnh):**
+> Caution may be advisable when coadministered with green tea or green tea extracts.  Dosing reduction of the statin and/or limiting consumption of green tea and green tea products may be required if an interaction is suspected.
+
+**Đoạn giải thích tiếng Việt (đã tách câu):**
+
+1. [ ] Dùng Basaterol chung với trà xanh có thể làm tăng đáng kể nồng độ lovastatin trong huyết tương, do các hợp chất trong trà xanh ức chế chuyển hóa qua CYP450 3A4 ở thành ruột.
+2. [ ] Điều này dẫn đến nguy cơ tích lũy thuốc và các chất chuyển hóa có hoạt tính cao hơn trong cơ thể.
+3. [ ] Vì vậy, cần thận trọng khi phối hợp hai loại này và theo dõi chặt chẽ để điều chỉnh phù hợp nếu nghi ngờ có tương tác.
+
+**Verdict (tự điền vào file calibration_<tên>.csv, KHÔNG điền ở đây):**
+- faithfulness: pass / fail — lý do nếu fail: ___________
+- relevance: pass / fail — lý do nếu fail: ___________
+- completeness: pass / fail — lý do nếu fail: ___________
+
+---

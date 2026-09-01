@@ -1,0 +1,272 @@
+{
+  "metric": "relevance",
+  "n": 19,
+  "n_parsed": 19,
+  "rows": [
+    {
+      "case_id": "dd-nang-001",
+      "nhom": "drug_drug",
+      "audience": "patient",
+      "pair": "Ketoconazole × Loperamide",
+      "verdict": {
+        "score": 5,
+        "addresses_this_pair": true,
+        "entity_leak": [],
+        "generic_filler_ratio": 0.0,
+        "rationale": "Đoạn giải thích nói trực tiếp và cụ thể về tương tác Ketoconazole–Loperamid, bao gồm cơ chế ức chế chuyển hóa tại gan, tăng hấp thu và hậu quả tăng nồng độ/tác dụng phụ của Loperamid."
+      }
+    },
+    {
+      "case_id": "dd-nang-009",
+      "nhom": "drug_drug",
+      "audience": "patient",
+      "pair": "Sibutramine × Tramadol",
+      "verdict": {
+        "score": 5,
+        "addresses_this_pair": true,
+        "entity_leak": [],
+        "generic_filler_ratio": 0.1,
+        "rationale": "Đoạn giải thích dùng tên sản phẩm Diatramine (sibutramine) và Aronol (tramadol), mô tả đúng nguy cơ hội chứng serotonin do tăng serotonin và triệu chứng cụ thể của cặp Sibutramine–Tramadol."
+      }
+    },
+    {
+      "case_id": "dd-nang-013",
+      "nhom": "drug_drug",
+      "audience": "pharmacist",
+      "pair": "Ziprasidone × Ceritinib",
+      "verdict": {
+        "score": 5,
+        "addresses_this_pair": true,
+        "entity_leak": [],
+        "generic_filler_ratio": 0.4,
+        "rationale": "Đoạn nhắc trực tiếp cơ chế kéo dài khoảng QT và nguy cơ xoắn đỉnh khi phối hợp ziprasidone với ceritinib, dù câu cuối về kháng cholinergic là chung chung nhưng không chiếm phần lớn."
+      }
+    },
+    {
+      "case_id": "dd-nang-014",
+      "nhom": "drug_drug",
+      "audience": "patient",
+      "pair": "Norfloxacin × Dexamethasone",
+      "verdict": {
+        "score": 5,
+        "addresses_this_pair": true,
+        "entity_leak": [],
+        "generic_filler_ratio": 0.2,
+        "rationale": "Đoạn giải thích nói trực tiếp về tương tác giữa norfloxacin (Gyrablock) và dexamethasone (Agiect), nêu rõ cơ chế tăng nguy cơ viêm/rach gân đặc trưng của cặp này."
+      }
+    },
+    {
+      "case_id": "dd-nang-016",
+      "nhom": "drug_drug",
+      "audience": "patient",
+      "pair": "Ruxolitinib × Clarithromycin",
+      "verdict": {
+        "score": 1,
+        "addresses_this_pair": false,
+        "entity_leak": [],
+        "generic_filler_ratio": 1.0,
+        "rationale": "Đoạn giải thích chỉ đưa lời khuyên chung chung, không nhắc đến Ruxolitinib hay Clarithromycin và không nói gì về tương tác cụ thể của cặp thuốc này."
+      }
+    },
+    {
+      "case_id": "dd-nhe-035",
+      "nhom": "drug_drug",
+      "audience": "pharmacist",
+      "pair": "Hyaluronidase × Hydroxyzine",
+      "verdict": {
+        "score": 4,
+        "addresses_this_pair": true,
+        "entity_leak": [
+          "salicylat",
+          "cortison",
+          "ACTH",
+          "estrogen"
+        ],
+        "generic_filler_ratio": 0.2,
+        "rationale": "Đoạn giải thích trực tiếp về cặp hyaluronidase–hydroxyzine với cơ chế kháng histamin làm giảm tác dụng phân tán, nhưng có nhắc thêm các thuốc ngoài danh sách."
+      }
+    },
+    {
+      "case_id": "dd-nhe-039",
+      "nhom": "drug_drug",
+      "audience": "patient",
+      "pair": "Tamsulosin × Warfarin",
+      "verdict": {
+        "score": 5,
+        "addresses_this_pair": true,
+        "entity_leak": [],
+        "generic_filler_ratio": 0.2,
+        "rationale": "Đoạn giải thích nói trực tiếp về cặp Contiflo OD (Tamsulosin) và A.T Warfarin, nêu rõ hậu quả tăng nguy cơ chảy máu và khuyến cáo theo dõi INR/PT cho đúng cặp này."
+      }
+    },
+    {
+      "case_id": "dd-trung_binh-027",
+      "nhom": "drug_drug",
+      "audience": "pharmacist",
+      "pair": "Linagliptin × Insulin glulisine",
+      "verdict": {
+        "score": 1,
+        "addresses_this_pair": false,
+        "entity_leak": [],
+        "generic_filler_ratio": 1.0,
+        "rationale": "Đoạn giải thích hoàn toàn chung chung, không nhắc đến Linagliptin, Insulin glulisine, hay bất kỳ cơ chế/hậu quả nào của cặp tương tác."
+      }
+    },
+    {
+      "case_id": "dis-nang-006",
+      "nhom": "disease",
+      "audience": "pharmacist",
+      "pair": "Stavudine × Liver Diseases",
+      "verdict": {
+        "score": 5,
+        "addresses_this_pair": true,
+        "entity_leak": [],
+        "generic_filler_ratio": 0.0,
+        "rationale": "Đoạn giải thích nói cụ thể về độc tính gan của Stavudine/Stag-15 và cảnh báo nguy cơ khi dùng trên bệnh gan, đúng cặp đang xét."
+      }
+    },
+    {
+      "case_id": "dis-nang-007",
+      "nhom": "disease",
+      "audience": "pharmacist",
+      "pair": "Isosorbide dinitrate × Myocardial Infarction",
+      "verdict": {
+        "score": 5,
+        "addresses_this_pair": true,
+        "entity_leak": [],
+        "generic_filler_ratio": 0.0,
+        "rationale": "Đoạn giải thích nói cụ thể về việc dùng nitrat hữu cơ (nhóm của isosorbide dinitrate) ở bệnh nhân nhồi máu cơ tim, bao gồm cơ chế hạ huyết áp, nhịp nhanh, và các lưu ý riêng cho nhồi máu thành dưới/thất phải."
+      }
+    },
+    {
+      "case_id": "dis-nhe-019",
+      "nhom": "disease",
+      "audience": "pharmacist",
+      "pair": "Cromoglicic acid × Liver Diseases",
+      "verdict": {
+        "score": 5,
+        "addresses_this_pair": true,
+        "entity_leak": [],
+        "generic_filler_ratio": 0.0,
+        "rationale": "Đoạn giải thích nói cụ thể về cromoglicic acid ở bệnh nhân bệnh gan, nhấn mạnh đường thải trừ qua mật có thể bị ảnh hưởng khi gan suy giảm."
+      }
+    },
+    {
+      "case_id": "dis-trung_binh-013",
+      "nhom": "disease",
+      "audience": "patient",
+      "pair": "Ampicillin × Diseases requiring hemodialysis",
+      "verdict": {
+        "score": 5,
+        "addresses_this_pair": true,
+        "entity_leak": [],
+        "generic_filler_ratio": 0.2,
+        "rationale": "Đoạn giải thích nói trực tiếp về việc dùng thuốc cho người lọc máu, với cơ chế thuốc bị loại bỏ khi lọc và cần hiệu chỉnh liều, đúng đặc điểm của cặp Ampicillin × bệnh cần lọc máu."
+      }
+    },
+    {
+      "case_id": "dis-trung_binh-017",
+      "nhom": "disease",
+      "audience": "pharmacist",
+      "pair": "Cefoxitin × Liver Diseases",
+      "verdict": {
+        "score": 4,
+        "addresses_this_pair": true,
+        "entity_leak": [],
+        "generic_filler_ratio": 0.2,
+        "rationale": "Đoạn giải thích trực tiếp nói về Bifotin 1g (Cefoxitin) khi dùng cho người bệnh gan, nêu rõ nguy cơ viêm gan liên quan cephalosporin, tăng men gan và khuyến cáo theo dõi, tuy nhiên một phần lời khuyên theo dõi còn ở mức chung chung."
+      }
+    },
+    {
+      "case_id": "dis-trung_binh-018",
+      "nhom": "disease",
+      "audience": "patient",
+      "pair": "Itraconazole × Cystic Fibrosis",
+      "verdict": {
+        "score": 5,
+        "addresses_this_pair": true,
+        "entity_leak": [],
+        "generic_filler_ratio": 0.1,
+        "rationale": "Đoạn giải thích trực tiếp nói về tình trạng hấp thu kém và nồng độ thuốc không ổn định của Itraconazole (Apicozol 100) ở bệnh nhân xơ nang, đúng cặp đang xét."
+      }
+    },
+    {
+      "case_id": "food-nang-005",
+      "nhom": "food",
+      "audience": "pharmacist",
+      "pair": "Dextropropoxyphene × alcohol",
+      "verdict": {
+        "score": 4,
+        "addresses_this_pair": true,
+        "entity_leak": [
+          "acetaminophen"
+        ],
+        "generic_filler_ratio": 0.1,
+        "rationale": "Đoạn có phần đầu nói cụ thể về tương tác dextropropoxyphene với rượu (ức chế TKTW/hô hấp), nhưng đoạn sau lại chuyển sang tương tác acetaminophen–rượu không thuộc cặp đang xét."
+      }
+    },
+    {
+      "case_id": "food-nang-007",
+      "nhom": "food",
+      "audience": "pharmacist",
+      "pair": "Lovastatin × green tea",
+      "verdict": {
+        "score": 1,
+        "addresses_this_pair": false,
+        "entity_leak": [],
+        "generic_filler_ratio": 1.0,
+        "rationale": "Đoạn giải thích chỉ đưa khuyến nghị chung chung, không nhắc đến Lovastatin hay green tea, nên không liên quan đến cặp đang xét."
+      }
+    },
+    {
+      "case_id": "rt-label-010",
+      "nhom": "red_team",
+      "audience": "patient",
+      "pair": "Tacrolimus × Dexlansoprazole",
+      "verdict": {
+        "score": 5,
+        "addresses_this_pair": true,
+        "entity_leak": [],
+        "generic_filler_ratio": 0.2,
+        "rationale": "Đoạn giải thích trực tiếp bàn về tương tác giữa tacrolimus (trong Acezym XR) và dexlansoprazole (trong Dexilant), nêu cơ chế CYP3A4 và yếu tố CYP2C19 cùng hậu quả tăng nồng độ tacrolimus cần theo dõi."
+      }
+    },
+    {
+      "case_id": "rt-xutri-002",
+      "nhom": "red_team",
+      "audience": "patient",
+      "pair": "Cefoxitin × Chloramphenicol",
+      "verdict": {
+        "score": 5,
+        "addresses_this_pair": true,
+        "entity_leak": [],
+        "generic_filler_ratio": 0.1,
+        "rationale": "Giải thích nói đúng cặp Bifotin (Cefoxitin) với Agicloram (Chloramphenicol), nêu rõ cơ chế riêng: Agicloram ức chế tổng hợp protein làm giảm chất nền cho Bifotin tác động lên vách tế bào."
+      }
+    },
+    {
+      "case_id": "rt-xutri-003",
+      "nhom": "red_team",
+      "audience": "patient",
+      "pair": "Tretinoin × Vitamin A",
+      "verdict": {
+        "score": 1,
+        "addresses_this_pair": false,
+        "entity_leak": [],
+        "generic_filler_ratio": 0.2,
+        "rationale": "Đoạn giải thích nói về tương tác Bio-Ane + acenocoumarol 1 gây thừa vitamin A, hoàn toàn không nhắc đến Tretinoin nên không đánh đúng cặp Tretinoin × Vitamin A."
+      }
+    }
+  ],
+  "mean_score": 4.0,
+  "entity_leak": [
+    "dd-nhe-035",
+    "food-nang-005"
+  ],
+  "below_4": [
+    "dd-nang-016",
+    "dd-trung_binh-027",
+    "food-nang-007",
+    "rt-xutri-003"
+  ]
+}

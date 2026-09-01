@@ -1,0 +1,242 @@
+{
+  "metric": "completeness",
+  "n": 16,
+  "n_parsed": 16,
+  "rows": [
+    {
+      "case_id": "dd-nang-001",
+      "nhom": "drug_drug",
+      "audience": "patient",
+      "pair": "Ketoconazole × Loperamide",
+      "verdict": {
+        "mechanism_present": true,
+        "consequence_present": true,
+        "key_qualifier_dropped": [],
+        "score": 1.0,
+        "rationale": "Đoạn giải thích nêu đúng cơ chế tương tác (ức chế chuyển hóa và tăng hấp thu) và hậu quả lâm sàng (tăng nồng độ thuốc, tăng tác dụng phụ), không bỏ sót điều kiện quan trọng nào của nguồn."
+      }
+    },
+    {
+      "case_id": "dd-nang-009",
+      "nhom": "drug_drug",
+      "audience": "patient",
+      "pair": "Sibutramine × Tramadol",
+      "verdict": {
+        "mechanism_present": true,
+        "consequence_present": true,
+        "key_qualifier_dropped": [],
+        "score": 1.0,
+        "rationale": "Đoạn giải thích đã nêu đủ cơ chế (dư thừa serotonin do tăng hoạt động) và hậu quả lâm sàng (hội chứng serotonin hiếm gặp nhưng nghiêm trọng, đe dọa tính mạng), không bỏ sót điều kiện quan trọng nào từ nguồn."
+      }
+    },
+    {
+      "case_id": "dd-nang-013",
+      "nhom": "drug_drug",
+      "audience": "pharmacist",
+      "pair": "Ziprasidone × Ceritinib",
+      "verdict": {
+        "mechanism_present": true,
+        "consequence_present": true,
+        "key_qualifier_dropped": [],
+        "score": 1.0,
+        "rationale": "Đoạn giải thích đầy đủ cơ chế kéo dài QT phụ thuộc liều và tác dụng cộng khi phối hợp, đồng thời nêu đủ các hậu quả lâm sàng (loạn nhịp thất, xoắn đỉnh, đột tử và các tác dụng do ức chế phó giao cảm quá mức), giữ đúng các điều kiện quan trọng của nguồn."
+      }
+    },
+    {
+      "case_id": "dd-nang-014",
+      "nhom": "drug_drug",
+      "audience": "patient",
+      "pair": "Norfloxacin × Dexamethasone",
+      "verdict": {
+        "mechanism_present": "n/a",
+        "consequence_present": true,
+        "key_qualifier_dropped": [],
+        "score": 1.0,
+        "rationale": "Đoạn giải thích đầy đủ các hậu quả lâm sàng chính (viêm/rách gân, vị trí, phẫu thuật/tàn tật, thời điểm rách) và giữ nguyên điều kiện quan trọng về thời gian, phù hợp cho bệnh nhân."
+      }
+    },
+    {
+      "case_id": "dd-nang-016",
+      "nhom": "drug_drug",
+      "audience": "patient",
+      "pair": "Ruxolitinib × Clarithromycin",
+      "verdict": {
+        "mechanism_present": false,
+        "consequence_present": false,
+        "key_qualifier_dropped": [
+          "tương tác chỉ xảy ra với chất ức chế mạnh CYP450 3A4"
+        ],
+        "score": 0.0,
+        "rationale": "Đoạn giải thích không nêu cơ chế tương tác, không nêu hậu quả tăng nồng độ thuốc và bỏ qua điều kiện quan trọng là chỉ với chất ức chế mạnh CYP450 3A4."
+      }
+    },
+    {
+      "case_id": "dd-nhe-035",
+      "nhom": "drug_drug",
+      "audience": "pharmacist",
+      "pair": "Hyaluronidase × Hydroxyzine",
+      "verdict": {
+        "mechanism_present": true,
+        "consequence_present": true,
+        "key_qualifier_dropped": [],
+        "score": 1.0,
+        "rationale": "Đoạn giải thích nêu đầy đủ cơ chế kháng hyaluronidase và hậu quả cần tăng liều, không bỏ sót điều kiện quan trọng nào."
+      }
+    },
+    {
+      "case_id": "dd-nhe-039",
+      "nhom": "drug_drug",
+      "audience": "patient",
+      "pair": "Tamsulosin × Warfarin",
+      "verdict": {
+        "mechanism_present": "n/a",
+        "consequence_present": true,
+        "key_qualifier_dropped": [],
+        "score": 1.0,
+        "rationale": "Đoạn giải thích phản ánh đầy đủ các ý chính từ nguồn: nghiên cứu chưa kết luận, khuyến nghị thận trọng, theo dõi INR/PT và hướng dẫn báo dấu hiệu chảy máu."
+      }
+    },
+    {
+      "case_id": "dd-trung_binh-027",
+      "nhom": "drug_drug",
+      "audience": "pharmacist",
+      "pair": "Linagliptin × Insulin glulisine",
+      "verdict": {
+        "mechanism_present": "n/a",
+        "consequence_present": false,
+        "key_qualifier_dropped": [
+          "Không nêu rõ nguy cơ hạ đường huyết chỉ xảy ra khi phối hợp DPP-4 inhibitor với insulin secretagogue (sulfonylurea, meglitinide) hoặc insulin"
+        ],
+        "score": 0.5,
+        "rationale": "Đoạn giải thích bỏ hoàn toàn hậu quả lâm sàng là tăng nguy cơ hạ đường huyết, mặc dù nguồn không có cơ chế tương tác nên chỉ thiếu một trục nội dung chính."
+      }
+    },
+    {
+      "case_id": "dis-nang-006",
+      "nhom": "disease",
+      "audience": "pharmacist",
+      "pair": "Stavudine × Liver Diseases",
+      "verdict": {
+        "mechanism_present": "n/a",
+        "consequence_present": true,
+        "key_qualifier_dropped": [
+          "tiền sử lạm dụng rượu",
+          "viêm gan"
+        ],
+        "score": 1.0,
+        "rationale": "Đoạn nêu đầy đủ các biến cố gan chính và lưu ý thận trọng ở bệnh nhân bệnh gan, nhưng bỏ qua các yếu tố nguy cơ quan trọng là tiền sử nghiện rượu và viêm gan."
+      }
+    },
+    {
+      "case_id": "dis-nang-007",
+      "nhom": "disease",
+      "audience": "pharmacist",
+      "pair": "Isosorbide dinitrate × Myocardial Infarction",
+      "verdict": {
+        "mechanism_present": true,
+        "consequence_present": true,
+        "key_qualifier_dropped": [
+          "Không đề cập rằng các dạng nitrat/nitrit uống hoặc tác dụng kéo dài không nên dùng trong giai đoạn sớm của nhồi máu cơ tim cấp do khó kiểm soát và chấm dứt nhanh hiệu ứng huyết động."
+        ],
+        "score": 1.0,
+        "rationale": "Đoạn giải thích đầy đủ cơ chế (giảm tiền tải thất phải, hạ huyết áp, nhịp nhanh làm nặng thiếu máu cơ tim) và hậu quả lâm sàng, chỉ bỏ qua khuyến cáo cụ thể về dạng uống/tác dụng kéo dài trong giai đoạn sớm AMI."
+      }
+    },
+    {
+      "case_id": "dis-nhe-019",
+      "nhom": "disease",
+      "audience": "pharmacist",
+      "pair": "Cromoglicic acid × Liver Diseases",
+      "verdict": {
+        "mechanism_present": true,
+        "consequence_present": "n/a",
+        "key_qualifier_dropped": [
+          "Bỏ sót đối tượng suy thận: nguồn nêu cần cân nhắc giảm liều ở bệnh nhân suy thận hoặc suy gan, đoạn chỉ đề cập bệnh gan.",
+          "Bỏ sót bối cảnh sinh khả dụng toàn thân thấp (<1% đường uống, ~8% đường hít) mà nguồn nêu ra."
+        ],
+        "score": 1.0,
+        "rationale": "Đoạn văn phản ánh đúng cơ chế thải trừ gần như tương đương qua thận và mật cùng ảnh hưởng khi suy gan; nguồn không mô tả hậu quả lâm sàng cụ thể nên không tính thiếu, dù có bỏ sót vài điều kiện quan trọng."
+      }
+    },
+    {
+      "case_id": "dis-trung_binh-013",
+      "nhom": "disease",
+      "audience": "patient",
+      "pair": "Ampicillin × Diseases requiring hemodialysis",
+      "verdict": {
+        "mechanism_present": true,
+        "consequence_present": true,
+        "key_qualifier_dropped": [
+          "Không nêu ngoại lệ đối với nhóm penicillin kháng penicillinase (penicillinase-resistant) — những thuốc này không bị loại qua lọc máu"
+        ],
+        "score": 1.0,
+        "rationale": "Đoạn giải thích nêu đúng cơ chế (thuốc bị loại qua lọc máu) và hậu quả (lượng thuốc còn lại có thể không đủ duy trì tác dụng), nhưng bỏ qua điều kiện quan trọng là ngoại lệ với nhóm penicillin kháng penicillinase."
+      }
+    },
+    {
+      "case_id": "dis-trung_binh-017",
+      "nhom": "disease",
+      "audience": "pharmacist",
+      "pair": "Cefoxitin × Liver Diseases",
+      "verdict": {
+        "mechanism_present": "n/a",
+        "consequence_present": true,
+        "key_qualifier_dropped": [],
+        "score": 1.0,
+        "rationale": "Đoạn giải thích đầy đủ các ý chính từ nguồn: nguy cơ viêm gan, tăng men gan thoáng qua và khuyến cáo thận trọng/theo dõi ở bệnh nhân rối loạn gan."
+      }
+    },
+    {
+      "case_id": "dis-trung_binh-018",
+      "nhom": "disease",
+      "audience": "patient",
+      "pair": "Itraconazole × Cystic Fibrosis",
+      "verdict": {
+        "mechanism_present": "n/a",
+        "consequence_present": true,
+        "key_qualifier_dropped": [],
+        "score": 1.0,
+        "rationale": "Đoạn giải thích đã nêu đúng hậu quả là nồng độ thuốc không đạt mức điều trị ở một số bệnh nhân xơ nang, và không bỏ sót điều kiện quan trọng nào."
+      }
+    },
+    {
+      "case_id": "food-nang-005",
+      "nhom": "food",
+      "audience": "pharmacist",
+      "pair": "Dextropropoxyphene × alcohol",
+      "verdict": {
+        "mechanism_present": true,
+        "consequence_present": true,
+        "key_qualifier_dropped": [],
+        "score": 1.0,
+        "rationale": "Đoạn giải thích đầy đủ các ý chính từ nguồn gồm tác dụng cộng hợp ức chế thần kinh trung ương/hô hấp, nguy cơ tử vong khi lạm dụng và nhóm bệnh nhân đặc biệt có tiền sử rối loạn cảm xúc/tự sát/lạm dụng chất, không bỏ sót điều kiện quan trọng nào."
+      }
+    },
+    {
+      "case_id": "food-nang-007",
+      "nhom": "food",
+      "audience": "pharmacist",
+      "pair": "Lovastatin × green tea",
+      "verdict": {
+        "mechanism_present": false,
+        "consequence_present": false,
+        "key_qualifier_dropped": [
+          "Không nêu rõ tương tác xảy ra với nước bưởi",
+          "Chỉ đề cập đến lovastatin và simvastatin"
+        ],
+        "score": 0.0,
+        "rationale": "Đoạn giải thích chỉ đưa ra lời khuyên chung chung, hoàn toàn không đề cập đến cơ chế ức chế CYP450 3A4 hay hậu quả tăng nồng độ statin."
+      }
+    }
+  ],
+  "mean_score": 0.844,
+  "missing_mechanism": [
+    "dd-nang-016",
+    "food-nang-007"
+  ],
+  "missing_consequence": [
+    "dd-nang-016",
+    "dd-trung_binh-027",
+    "food-nang-007"
+  ]
+}
