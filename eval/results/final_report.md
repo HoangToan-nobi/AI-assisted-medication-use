@@ -4,8 +4,8 @@
 > ra** (luồng `/products/check`) — không đánh giá OCR, xếp hạng mức độ, chuẩn hoá tên hay
 > giao diện.
 >
-> Báo cáo trước đó ([report.md](report.md), 31/08, chấm bằng DeepSeek-reasoner) vẫn giữ
-> nguyên để đối chiếu lịch sử.
+> Đây là báo cáo chính thức, thay cho bản nháp 31/08 (chấm bằng DeepSeek-reasoner) —
+> bản đó giữ ngoài git, không còn trong repo.
 
 ---
 

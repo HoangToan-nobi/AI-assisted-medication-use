@@ -79,3 +79,20 @@ eval/results/runs/
 # Không bao giờ được đưa lên git: đã push là nằm vĩnh viễn trong lịch sử.
 .cursor/
 *.zip
+
+# Eval — chỉ track báo cáo chính thức (final_report.md), 2 bản judge_summary và
+# số liệu judge của đợt heldout/claude_full. Phiếu chấm tay, biên bản hiệu chỉnh
+# giữa 2 người chấm và bản nháp cũ giữ trên máy, không đưa vào git.
+eval/results/report.md
+eval/results/manual_test_cases.md
+eval/results/judge_summary.md
+eval/results/judge_completeness.json
+eval/results/judge_consistency.json
+eval/results/judge_faithfulness.json
+eval/results/judge_relevance.json
+eval/results/judge_calibration*
+eval/results/calibration*
+eval/results/human_review*
+eval/results/demo_day_summary.html
+eval/results/HUONG_DAN_CHAM_TAY.md
+eval/results/NHANH_B_DE_HIEU.md

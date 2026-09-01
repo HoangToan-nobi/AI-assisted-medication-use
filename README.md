@@ -167,7 +167,8 @@ Tìm kiếm/autocomplete tên biệt dược:
 curl "http://localhost:8000/api/v1/guest/products/search?q=aspirin"
 ```
 
-Kết quả mẫu thực tế (5 test case đầy đủ, kèm output JSON): xem [`eval/results/manual_test_cases.md`](eval/results/manual_test_cases.md).
+Báo cáo đánh giá chất lượng đầu ra LLM (135 case tối ưu + 40 case held-out chưa từng
+dùng để sửa, kèm số liệu judge gốc): xem [`eval/results/final_report.md`](eval/results/final_report.md).
 
 ## Cấu trúc dự án
 
