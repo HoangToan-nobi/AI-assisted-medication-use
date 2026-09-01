@@ -4,9 +4,9 @@
 
 ## Link
 
-**https://youtu.be/844Ecl_U9LQ?si=Gy8pFp7SL9-43fOg**
+**https://youtu.be/844Ecl_U9LQ?si=ImpH3Ft8t3XGg8lT**
 
-[![MediCheck MVP Demo](https://img.youtube.com/vi/844Ecl_U9LQ/maxresdefault.jpg)](https://www.youtube.com/watch?v=844Ecl_U9LQ)
+[![MediCheck MVP Demo](https://img.youtube.com/vi/844Ecl_U9LQ/maxresdefault.jpg)](https://youtu.be/844Ecl_U9LQ?si=ImpH3Ft8t3XGg8lT)
 
 ## Nội dung theo mốc thời gian
 

@@ -17,7 +17,7 @@ Hệ thống kiểm tra **3 loại tương tác**, số liệu CSDL production (
 
 🔗 **Dùng thử:** https://ai20k-c3-team005-medicheck.vercel.app 
 
-🎬 **Video demo:** [https://www.youtube.com/watch?v=mrw6JcRn0yU](https://youtu.be/844Ecl_U9LQ?si=ImpH3Ft8t3XGg8lT)
+🎬 **Video demo:** [https://youtu.be/844Ecl_U9LQ?si=ImpH3Ft8t3XGg8lT](https://youtu.be/844Ecl_U9LQ?si=ImpH3Ft8t3XGg8lT)
 
 ## 10 Deliverables
 
@@ -28,7 +28,7 @@ Hệ thống kiểm tra **3 loại tương tác**, số liệu CSDL production (
 | 3 | Sơ đồ kiến trúc | [`docs/architecture.md`](docs/architecture.md) |
 | 4 | AI Log | [`.ai-log/`](.ai-log/) — hook tự ghi mọi prompt, tự submit lên server BTC lúc `git push`; cách hoạt động: [`docs/ai-log.md`](docs/ai-log.md) |
 | 5 | Live URL | https://ai20k-c3-team005-medicheck.vercel.app (frontend Vercel → backend Render → Supabase/CockroachDB/Modal) |
-| 6 | Video demo | [`docs/video-demo.md`](docs/video-demo.md) → https://www.youtube.com/watch?v=mrw6JcRn0yU |
+| 6 | Video demo | [`docs/video-demo.md`](docs/video-demo.md) → https://youtu.be/844Ecl_U9LQ?si=ImpH3Ft8t3XGg8lT |
 | 7 | Pitch deck | [`docs/pitch-deck.pdf`](docs/pitch-deck.pdf) — 17 trang; file nguồn và bản dựng bằng code ở [`presentation/`](presentation/) |
 | 8 | Nhật ký tuần | [`docs/journal.md`](docs/journal.md) |
 | 9 | Worklog theo ngày | [`docs/worklog.md`](docs/worklog.md) — dựng từ `git log --all` |
@@ -302,7 +302,7 @@ Danh sách endpoint đầy đủ + request/response schema: [http://localhost:80
 
 Xem video giới thiệu và quy trình hoạt động các luồng tra cứu trên YouTube:
 
-[![MediCheck MVP Demo](https://img.youtube.com/vi/844Ecl_U9LQ/maxresdefault.jpg)](https://youtu.be/844Ecl_U9LQ?si=Gy8pFp7SL9-43fOg)
+[![MediCheck MVP Demo](https://img.youtube.com/vi/844Ecl_U9LQ/maxresdefault.jpg)](https://youtu.be/844Ecl_U9LQ?si=ImpH3Ft8t3XGg8lT)
 
 ### 🎬 Nội dung video
 
