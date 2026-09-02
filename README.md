@@ -56,8 +56,8 @@ Tài liệu đặc tả & thiết kế theo giai đoạn (ý tưởng → BRD/SR
 
 | Layer | Công nghệ |
 |---|---|
-| Agent | LangGraph + LangChain, 5 node (chuẩn hóa → tra cứu → xếp hạng → giải thích → guardrail) |
-| LLM | DeepSeek-chat (qua `langchain-openai` trỏ base_url DeepSeek) |
+| Agent | LangGraph, 5 node tất định (chuẩn hóa → tra cứu → xếp hạng → gắn dữ liệu → guardrail) — không node nào gọi LLM, nên mọi cặp tương tác luôn đến từ CSDL |
+| LLM | DeepSeek-chat (`langchain-openai` trỏ base_url DeepSeek), chạy **sau** agent ở tầng service: giải thích cấp thuốc, tổng quan, thực phẩm & bệnh nền |
 | Backend | FastAPI + Uvicorn + SQLAlchemy |
 | Database | Postgres trên Supabase (DB chính) + CockroachDB (3 bảng tra cứu, xem [`docs/database-split.md`](docs/database-split.md)); SQLite `data/app.db` cho dev offline |
 | Dữ liệu tương tác | DDInter 2.0 thật (thuốc–thuốc, thuốc–thực phẩm, thuốc–bệnh nền), không phải mô phỏng |

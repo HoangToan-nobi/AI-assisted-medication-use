@@ -6,11 +6,15 @@
 
 MediCheck nhận danh sách thuốc (gõ tên biệt dược/hoạt chất, hoặc chụp ảnh đơn thuốc cho
 service OCR đọc), phân giải biệt dược → hoạt chất, rồi chạy **LangGraph agent 5 node** để
-chuẩn hóa, tra cứu DDInter 2.0, xếp hạng mức độ và sinh giải thích tiếng Việt kèm trích
-dẫn. Cùng lượt kiểm tra còn tra thêm **tương tác thuốc–thực phẩm** và **thuốc–bệnh nền**
-bằng SQL thuần (ngoài agent). Kết quả đi qua guardrail an toàn y tế, được gộp theo
-thuốc/đơn/tổng quan, lưu lại cho bệnh nhân và đưa vào hàng đợi để **dược sĩ xác nhận**
-(human-in-the-loop).
+chuẩn hóa, tra cứu DDInter 2.0, xếp hạng mức độ và gắn nguồn trích dẫn.
+
+**Cả 5 node đều tất định — không node nào gọi LLM.** Đây là lựa chọn có chủ đích: tương
+tác thuốc là dữ liệu y khoa, sai một cặp là nguy hiểm thật, nên mọi cặp tương tác đều đến
+từ CSDL chứ không do model sinh ra. LLM chỉ vào cuộc **sau** agent, ở tầng service, để
+diễn giải phần dữ liệu đã tra được — cùng lúc với việc tra **tương tác thuốc–thực phẩm**
+và **thuốc–bệnh nền** bằng SQL thuần. Mọi đoạn LLM viết đều đi qua bộ lọc an toàn y tế,
+rồi được gộp theo thuốc/đơn/tổng quan, lưu lại cho bệnh nhân và đưa vào hàng đợi để
+**dược sĩ xác nhận** (human-in-the-loop).
 
 ## 1. Sơ đồ hệ thống
 
@@ -55,7 +59,7 @@ flowchart TB
     RESOLVER --> NORM
     NORM --> MAIN
     LOOK --> FACTS
-    EXP --> LLM
+    ROLLUP --> LLM
     FOODDIS --> FACTS
     FOODDIS --> LLM
     GUARD --> ROLLUP
@@ -83,7 +87,7 @@ flowchart LR
     START(["raw_medications"]) --> N["normalize<br/>tên/alias → hoạt chất"]
     N --> L["lookup<br/>tra cặp trong DDInter"]
     L --> R["rank<br/>nhe / trung_binh / nang / chua_phan_loai"]
-    R --> E["explain<br/>gọi DeepSeek theo vai trò người đọc"]
+    R --> E["explain<br/>gắn field cấu trúc + nguồn trích dẫn"]
     E --> G["guardrail<br/>kiểm citation + lọc câu nguy hiểm"]
     G --> END(["MedCheckState"])
     N -. error .-> ERR(["END ERROR"])
@@ -95,8 +99,20 @@ flowchart LR
 
 Mỗi node ghi kết quả vào `MedCheckState` ([`src/agents/state.py`](../src/agents/state.py)).
 Node nào set `error` thì graph dừng sớm — agent **không bịa** tương tác khi thiếu dữ liệu
-mà trả cờ báo thiếu. Guardrail chặn mọi ngôn ngữ khuyên tự ý đổi/ngừng/chỉnh liều và loại
-đoạn giải thích không có `nguon_trich_dan`.
+mà trả cờ báo thiếu.
+
+Cả 5 node đều tất định: `normalize`/`lookup` là truy vấn SQL, `rank` là bảng ánh xạ mức
+độ, `explain` chỉ gắn field cấu trúc và `mo_ta_dich` (bản dịch nguyên văn đã lưu sẵn trong
+CSDL), `guardrail` là regex. Giải thích ở cấp hoạt chất trước đây do LLM sinh, nhưng nó
+chưa từng hiển thị ở luồng nào — chỉ dùng làm dữ liệu dựng đồ thị — nên đã cắt bỏ để khỏi
+tốn một lượt gọi LLM cho **mỗi cặp** hoạt chất.
+
+Guardrail chặn đoạn giải thích không có `nguon_trich_dan` và lọc ngôn ngữ khuyên tự ý
+đổi/ngừng/chỉnh liều. Hàm lọc `filter_banned_language()` định nghĩa trong `guardrail_node`
+nhưng được [`rollup_explain.py`](../src/services/rollup_explain.py) và
+[`food_disease_explain.py`](../src/services/food_disease_explain.py) import dùng lại cho
+văn bản do LLM sinh ở tầng service — nên guardrail vẫn phủ đúng chỗ AI thực sự viết chữ.
+Lọc theo từng câu, chỉ thay cả đoạn bằng câu trung lập khi mọi câu đều vi phạm.
 
 ## 4. Dữ liệu
 
@@ -126,8 +142,10 @@ SQLite (`data/app.db`) vẫn dùng được cho dev offline khi để trống `D
 
 1. Người dùng nhập biệt dược, hoặc upload ảnh đơn → OCR Service trả ứng viên để xác nhận.
 2. Backend kiểm tra quyền, phân giải biệt dược → hoạt chất (`products` / `product_ingredients`).
-3. Agent chạy 5 node; `explain` gọi DeepSeek với giọng điệu theo vai trò người đọc.
-4. Song song: tra thuốc–thực phẩm và thuốc–bệnh nền, sinh giải thích riêng cho 2 nhóm.
+3. Agent chạy 5 node, trả về kết quả có cấu trúc: cặp tương tác, mức độ, mô tả gốc và
+   nguồn trích dẫn — chưa có câu chữ nào do AI viết.
+4. Sau agent, LLM mới vào cuộc: giải thích cấp thuốc, tóm tắt tổng quan, thuốc–thực phẩm
+   và thuốc–bệnh nền. Mọi đoạn sinh ra đều qua `filter_banned_language()` trước khi trả về.
 5. Gộp kết quả theo hoạt chất → thuốc → đơn → tổng quan (`asyncio.gather` cho 4 nhánh LLM).
 6. Luồng bệnh nhân: lưu `interaction_checks`; bệnh nhân có thể gửi yêu cầu dược sĩ xác nhận.
 7. Dược sĩ xem bản đầy đủ (có `xu_tri`, thuốc thay thế), xác nhận + ghi chú → bệnh nhân nhận thông báo.
