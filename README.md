@@ -8,10 +8,11 @@ Hệ thống kiểm tra **3 loại tương tác**, số liệu CSDL production (
 
 | Loại | Bảng | Số bản ghi |
 |---|---|---:|
-| Thuốc – thuốc (chạy trong LangGraph agent) | `interactions` | 160.227 cặp / 1.939 hoạt chất |
+| Thuốc – thuốc (chạy trong LangGraph agent) | `interactions` | 160.227 cặp |
 | Thuốc – thực phẩm | `food_interactions` | 803 |
 | Thuốc – bệnh nền | `disease_interactions` | 7.672 (trên 450 bệnh) |
 | Biệt dược Việt Nam → hoạt chất | `products` / `product_ingredients` | 41.302 / 68.562 |
+| Danh mục hoạt chất | `medications` | 2.073 (1.939 có ít nhất 1 cặp tương tác) |
 
 **AI không tự chẩn đoán, không tự khuyên đổi/ngừng thuốc — mọi cảnh báo chỉ mang tính tham khảo.**
 

@@ -128,10 +128,16 @@ Số liệu production (01/09/2026):
 
 | Dữ liệu | Bản ghi |
 |---|---:|
-| Tương tác thuốc–thuốc (DDInter 2.0) | 160.227 cặp / 1.939 hoạt chất |
+| Tương tác thuốc–thuốc (DDInter 2.0) | 160.227 cặp |
 | Tương tác thuốc–bệnh nền | 7.672 (trên 450 bệnh) |
 | Tương tác thuốc–thực phẩm | 803 |
 | Biệt dược Việt Nam → hoạt chất | 41.302 / 68.562 |
+| Danh mục hoạt chất | 2.073 |
+
+Trong 2.073 hoạt chất của danh mục, **1.939** có ít nhất một cặp tương tác. 134 hoạt chất
+còn lại (thuốc nhỏ mắt, vaccine, chất chẩn đoán như `Sulfur hexafluoride`) không có dòng
+nào ở cả ba bảng — DDInter không xây dữ liệu tương tác toàn thân cho nhóm này, nên agent
+trả cờ "không đủ dữ liệu" thay vì suy đoán.
 
 ETL: [`scripts/import_ddinter.py`](../scripts/import_ddinter.py),
 [`import_ddinter_dfi_ddsi.py`](../scripts/import_ddinter_dfi_ddsi.py),
